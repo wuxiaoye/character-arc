@@ -1,8 +1,69 @@
 <script setup lang="ts">
-import { BookOpen, Clock, MoreHorizontal, Plus } from 'lucide-vue-next'
+import { computed, h } from 'vue'
+import { BookOpen, Clock, MoreHorizontal, Plus, Trash2 } from 'lucide-vue-next'
+import { NDropdown, useDialog } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
+const dialog = useDialog()
+
+const canDeleteProject = computed(() => appStore.projects.length > 1)
+
+const projectMenuOptions = computed(() => [
+  {
+    key: 'open',
+    label: '打开项目'
+  },
+  {
+    key: 'divider',
+    type: 'divider'
+  },
+  {
+    key: 'delete',
+    label: () => h('span', { class: 'project-menu-danger-label' }, '删除项目'),
+    disabled: !canDeleteProject.value
+  }
+])
+
+function renderMenuIcon(option: { key?: string | number }) {
+  if (option.key === 'open') {
+    return h(BookOpen, { size: 16 })
+  }
+  if (option.key === 'delete') {
+    return h(Trash2, { size: 16, class: 'project-menu-danger-label' })
+  }
+  return null
+}
+
+function handleMenuSelect(action: string | number, projectId: string): void {
+  if (action === 'open') {
+    appStore.openProject(projectId)
+    return
+  }
+
+  if (action === 'delete') {
+    requestDeleteProject(projectId)
+  }
+}
+
+function requestDeleteProject(projectId: string): void {
+  const project = appStore.projects.find((item) => item.id === projectId)
+  if (!project) {
+    return
+  }
+
+  dialog.warning({
+    title: '确认删除项目',
+    content: `确定要删除“${project.title}”吗？删除后当前本地项目数据将无法恢复。`,
+    positiveText: '确认删除',
+    negativeText: '取消',
+    autoFocus: false,
+    closable: false,
+    onPositiveClick: () => {
+      appStore.deleteProject(projectId)
+    }
+  })
+}
 </script>
 
 <template>
@@ -34,9 +95,18 @@ const appStore = useAppStore()
             <div class="project-icon" :style="{ background: project.cover }">
               <BookOpen :size="26" />
             </div>
-            <button class="more-button" @click.stop>
-              <MoreHorizontal :size="18" />
-            </button>
+            <n-dropdown
+              trigger="click"
+              :options="projectMenuOptions"
+              :render-icon="renderMenuIcon"
+              placement="bottom-end"
+              size="large"
+              @select="(key) => handleMenuSelect(key, project.id)"
+            >
+              <button class="more-button" @click.stop>
+                <MoreHorizontal :size="18" />
+              </button>
+            </n-dropdown>
           </div>
 
           <div class="project-card-bottom">
@@ -57,6 +127,7 @@ const appStore = useAppStore()
         </article>
       </div>
     </div>
+
   </section>
 </template>
 
@@ -71,6 +142,7 @@ const appStore = useAppStore()
 }
 
 .project-shell {
+  z-index: 1;
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
@@ -193,8 +265,8 @@ const appStore = useAppStore()
 
 .more-button {
   display: inline-flex;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   align-items: center;
   justify-content: center;
   border: none;
@@ -208,6 +280,10 @@ const appStore = useAppStore()
 .more-button:hover {
   background: rgba(0, 0, 0, 0.04);
   color: #1f2937;
+}
+
+:deep(.project-menu-danger-label) {
+  color: #dc2626;
 }
 
 .project-genre {

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { BookCopy, Clock3, FileText, GitMerge, Sparkles, Users } from 'lucide-vue-next'
 import { useAppStore } from '@/stores/app'
+import type { PanelName } from '@/types/app'
 
 const props = defineProps<{
   searchQuery?: string
@@ -24,28 +25,32 @@ const overviewCards = computed(() => [
     label: '累计字数',
     value: `${totalWords.value.toLocaleString()} 字`,
     hint: '正文总量',
-    icon: FileText
+    icon: FileText,
+    target: 'chapters' as PanelName
   },
   {
     key: 'characters',
     label: '角色数量',
     value: `${totalCharacters.value} 名`,
     hint: '已建角色',
-    icon: Users
+    icon: Users,
+    target: 'characters' as PanelName
   },
   {
     key: 'outline',
     label: '大纲节点',
     value: `${totalOutlineItems.value} 条`,
     hint: '剧情推进',
-    icon: GitMerge
+    icon: GitMerge,
+    target: 'outline' as PanelName
   },
   {
     key: 'chapters',
     label: '章节草稿',
     value: `${totalChapters.value} 章`,
     hint: '创作进度',
-    icon: BookCopy
+    icon: BookCopy,
+    target: 'chapters' as PanelName
   }
 ])
 
@@ -89,6 +94,32 @@ const quickEntries = computed(() => {
 })
 
 const recentChapter = computed(() => appStore.selectedChapter ?? appStore.chapters[0])
+
+function goToPanel(panel: PanelName): void {
+  appStore.setPanel(panel)
+}
+
+function openEntry(type: string, title: string): void {
+  if (type === '章节') {
+    const chapter = appStore.chapters.find((item) => item.title === title)
+    if (chapter) {
+      appStore.selectChapter(chapter.id)
+    }
+    return
+  }
+
+  if (type === '角色') {
+    appStore.setPanel('characters')
+    return
+  }
+
+  if (type === '大纲') {
+    appStore.setPanel('outline')
+    return
+  }
+
+  appStore.setPanel('world')
+}
 </script>
 
 <template>
@@ -109,7 +140,7 @@ const recentChapter = computed(() => appStore.selectedChapter ?? appStore.chapte
         <div class="hero-card-glow" :style="{ background: currentProject?.cover }"></div>
         <div class="hero-card-top">
           <span class="hero-genre">{{ currentProject?.genre }}</span>
-          <button class="hero-action">
+          <button class="hero-action" @click="appStore.setPanel('chapters')">
             <Sparkles :size="16" />
             <span>继续创作</span>
           </button>
@@ -120,8 +151,13 @@ const recentChapter = computed(() => appStore.selectedChapter ?? appStore.chapte
         </p>
       </article>
 
-      <div class="stats-grid">
-        <article v-for="card in overviewCards" :key="card.key" class="stat-card">
+        <div class="stats-grid">
+        <button
+          v-for="card in overviewCards"
+          :key="card.key"
+          class="stat-card"
+          @click="goToPanel(card.target)"
+        >
           <div class="stat-icon">
             <component :is="card.icon" :size="18" />
           </div>
@@ -130,7 +166,7 @@ const recentChapter = computed(() => appStore.selectedChapter ?? appStore.chapte
             <strong>{{ card.value }}</strong>
             <small>{{ card.hint }}</small>
           </div>
-        </article>
+        </button>
       </div>
     </div>
 
@@ -142,11 +178,16 @@ const recentChapter = computed(() => appStore.selectedChapter ?? appStore.chapte
       </div>
 
       <div v-if="quickEntries.length > 0" class="focus-list">
-        <article v-for="entry in quickEntries" :key="entry.id" class="focus-card">
+        <button
+          v-for="entry in quickEntries"
+          :key="entry.id"
+          class="focus-card"
+          @click="openEntry(entry.type, entry.title)"
+        >
           <span class="focus-type">{{ entry.type }}</span>
           <h5>{{ entry.title }}</h5>
           <p>{{ entry.description }}</p>
-        </article>
+        </button>
       </div>
       <div v-else class="empty-state">
         <p>没有匹配“{{ normalizedQuery }}”的项目内容。</p>
@@ -289,8 +330,20 @@ const recentChapter = computed(() => appStore.selectedChapter ?? appStore.chapte
   border: 1px solid rgba(243, 244, 246, 0.9);
   border-radius: 24px;
   background: white;
+  cursor: pointer;
   padding: 18px 20px;
   box-shadow: 0 6px 22px rgba(15, 23, 42, 0.03);
+  text-align: left;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--arc-primary) 12%, white);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.05);
 }
 
 .stat-icon {
@@ -365,7 +418,19 @@ const recentChapter = computed(() => appStore.selectedChapter ?? appStore.chapte
   border: 1px solid rgba(243, 244, 246, 0.95);
   border-radius: 22px;
   background: white;
+  cursor: pointer;
   padding: 16px;
+  text-align: left;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.focus-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--arc-primary) 12%, white);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.05);
 }
 
 .focus-type {

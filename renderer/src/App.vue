@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NConfigProvider, NGlobalStyle, NMessageProvider } from 'naive-ui'
+import { NConfigProvider, NDialogProvider, NGlobalStyle, NMessageProvider } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { createNaiveThemeOverrides } from '@/theme/presets'
 import ProjectCenter from '@/pages/ProjectCenter.vue'
@@ -35,17 +35,19 @@ const appStyleVars = computed(() => ({
 <template>
   <n-config-provider :theme-overrides="themeOverrides">
     <n-message-provider>
-      <n-global-style />
-      <div class="app-shell" :style="appStyleVars">
-        <div class="app-titlebar arc-drag-region"></div>
-        <div class="app-content">
-          <Transition name="view-fade" mode="out-in">
-            <ProjectCenter v-if="appStore.currentView === 'projects'" key="projects" />
-            <ProjectWizardPage v-else-if="appStore.currentView === 'wizard'" key="wizard" />
-            <WorkbenchPage v-else key="workbench" />
-          </Transition>
+      <n-dialog-provider>
+        <n-global-style />
+        <div class="app-shell" :style="appStyleVars">
+          <div class="app-titlebar arc-drag-region"></div>
+          <div class="app-content">
+            <Transition name="view-fade" mode="out-in">
+              <ProjectCenter v-if="appStore.currentView === 'projects'" key="projects" />
+              <ProjectWizardPage v-else-if="appStore.currentView === 'wizard'" key="wizard" />
+              <WorkbenchPage v-else key="workbench" />
+            </Transition>
+          </div>
         </div>
-      </div>
+      </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>
 </template>

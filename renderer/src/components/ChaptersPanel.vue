@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Globe2, PenTool, Plus, Sparkles } from 'lucide-vue-next'
+import { Globe2, PenTool, Plus, Sparkles, Trash2 } from 'lucide-vue-next'
 import { useAppStore } from '@/stores/app'
 
 const props = defineProps<{
@@ -89,7 +89,7 @@ onBeforeUnmount(() => {
       <aside class="chapter-sidebar">
         <div class="chapter-side-head">
           <span>卷一：苏醒之日</span>
-          <button class="mini-icon">
+          <button class="mini-icon" @click="appStore.createChapter()">
             <Plus :size="15" />
           </button>
         </div>
@@ -124,6 +124,9 @@ onBeforeUnmount(() => {
             @click="toggleHelper('world')"
           >
             <Globe2 :size="16" />
+          </button>
+          <button class="tool-badge neutral danger" title="删除章节" @click="appStore.deleteChapter(appStore.selectedChapterId)">
+            <Trash2 :size="16" />
           </button>
         </div>
 
@@ -329,6 +332,11 @@ onBeforeUnmount(() => {
 .tool-badge.neutral.active {
   background: color-mix(in srgb, var(--arc-primary) 8%, white);
   color: var(--arc-primary);
+}
+
+.tool-badge.danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
 }
 
 .helper-card {

@@ -270,6 +270,19 @@ export const useAppStore = defineStore('app', () => {
     activePanel.value = 'world'
   }
 
+  function deleteProject(projectId: string): void {
+    if (projects.value.length <= 1) {
+      return
+    }
+
+    projects.value = projects.value.filter((project) => project.id !== projectId)
+
+    if (selectedProjectId.value === projectId) {
+      selectedProjectId.value = projects.value[0].id
+      currentView.value = 'projects'
+    }
+  }
+
   function setPanel(panel: PanelName): void {
     activePanel.value = panel
   }
@@ -277,6 +290,37 @@ export const useAppStore = defineStore('app', () => {
   function selectChapter(chapterId: string): void {
     selectedChapterId.value = chapterId
     activePanel.value = 'chapters'
+  }
+
+  function createChapter(): void {
+    const nextIndex = chapters.value.length + 1
+    const newChapter: ChapterDraft = {
+      id: `chapter-${Date.now()}`,
+      title: `第${nextIndex}章：新章节`,
+      content: ''
+    }
+
+    chapters.value.push(newChapter)
+    selectedChapterId.value = newChapter.id
+    activePanel.value = 'chapters'
+  }
+
+  function deleteChapter(chapterId: string): void {
+    if (chapters.value.length <= 1) {
+      return
+    }
+
+    const targetIndex = chapters.value.findIndex((chapter) => chapter.id === chapterId)
+    if (targetIndex === -1) {
+      return
+    }
+
+    chapters.value = chapters.value.filter((chapter) => chapter.id !== chapterId)
+
+    if (selectedChapterId.value === chapterId) {
+      const fallback = chapters.value[Math.max(0, targetIndex - 1)] ?? chapters.value[0]
+      selectedChapterId.value = fallback.id
+    }
   }
 
   function updateChapterTitle(value: string): void {
@@ -363,9 +407,12 @@ export const useAppStore = defineStore('app', () => {
     characters,
     closeWizard,
     createProject,
+    createChapter,
     currentTheme,
     currentProject,
     currentView,
+    deleteChapter,
+    deleteProject,
     insertIntoChapter,
     messages,
     openProject,

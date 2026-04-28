@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ChevronLeft,
   FileText,
@@ -23,8 +23,16 @@ import SettingsPanel from '@/components/SettingsPanel.vue'
 
 const appStore = useAppStore()
 const isSidebarOpen = ref(true)
-const searchKeyword = ref('')
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
+const panelSearch = reactive<Record<string, string>>({
+  overview: '',
+  world: '',
+  characters: '',
+  outline: '',
+  chapters: '',
+  settings: ''
+})
+const searchKeyword = ref(panelSearch[appStore.activePanel] ?? '')
 
 const sidebarItems = [
   { id: 'overview', label: '作品概览', icon: LayoutDashboard },
@@ -69,6 +77,19 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncViewportState)
+})
+
+watch(
+  () => appStore.activePanel,
+  (panel) => {
+    searchKeyword.value = panelSearch[panel] ?? ''
+  },
+  { immediate: true }
+)
+
+watch(searchKeyword, (value) => {
+  // Remember the latest search per panel so switching between modules feels contextual rather than destructive.
+  panelSearch[appStore.activePanel] = value
 })
 </script>
 
