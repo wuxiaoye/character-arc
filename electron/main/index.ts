@@ -10,7 +10,17 @@ function createMainWindow(): void {
     height: 960,
     minWidth: APP_MIN_WIDTH,
     minHeight: APP_MIN_HEIGHT,
-    titleBarStyle: 'hiddenInset',
+    autoHideMenuBar: true,
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    // Keep native caption buttons while giving the renderer a compact title-bar area to style around.
+    titleBarOverlay:
+      process.platform === 'win32'
+        ? {
+            color: '#f5f5f7',
+            symbolColor: '#1d1d1f',
+            height: 28
+          }
+        : false,
     backgroundColor: '#f5f5f7',
     show: false,
     webPreferences: {

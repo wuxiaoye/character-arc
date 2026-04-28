@@ -4,10 +4,11 @@ import { NConfigProvider, NGlobalStyle, NMessageProvider } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { createNaiveThemeOverrides } from '@/theme/presets'
 import ProjectCenter from '@/pages/ProjectCenter.vue'
+import ProjectWizardPage from '@/pages/ProjectWizardPage.vue'
 import WorkbenchPage from '@/pages/WorkbenchPage.vue'
-import ProjectWizardModal from '@/components/ProjectWizardModal.vue'
 
 const appStore = useAppStore()
+const platform = window.characterArc?.platform ?? 'unknown'
 
 const themeOverrides = computed(() => createNaiveThemeOverrides(appStore.theme))
 const appStyleVars = computed(() => ({
@@ -25,7 +26,9 @@ const appStyleVars = computed(() => ({
   '--arc-shadow-md': '0 10px 30px rgba(0, 0, 0, 0.06)',
   '--arc-radius-sm': '8px',
   '--arc-radius-md': '12px',
-  '--arc-radius-lg': '20px'
+  '--arc-radius-lg': '20px',
+  '--arc-titlebar-height': platform === 'win32' ? '28px' : platform === 'darwin' ? '24px' : '0px',
+  '--arc-window-controls-width': platform === 'win32' ? '138px' : '0px'
 }))
 </script>
 
@@ -34,9 +37,11 @@ const appStyleVars = computed(() => ({
     <n-message-provider>
       <n-global-style />
       <div class="app-shell" :style="appStyleVars">
-        <ProjectCenter v-if="appStore.currentView === 'projects'" />
-        <WorkbenchPage v-else />
-        <ProjectWizardModal />
+        <Transition name="view-fade" mode="out-in">
+          <ProjectCenter v-if="appStore.currentView === 'projects'" key="projects" />
+          <ProjectWizardPage v-else-if="appStore.currentView === 'wizard'" key="wizard" />
+          <WorkbenchPage v-else key="workbench" />
+        </Transition>
       </div>
     </n-message-provider>
   </n-config-provider>

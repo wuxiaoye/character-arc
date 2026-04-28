@@ -206,10 +206,9 @@ function loadStoredState(): StoredState {
 
 export const useAppStore = defineStore('app', () => {
   const stored = loadStoredState()
-  const currentView = ref<'projects' | 'workbench'>('projects')
-  const activePanel = ref<PanelName>('editor')
+  const currentView = ref<'projects' | 'wizard' | 'workbench'>('projects')
+  const activePanel = ref<PanelName>('world')
   const aiVisible = ref(true)
-  const wizardVisible = ref(false)
   const theme = ref<ThemeName>(stored.theme)
   const selectedProjectId = ref(stored.selectedProjectId)
   const projects = ref<ProjectSummary[]>(stored.projects)
@@ -241,7 +240,7 @@ export const useAppStore = defineStore('app', () => {
 
     selectedProjectId.value = projectId
     currentView.value = 'workbench'
-    activePanel.value = 'editor'
+    activePanel.value = 'world'
   }
 
   function backToProjects(): void {
@@ -249,11 +248,11 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function openWizard(): void {
-    wizardVisible.value = true
+    currentView.value = 'wizard'
   }
 
   function closeWizard(): void {
-    wizardVisible.value = false
+    currentView.value = 'projects'
   }
 
   function createProject(payload: { title: string; genre: string; wordCount: string }): void {
@@ -267,9 +266,8 @@ export const useAppStore = defineStore('app', () => {
     })
 
     selectedProjectId.value = projects.value[0].id
-    wizardVisible.value = false
     currentView.value = 'workbench'
-    activePanel.value = 'editor'
+    activePanel.value = 'world'
   }
 
   function setPanel(panel: PanelName): void {
@@ -278,7 +276,7 @@ export const useAppStore = defineStore('app', () => {
 
   function selectChapter(chapterId: string): void {
     selectedChapterId.value = chapterId
-    activePanel.value = 'editor'
+    activePanel.value = 'chapters'
   }
 
   function updateChapterTitle(value: string): void {
@@ -387,7 +385,6 @@ export const useAppStore = defineStore('app', () => {
     updateAppSetting,
     updateChapterContent,
     updateChapterTitle,
-    worldviewEntries,
-    wizardVisible
+    worldviewEntries
   }
 })

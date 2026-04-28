@@ -1,6 +1,6 @@
 export type ThemeName = 'ocean' | 'jade' | 'amber' | 'rose'
 
-export type PanelName = 'worldview' | 'characters' | 'outline' | 'editor' | 'settings'
+export type PanelName = 'overview' | 'world' | 'characters' | 'outline' | 'chapters' | 'settings'
 
 export interface ProjectSummary {
   id: string

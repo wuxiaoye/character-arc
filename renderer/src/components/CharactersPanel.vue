@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Plus, Search, Sparkles, Users } from 'lucide-vue-next'
-import { NButton, NInput, NTag } from 'naive-ui'
-import PanelFrame from '@/components/PanelFrame.vue'
+import { Plus, Search, Sparkles } from 'lucide-vue-next'
+import { NTag } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -35,33 +34,27 @@ function tagType(tone?: 'default' | 'danger' | 'success' | 'warning'): 'default'
 </script>
 
 <template>
-  <PanelFrame title="角色图鉴">
-    <template #title>
-      <span class="title-with-icon">
-        <Users :size="18" />
-        角色图鉴
-      </span>
-    </template>
-
-    <template #actions>
-      <n-input v-model:value="keyword" placeholder="搜索角色..." class="search-input">
-        <template #prefix>
+  <section class="character-panel">
+    <div class="section-head">
+      <div>
+        <h2>角色图鉴</h2>
+        <p>主要角色卡与关键人设在这里集中维护。</p>
+      </div>
+      <div class="head-actions">
+        <div class="search-input">
           <Search :size="16" />
-        </template>
-      </n-input>
-      <n-button round strong>
-        <template #icon>
+          <input v-model="keyword" type="text" placeholder="搜索角色..." />
+        </div>
+        <button class="soft-button">
           <Sparkles :size="16" />
-        </template>
-        AI生成角色
-      </n-button>
-      <n-button type="primary" round strong>
-        <template #icon>
+          <span>AI生成角色</span>
+        </button>
+        <button class="primary-button">
           <Plus :size="16" />
-        </template>
-        新建
-      </n-button>
-    </template>
+          <span>新建</span>
+        </button>
+      </div>
+    </div>
 
     <div class="character-grid">
       <article v-for="character in filteredCharacters" :key="character.id" class="character-card">
@@ -83,33 +76,111 @@ function tagType(tone?: 'default' | 'danger' | 'success' | 'warning'): 'default'
         </div>
       </article>
     </div>
-  </PanelFrame>
+  </section>
 </template>
 
 <style scoped>
-.title-with-icon {
-  display: inline-flex;
+.character-panel {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.section-head h2 {
+  margin: 0 0 8px;
+  font-size: clamp(30px, 3.4vw, 38px);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+
+.section-head p {
+  margin: 0;
+  color: #86868b;
+  font-size: 15px;
+}
+
+.head-actions {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: min(100%, 100%);
 }
 
 .search-input {
-  width: 220px;
+  display: inline-flex;
+  width: min(260px, 100%);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #f5f5f7;
+  color: #9ca3af;
+  padding: 10px 14px;
+}
+
+.search-input:focus-within {
+  border-color: color-mix(in srgb, var(--arc-primary) 22%, white);
+  background: white;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--arc-primary) 10%, transparent);
+}
+
+.search-input input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+}
+
+.soft-button,
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 650;
+  padding: 12px 18px;
+}
+
+.soft-button {
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+
+.soft-button :deep(svg) {
+  color: var(--arc-primary);
+}
+
+.primary-button {
+  background: var(--arc-primary);
+  color: white;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--arc-primary) 24%, transparent);
 }
 
 .character-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
 }
 
 .character-card {
   display: flex;
   gap: 16px;
-  border: 1px solid var(--arc-border);
-  border-radius: var(--arc-radius-lg);
-  background: var(--arc-bg-surface);
-  box-shadow: var(--arc-shadow-sm);
+  border: 1px solid rgba(243, 244, 246, 0.9);
+  border-radius: 28px;
+  background: white;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
   padding: 20px;
   transition:
     transform 0.2s ease,
@@ -118,7 +189,7 @@ function tagType(tone?: 'default' | 'danger' | 'success' | 'warning'): 'default'
 
 .character-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--arc-shadow-md);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.06);
 }
 
 .avatar {
@@ -149,5 +220,28 @@ function tagType(tone?: 'default' | 'danger' | 'success' | 'warning'): 'default'
   line-height: 1.5;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+@media (max-width: 860px) {
+  .search-input {
+    width: 100%;
+    order: 1;
+  }
+
+  .soft-button,
+  .primary-button {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+  }
+}
+
+@media (max-width: 720px) {
+  .character-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .character-card {
+    flex-direction: column;
+  }
 }
 </style>

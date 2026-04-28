@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Cpu, FolderOutput, FileText, Palette, Save } from 'lucide-vue-next'
 import { NButton, NCard, NFormItem, NInput, NSelect } from 'naive-ui'
-import PanelFrame from '@/components/PanelFrame.vue'
 import { themePresets } from '@/theme/presets'
 import { useAppStore } from '@/stores/app'
 import type { ThemeName } from '@/types/app'
@@ -15,7 +14,14 @@ const themeOptions = themePresets.map((preset) => ({
 </script>
 
 <template>
-  <PanelFrame title="项目与应用设置">
+  <section class="settings-panel">
+    <div class="section-head">
+      <div>
+        <h2>项目设置</h2>
+        <p>管理模型连接、主题色和本地备份策略。</p>
+      </div>
+    </div>
+
     <div class="settings-wrap">
       <n-card class="setting-card" :bordered="false">
         <template #header>
@@ -118,13 +124,35 @@ const themeOptions = themePresets.map((preset) => ({
         </div>
       </n-card>
     </div>
-  </PanelFrame>
+  </section>
 </template>
 
 <style scoped>
+.settings-panel {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.section-head {
+  margin-bottom: 32px;
+}
+
+.section-head h2 {
+  margin: 0 0 8px;
+  font-size: clamp(30px, 3.4vw, 38px);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+
+.section-head p {
+  margin: 0;
+  color: #86868b;
+  font-size: 15px;
+}
+
 .settings-wrap {
   display: flex;
-  max-width: 640px;
+  width: min(100%, 640px);
   margin: 0 auto;
   flex-direction: column;
   gap: 24px;
@@ -195,5 +223,25 @@ const themeOptions = themePresets.map((preset) => ({
 
 .theme-dot.active {
   border-color: #1d1d1f;
+}
+
+@media (max-width: 760px) {
+  .setting-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .compact-select {
+    width: 100%;
+  }
+
+  .setting-actions {
+    flex-direction: column;
+  }
+
+  .setting-actions :deep(.n-button) {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

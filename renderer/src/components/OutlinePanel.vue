@@ -1,29 +1,22 @@
 <script setup lang="ts">
 import { GitMerge, Plus, Sparkles } from 'lucide-vue-next'
-import { NButton } from 'naive-ui'
-import PanelFrame from '@/components/PanelFrame.vue'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
 </script>
 
 <template>
-  <PanelFrame title="大纲规划">
-    <template #title>
-      <span class="title-with-icon">
-        <GitMerge :size="18" />
-        大纲规划
-      </span>
-    </template>
-
-    <template #actions>
-      <n-button round strong>
-        <template #icon>
-          <Sparkles :size="16" />
-        </template>
-        AI 扩写大纲
-      </n-button>
-    </template>
+  <section class="outline-panel">
+    <div class="section-head">
+      <div>
+        <h2>剧情大纲</h2>
+        <p>整理篇章结构与关键冲突，让章节推进更加稳定。</p>
+      </div>
+      <button class="soft-button">
+        <Sparkles :size="16" />
+        <span>AI 扩写大纲</span>
+      </button>
+    </div>
 
     <div class="outline-wrap">
       <div class="volume-title">第一卷：霓虹下的老鼠 (目标字数: 5万字)</div>
@@ -44,25 +37,65 @@ const appStore = useAppStore()
         </div>
       </div>
     </div>
-  </PanelFrame>
+  </section>
 </template>
 
 <style scoped>
-.title-with-icon {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.outline-wrap {
-  max-width: 800px;
+.outline-panel {
+  max-width: 960px;
   margin: 0 auto;
 }
 
+.section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.section-head h2 {
+  margin: 0 0 8px;
+  font-size: clamp(30px, 3.4vw, 38px);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+
+.section-head p {
+  margin: 0;
+  color: #86868b;
+  font-size: 15px;
+}
+
+.soft-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 999px;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 650;
+  padding: 12px 18px;
+}
+
+.soft-button :deep(svg) {
+  color: var(--arc-primary);
+}
+
+.outline-wrap {
+  max-width: 820px;
+  margin: 0 auto;
+  width: 100%;
+}
+
 .volume-title {
-  margin: 24px 0 16px;
-  font-size: 18px;
-  font-weight: 600;
+  margin: 0 0 18px;
+  font-size: 22px;
+  font-weight: 650;
 }
 
 .outline-list {
@@ -75,10 +108,10 @@ const appStore = useAppStore()
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: 1px solid var(--arc-border);
-  border-radius: var(--arc-radius-md);
-  background: var(--arc-bg-surface);
-  box-shadow: var(--arc-shadow-sm);
+  border: 1px solid rgba(243, 244, 246, 0.9);
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.03);
   padding: 16px 20px;
 }
 
@@ -117,5 +150,17 @@ const appStore = useAppStore()
   cursor: pointer;
   font-size: 14px;
   padding: 18px 20px;
+}
+
+@media (max-width: 760px) {
+  .soft-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .outline-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>
