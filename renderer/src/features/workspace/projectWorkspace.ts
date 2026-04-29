@@ -3,6 +3,7 @@ import type {
   ChapterVersion,
   ChatMessage,
   CharacterCard,
+  InspirationEntry,
   OutlineItem,
   OutlineVolume,
   ProjectWorkspaceData,
@@ -45,6 +46,21 @@ function normalizeOutlineItems(outlineItems?: OutlineItem[]): OutlineItem[] {
   return sortedItems.map(({ item }, index) => ({
     ...item,
     sortOrder: index
+  }))
+}
+
+function normalizeInspirationEntries(inspirationEntries?: InspirationEntry[]): InspirationEntry[] {
+  const sortedEntries = (inspirationEntries ?? [])
+    .map((entry, index) => ({ entry, index }))
+    .sort((left, right) => (left.entry.sortOrder ?? left.index) - (right.entry.sortOrder ?? right.index))
+
+  return sortedEntries.map(({ entry }, index) => ({
+    ...entry,
+    tags: entry.tags?.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 5) ?? [],
+    source: entry.source === 'manual' ? 'manual' : 'ai',
+    sortOrder: index,
+    createdAt: toIsoTimestamp(entry.createdAt),
+    updatedAt: toIsoTimestamp(entry.updatedAt || entry.createdAt)
   }))
 }
 
@@ -152,6 +168,33 @@ const demoOutline: OutlineItem[] = [
   }
 ]
 
+const demoInspiration: InspirationEntry[] = [
+  {
+    id: 'inspiration-1',
+    type: '开篇钩子',
+    title: '让艾达带着“会说话”的损坏芯片醒来',
+    content:
+      '在李雷把艾达拖进回收站后，让她短暂苏醒，并从损坏芯片中听到一句带坐标的陌生语音。这会立刻把“救人”升级成“必须追查”的主线钩子。',
+    tags: ['悬念', '开篇', '主线引爆'],
+    source: 'ai',
+    sortOrder: 0,
+    createdAt: '2026-04-28T08:15:00.000Z',
+    updatedAt: '2026-04-28T08:15:00.000Z'
+  },
+  {
+    id: 'inspiration-2',
+    type: '转折点',
+    title: '老鬼其实提前认出了艾达的接口型号',
+    content:
+      '在第二章中埋下一个反常细节：老鬼看见接口后沉默太久，说明他知道这不是普通公司货。这能为后续老鬼与企业旧案的关系做铺垫。',
+    tags: ['伏笔', '人物关系', '转折'],
+    source: 'manual',
+    sortOrder: 1,
+    createdAt: '2026-04-28T08:20:00.000Z',
+    updatedAt: '2026-04-28T08:20:00.000Z'
+  }
+]
+
 const demoChapters: ChapterDraft[] = [
   {
     id: 'chapter-1',
@@ -218,6 +261,10 @@ function cloneCharacters(characters?: CharacterCard[]): CharacterCard[] {
     : []
 }
 
+function cloneInspirationEntries(inspirationEntries?: InspirationEntry[]): InspirationEntry[] {
+  return normalizeInspirationEntries(inspirationEntries)
+}
+
 function cloneWorldviewEntries(worldviewEntries?: WorldviewEntry[]): WorldviewEntry[] {
   return normalizeWorldviewEntries(worldviewEntries)
 }
@@ -232,6 +279,7 @@ export function createEmptyWorkspace(overrides?: Partial<ProjectWorkspaceData>):
   return {
     worldviewEntries: cloneWorldviewEntries(overrides?.worldviewEntries),
     characters: cloneCharacters(overrides?.characters),
+    inspirationEntries: cloneInspirationEntries(overrides?.inspirationEntries),
     outlineVolumes: cloneOutlineVolumes(volumeState.outlineVolumes),
     outlineItems: cloneOutlineItems(volumeState.outlineItems),
     chapters: cloneChapters(volumeState.chapters),
@@ -244,6 +292,7 @@ export function createDemoWorkspace(): ProjectWorkspaceData {
   return createEmptyWorkspace({
     worldviewEntries: demoWorldview,
     characters: demoCharacters,
+    inspirationEntries: demoInspiration,
     outlineVolumes: demoVolumes,
     outlineItems: demoOutline,
     chapters: demoChapters
@@ -267,6 +316,7 @@ export function normalizeWorkspace(
   return {
     worldviewEntries: cloneWorldviewEntries(workspace.worldviewEntries),
     characters: cloneCharacters(workspace.characters),
+    inspirationEntries: cloneInspirationEntries(workspace.inspirationEntries),
     outlineVolumes: cloneOutlineVolumes(volumeState.outlineVolumes),
     outlineItems: cloneOutlineItems(volumeState.outlineItems),
     chapters: cloneChapters(volumeState.chapters),

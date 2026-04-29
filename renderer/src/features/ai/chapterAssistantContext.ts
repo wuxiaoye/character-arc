@@ -1,4 +1,5 @@
-import type { ChapterDraft, CharacterCard, OutlineItem, OutlineVolume, ProjectSummary, WorldviewEntry } from '@/types/app'
+import { pickRelevantInspirationEntries } from '@/features/inspiration/relevance'
+import type { ChapterDraft, CharacterCard, InspirationEntry, OutlineItem, OutlineVolume, ProjectSummary, WorldviewEntry } from '@/types/app'
 
 type ChapterAssistantMessage = {
   role: 'user' | 'assistant'
@@ -17,6 +18,7 @@ type ChapterAssistantContextInput = {
   recentMessages: ChapterAssistantMessage[]
   worldviewEntries: WorldviewEntry[]
   characters: CharacterCard[]
+  inspirationEntries: InspirationEntry[]
   outlineItems: OutlineItem[]
   selectedText: string
   responseMode: 'freeform' | 'polish' | 'continue' | 'suggest' | 'reference'
@@ -27,6 +29,16 @@ type ChapterAssistantContextInput = {
 }
 
 export function buildChapterAssistantContext(input: ChapterAssistantContextInput): Record<string, unknown> {
+  const relevantInspirationEntries = pickRelevantInspirationEntries(
+    input.inspirationEntries,
+    {
+      title: input.chapter?.title,
+      summary: input.chapter?.summary,
+      content: input.chapterContent
+    },
+    6
+  )
+
   return {
     projectTitle: input.project?.title,
     projectGenre: input.project?.genre,
@@ -48,6 +60,12 @@ export function buildChapterAssistantContext(input: ChapterAssistantContextInput
       name: character.name,
       role: character.role,
       description: character.description
+    })),
+    inspirationEntries: relevantInspirationEntries.map((entry) => ({
+      type: entry.type,
+      title: entry.title,
+      content: entry.content,
+      tags: entry.tags
     })),
     outlineItems: input.outlineItems.map((item) => ({
       title: item.title,

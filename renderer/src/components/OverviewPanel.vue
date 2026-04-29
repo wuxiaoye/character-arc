@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { BookCopy, Clock3, FileText, GitMerge, Sparkles, Users } from 'lucide-vue-next'
+import { BookCopy, Clock3, FileText, GitMerge, Lightbulb, Sparkles, Users } from 'lucide-vue-next'
 import { getChapterCharacterCount, getChapterPreviewText } from '@/features/chapters/editorContent'
 import { useAppStore } from '@/stores/app'
 import type { PanelName } from '@/types/app'
@@ -15,6 +15,7 @@ const normalizedQuery = computed(() => props.searchQuery?.trim().toLowerCase() ?
 const currentProject = computed(() => appStore.currentProject)
 const totalCharacters = computed(() => appStore.characters.length)
 const totalOutlineItems = computed(() => appStore.outlineItems.length)
+const totalInspirationItems = computed(() => appStore.inspirationEntries.length)
 const totalChapters = computed(() => appStore.chapters.length)
 const totalWords = computed(() =>
   appStore.chapters.reduce((count, chapter) => count + getChapterCharacterCount(chapter.content), 0)
@@ -36,6 +37,14 @@ const overviewCards = computed(() => [
     hint: '已建角色',
     icon: Users,
     target: 'characters' as PanelName
+  },
+  {
+    key: 'inspiration',
+    label: '灵感卡片',
+    value: `${totalInspirationItems.value} 张`,
+    hint: '可扩写素材',
+    icon: Lightbulb,
+    target: 'inspiration' as PanelName
   },
   {
     key: 'outline',
@@ -68,6 +77,12 @@ const quickEntries = computed(() => {
       type: '角色',
       title: character.name,
       description: character.description
+    })),
+    ...appStore.inspirationEntries.map((entry) => ({
+      id: `inspiration-${entry.id}`,
+      type: '灵感',
+      title: entry.title,
+      description: entry.content
     })),
     ...appStore.outlineItems.map((item) => ({
       id: `outline-${item.id}`,
@@ -116,6 +131,11 @@ function openEntry(type: string, title: string): void {
 
   if (type === '大纲') {
     appStore.setPanel('outline')
+    return
+  }
+
+  if (type === '灵感') {
+    appStore.setPanel('inspiration')
     return
   }
 

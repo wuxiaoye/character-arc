@@ -7,7 +7,14 @@ export type AppSettings = {
   baseUrl: string
 }
 
-export type AiTaskName = 'worldview-entry' | 'character-card' | 'outline-item' | 'chapter-assistant' | 'project-bootstrap'
+export type AiTaskName =
+  | 'worldview-entry'
+  | 'character-card'
+  | 'outline-item'
+  | 'chapter-assistant'
+  | 'project-bootstrap'
+  | 'chapter-analysis'
+  | 'inspiration-pack'
 
 export type AiTaskPayload = {
   task: AiTaskName
@@ -44,12 +51,35 @@ export type ProjectBootstrapResult = {
   outlineItems: OutlineResult[]
 }
 
+export type ChapterAnalysisResult = {
+  overview: string
+  pacing: string
+  tension: string
+  continuity: string
+  highlights: string[]
+  risks: string[]
+  revisionActions: string[]
+}
+
+export type InspirationResult = {
+  type: string
+  title: string
+  content: string
+  tags: string[]
+}
+
+export type InspirationPackResult = {
+  entries: InspirationResult[]
+}
+
 export type AiTaskResult =
   | WorldviewResult
   | CharacterResult
   | OutlineResult
   | ChapterAssistantResult
   | ProjectBootstrapResult
+  | ChapterAnalysisResult
+  | InspirationPackResult
 
 export type PromptPair = {
   system: string
@@ -129,6 +159,9 @@ export function resolveMaxTokens(task?: AiTaskPayload): number | undefined {
   switch (task?.task) {
     case 'project-bootstrap':
       return 1500
+    case 'chapter-analysis':
+    case 'inspiration-pack':
+      return 1200
     case 'chapter-assistant':
       switch (String(task.context.responseLength ?? 'medium')) {
         case 'short':

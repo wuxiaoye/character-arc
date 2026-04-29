@@ -1,6 +1,6 @@
 export type ThemeName = 'ocean' | 'jade' | 'amber' | 'rose'
 
-export type PanelName = 'overview' | 'world' | 'characters' | 'outline' | 'chapters' | 'settings'
+export type PanelName = 'overview' | 'world' | 'characters' | 'inspiration' | 'outline' | 'chapters' | 'settings'
 
 export interface ProjectSummary {
   id: string
@@ -33,6 +33,18 @@ export interface CharacterCard {
   description: string
   avatar: string
   tags: CharacterTag[]
+}
+
+export interface InspirationEntry {
+  id: string
+  type: string
+  title: string
+  content: string
+  tags: string[]
+  source: 'ai' | 'manual'
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
 }
 
 export interface OutlineVolume {
@@ -102,6 +114,7 @@ export interface ChapterVersion {
 export interface ProjectWorkspaceData {
   worldviewEntries: WorldviewEntry[]
   characters: CharacterCard[]
+  inspirationEntries: InspirationEntry[]
   outlineVolumes: OutlineVolume[]
   outlineItems: OutlineItem[]
   chapters: ChapterDraft[]

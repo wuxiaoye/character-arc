@@ -35,6 +35,7 @@ import type {
   ChapterVersion,
   ChatMessage,
   CharacterCard,
+  InspirationEntry,
   OutlineItem,
   OutlineVolume,
   PanelName,
@@ -53,6 +54,7 @@ interface ProjectWorkspacePayload {
   }
   worldviewEntries?: WorldviewEntry[]
   characters?: CharacterCard[]
+  inspirationEntries?: InspirationEntry[]
   outlineVolumes?: OutlineVolume[]
   outlineItems?: OutlineItem[]
   chapters?: ChapterDraft[]
@@ -79,6 +81,13 @@ function reindexWorldviewEntries(entries: WorldviewEntry[]): WorldviewEntry[] {
 function reindexOutlineItems(items: OutlineItem[]): OutlineItem[] {
   return items.map((item, index) => ({
     ...item,
+    sortOrder: index
+  }))
+}
+
+function reindexInspirationEntries(entries: InspirationEntry[]): InspirationEntry[] {
+  return entries.map((entry, index) => ({
+    ...entry,
     sortOrder: index
   }))
 }
@@ -111,6 +120,7 @@ export const useAppStore = defineStore('app', () => {
   )
   const worldviewEntries = computed(() => currentWorkspace.value.worldviewEntries)
   const characters = computed(() => currentWorkspace.value.characters)
+  const inspirationEntries = computed(() => currentWorkspace.value.inspirationEntries)
   const outlineItems = computed(() => currentWorkspace.value.outlineItems)
   const chapters = computed(() => currentWorkspace.value.chapters)
   const outlineVolumes = computed(() => currentWorkspace.value.outlineVolumes)
@@ -399,6 +409,7 @@ export const useAppStore = defineStore('app', () => {
     project?: Partial<ProjectSummary>
     worldviewEntries?: WorldviewEntry[]
     characters?: CharacterCard[]
+    inspirationEntries?: InspirationEntry[]
     outlineVolumes?: OutlineVolume[]
     outlineItems?: OutlineItem[]
     chapters?: ChapterDraft[]
@@ -420,6 +431,7 @@ export const useAppStore = defineStore('app', () => {
       [projectId]: normalizeProjectWorkspaceData({
         worldviewEntries: payload.worldviewEntries,
         characters: payload.characters,
+        inspirationEntries: payload.inspirationEntries,
         outlineVolumes: payload.outlineVolumes,
         outlineItems: payload.outlineItems,
         chapters: payload.chapters,
@@ -506,6 +518,7 @@ export const useAppStore = defineStore('app', () => {
       [projectId]: normalizeProjectWorkspaceData({
         worldviewEntries: payload.worldviewEntries,
         characters: payload.characters,
+        inspirationEntries: payload.inspirationEntries,
         outlineVolumes: nextVolumes,
         outlineItems: payload.outlineItems,
         chapters: nextChapters,
@@ -517,7 +530,10 @@ export const useAppStore = defineStore('app', () => {
     pendingChapterInsertion.value = null
     aiVisible.value = true
     currentView.value = 'workbench'
-    activePanel.value = payload.worldviewEntries?.length || payload.outlineItems?.length ? 'overview' : 'chapters'
+    activePanel.value =
+      payload.worldviewEntries?.length || payload.inspirationEntries?.length || payload.outlineItems?.length
+        ? 'overview'
+        : 'chapters'
     syncSelectedChapter(projectId)
     schedulePersist('fast')
   }
@@ -664,6 +680,76 @@ export const useAppStore = defineStore('app', () => {
     updateCurrentWorkspace((workspace) => ({
       ...workspace,
       characters: workspace.characters.filter((character) => character.id !== characterId)
+    }))
+    schedulePersist('fast')
+  }
+
+  function createInspirationEntry(payload?: Partial<InspirationEntry>): void {
+    const createdAt = toIsoTimestamp(payload?.createdAt)
+    const updatedAt = toIsoTimestamp(payload?.updatedAt || payload?.createdAt)
+    const normalizedTags = Array.isArray(payload?.tags)
+      ? payload.tags
+          .map((tag) => String(tag).trim())
+          .filter(Boolean)
+          .slice(0, 8)
+      : []
+
+    updateCurrentWorkspace((workspace) => ({
+      ...workspace,
+      inspirationEntries: reindexInspirationEntries([
+        {
+          id: `inspiration-${Date.now()}`,
+          type: payload?.type?.trim() || '场景火花',
+          title: payload?.title?.trim() || `灵感卡片 ${workspace.inspirationEntries.length + 1}`,
+          content:
+            payload?.content?.trim() ||
+            '这里记录一个可以继续扩写的灵感片段，你可以补充场景、冲突、情绪或关键台词。',
+          tags: normalizedTags,
+          source: payload?.source === 'ai' ? 'ai' : 'manual',
+          sortOrder: payload?.sortOrder ?? 0,
+          createdAt,
+          updatedAt
+        },
+        ...workspace.inspirationEntries
+      ])
+    }))
+    schedulePersist('fast')
+  }
+
+  function updateInspirationEntry(entryId: string, payload: Partial<InspirationEntry>): void {
+    updateCurrentWorkspace((workspace) => ({
+      ...workspace,
+      inspirationEntries: reindexInspirationEntries(
+        workspace.inspirationEntries.map((entry) =>
+          entry.id === entryId
+            ? {
+                ...entry,
+                type: payload.type?.trim() || entry.type,
+                title: payload.title?.trim() || entry.title,
+                content: payload.content?.trim() || entry.content,
+                tags:
+                  Array.isArray(payload.tags) && payload.tags.length
+                    ? payload.tags
+                        .map((tag) => String(tag).trim())
+                        .filter(Boolean)
+                        .slice(0, 8)
+                    : entry.tags,
+                source: payload.source ?? entry.source,
+                updatedAt: toIsoTimestamp(payload.updatedAt || new Date().toISOString())
+              }
+            : entry
+        )
+      )
+    }))
+    schedulePersist('fast')
+  }
+
+  function deleteInspirationEntry(entryId: string): void {
+    updateCurrentWorkspace((workspace) => ({
+      ...workspace,
+      inspirationEntries: reindexInspirationEntries(
+        workspace.inspirationEntries.filter((entry) => entry.id !== entryId)
+      )
     }))
     schedulePersist('fast')
   }
@@ -1242,10 +1328,12 @@ export const useAppStore = defineStore('app', () => {
     chapterVersions,
     chapters,
     characters,
+    inspirationEntries,
     closeWizard,
     createProject,
     createProjectWorkspace,
     createCharacter,
+    createInspirationEntry,
     createOutlineItem,
     createOutlineVolume,
     createWorldviewEntry,
@@ -1262,6 +1350,7 @@ export const useAppStore = defineStore('app', () => {
     isPersistencePending,
     deleteChapter,
     deleteCharacter,
+    deleteInspirationEntry,
     deleteOutlineItem,
     deleteProject,
     deleteWorldviewEntry,
@@ -1305,6 +1394,7 @@ export const useAppStore = defineStore('app', () => {
     updateChapterSummary,
     updateChapterTitle,
     updateCharacter,
+    updateInspirationEntry,
     updateOutlineItem,
     updateOutlineVolume,
     updateWorldviewEntry,

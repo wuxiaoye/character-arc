@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Cpu, Download, FileJson, FileStack, FileText, FolderOutput, Palette, PlugZap, Save, Users } from 'lucide-vue-next'
+import { Cpu, Download, FileJson, FileStack, FileText, FolderOutput, Lightbulb, Palette, PlugZap, Save, Users } from 'lucide-vue-next'
 import { NButton, NCard, NFormItem, NInput, NSelect, useMessage } from 'naive-ui'
 import { getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { autoSaveOptions } from '@/features/settings/autoSave'
@@ -164,6 +164,7 @@ async function handleExportJson(): Promise<void> {
     project: appStore.currentProject,
     worldviewEntries: appStore.worldviewEntries,
     characters: appStore.characters,
+    inspirationEntries: appStore.inspirationEntries,
     outlineVolumes: appStore.outlineVolumes,
     outlineItems: appStore.outlineItems,
     chapters: appStore.chapters,
@@ -263,6 +264,29 @@ async function handleExportOutline(): Promise<void> {
   }
 }
 
+async function handleExportInspiration(): Promise<void> {
+  const result = await window.characterArc.exportJson({
+    data: {
+      version: '1.0',
+      type: 'inspiration',
+      project: appStore.currentProject,
+      inspirationEntries: appStore.inspirationEntries,
+      exportedAt: new Date().toISOString()
+    },
+    title: '导出灵感卡片 JSON',
+    defaultPath: `${buildExportStem('inspiration')}.json`
+  })
+
+  if (result.success) {
+    message.success('灵感卡片已导出')
+    return
+  }
+
+  if (!result.canceled) {
+    message.error('导出灵感卡片失败，请稍后重试')
+  }
+}
+
 async function handleExportChaptersJson(): Promise<void> {
   const result = await window.characterArc.exportJson({
     data: {
@@ -302,6 +326,7 @@ async function handleImportJson(): Promise<void> {
     project?: import('@/types/app').ProjectSummary
     worldviewEntries?: import('@/types/app').WorldviewEntry[]
     characters?: import('@/types/app').CharacterCard[]
+    inspirationEntries?: import('@/types/app').InspirationEntry[]
     outlineVolumes?: import('@/types/app').OutlineVolume[]
     outlineItems?: import('@/types/app').OutlineItem[]
     chapters?: import('@/types/app').ChapterDraft[]
@@ -445,6 +470,11 @@ async function handleImportJson(): Promise<void> {
               <FileStack :size="18" />
               <strong>剧情大纲</strong>
               <span>导出大纲节点与冲突</span>
+            </button>
+            <button class="module-export-card" @click="handleExportInspiration">
+              <Lightbulb :size="18" />
+              <strong>灵感卡片</strong>
+              <span>导出标题、桥段与转折素材</span>
             </button>
             <button class="module-export-card" @click="handleExportChaptersJson">
               <FileJson :size="18" />

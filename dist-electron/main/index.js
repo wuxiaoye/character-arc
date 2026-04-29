@@ -63,9 +63,103 @@ function buildTaskPrompt(task) {
 返回格式：{"worldviewEntries":[{"type":"","title":"","content":""}],"outlineItems":[{"title":"","wordTarget":"","conflict":"","summary":""}]}`
     };
   }
+  if (task.task === "chapter-analysis") {
+    const worldviewEntries = Array.isArray(context.worldviewEntries) ? context.worldviewEntries.slice(0, 8).map((entry) => `${String(entry.title ?? "")}：${String(entry.content ?? "")}`).join("\n") : "";
+    const characters = Array.isArray(context.characters) ? context.characters.slice(0, 8).map((character) => `${String(character.name ?? "")} / ${String(character.role ?? "")}：${String(character.description ?? "")}`).join("\n") : "";
+    Array.isArray(context.inspirationEntries) ? context.inspirationEntries.slice(0, 6).map((entry) => {
+      const record = entry;
+      const tags = Array.isArray(record.tags) ? record.tags.map((tag) => String(tag)).join("、") : "";
+      return `${String(record.type ?? "")} / ${String(record.title ?? "")}：${String(record.content ?? "")}${tags ? `（标签：${tags}）` : ""}`;
+    }).join("\n") : "";
+    const outlineItems = Array.isArray(context.outlineItems) ? context.outlineItems.slice(0, 6).map((item) => `${String(item.title ?? "")}：${String(item.summary ?? "")}`).join("\n") : "";
+    return {
+      system: "你是小说章节分析助手。请只返回 JSON 对象，不要返回 Markdown，不要解释。字段必须包含 overview、pacing、tension、continuity、highlights、risks、revisionActions。",
+      user: `请分析当前章节的写作质量与可优化点。
+
+项目标题：${String(context.projectTitle ?? "")}
+项目题材：${String(context.projectGenre ?? "")}
+当前分卷：${String(context.chapterVolumeTitle ?? "")}
+当前分卷摘要：${String(context.chapterVolumeSummary ?? "")}
+当前章节标题：${String(context.chapterTitle ?? "")}
+当前章节摘要：${String(context.chapterSummary ?? "")}
+当前章节状态：${String(context.chapterStatus ?? "")}
+当前章节预估字数：${String(context.chapterWordTarget ?? "")}
+当前章节实际字数：${String(context.chapterWordCount ?? "")}
+当前章节正文：
+${String(context.chapterContent ?? "")}
+
+相关世界观：
+${worldviewEntries || "暂无"}
+
+相关角色：
+${characters || "暂无"}
+
+相关大纲：
+${outlineItems || "暂无"}
+
+要求：
+1. overview 用 1 到 2 句话概括当前章节完成度、情绪和主要问题
+2. pacing / tension / continuity 都用一句中文短评，既要判断也要说明原因
+3. highlights 返回 2 到 4 条，强调当前章节已经做得好的地方
+4. risks 返回 2 到 4 条，指出节奏、逻辑、人物一致性、设定引用或信息密度方面的风险
+5. revisionActions 返回 3 到 5 条，必须是作者可以立刻执行的修改动作，尽量具体
+6. 输出务必紧贴当前正文，不要给空泛写作建议
+
+返回格式：{"overview":"","pacing":"","tension":"","continuity":"","highlights":["",""],"risks":["",""],"revisionActions":["","",""]}`
+    };
+  }
+  if (task.task === "inspiration-pack") {
+    const worldviewEntries = Array.isArray(context.worldviewEntries) ? context.worldviewEntries.slice(0, 8).map((entry) => `${String(entry.title ?? "")}：${String(entry.content ?? "")}`).join("\n") : "";
+    const characters = Array.isArray(context.characters) ? context.characters.slice(0, 8).map((character) => `${String(character.name ?? "")} / ${String(character.role ?? "")}：${String(character.description ?? "")}`).join("\n") : "";
+    Array.isArray(context.inspirationEntries) ? context.inspirationEntries.slice(0, 6).map((entry) => {
+      const record = entry;
+      const tags = Array.isArray(record.tags) ? record.tags.map((tag) => String(tag)).join("、") : "";
+      return `${String(record.type ?? "")} / ${String(record.title ?? "")}：${String(record.content ?? "")}${tags ? `（标签：${tags}）` : ""}`;
+    }).join("\n") : "";
+    const outlineItems = Array.isArray(context.outlineItems) ? context.outlineItems.slice(0, 6).map((item) => `${String(item.title ?? "")}：${String(item.summary ?? "")}`).join("\n") : "";
+    const existingInspirationTitles = Array.isArray(context.existingInspirationTitles) ? JSON.stringify(context.existingInspirationTitles) : "[]";
+    return {
+      system: "你是小说灵感生成助手。请只返回 JSON 对象，不要返回 Markdown，不要解释。字段必须包含 entries，entries 中每一项都必须包含 type、title、content、tags。",
+      user: `请围绕当前小说项目生成一组可直接保存的灵感卡片。
+
+项目标题：${String(context.projectTitle ?? "")}
+项目题材：${String(context.projectGenre ?? "")}
+当前章节标题：${String(context.chapterTitle ?? "")}
+当前章节摘要：${String(context.chapterSummary ?? "")}
+当前章节正文：
+${String(context.chapterContent ?? "")}
+
+灵感焦点：${String(context.focusType ?? "场景火花")}
+已有灵感标题：${existingInspirationTitles}
+
+相关世界观：
+${worldviewEntries || "暂无"}
+
+相关角色：
+${characters || "暂无"}
+
+相关大纲：
+${outlineItems || "暂无"}
+
+要求：
+1. entries 返回 4 条灵感卡片，每条都必须紧贴“灵感焦点”
+2. type 必须从以下类型中选一个：标题灵感、开篇钩子、场景火花、剧情转折、设定补完、人物动机
+3. title 要短而明确，避免与已有灵感标题重复
+4. content 用中文写成 60 到 140 字的可执行灵感描述，强调可落地场景、冲突、情绪或推进方式
+5. tags 返回 2 到 4 个简短标签，方便后续筛选
+6. 不要空泛鸡汤，不要写成长篇大纲，要像作者工作台里的“灵感卡片”
+
+返回格式：{"entries":[{"type":"","title":"","content":"","tags":["",""]}]}`
+    };
+  }
   if (task.task === "chapter-assistant") {
     const worldviewEntries = Array.isArray(context.worldviewEntries) ? context.worldviewEntries.slice(0, 8).map((entry) => `${String(entry.title ?? "")}：${String(entry.content ?? "")}`).join("\n") : "";
     const characters = Array.isArray(context.characters) ? context.characters.slice(0, 8).map((character) => `${String(character.name ?? "")} / ${String(character.role ?? "")}：${String(character.description ?? "")}`).join("\n") : "";
+    const inspirationEntries = Array.isArray(context.inspirationEntries) ? context.inspirationEntries.slice(0, 6).map((entry) => {
+      const record = entry;
+      const tags = Array.isArray(record.tags) ? record.tags.map((tag) => String(tag)).join("、") : "";
+      return `${String(record.type ?? "")} / ${String(record.title ?? "")}：${String(record.content ?? "")}${tags ? `（标签：${tags}）` : ""}`;
+    }).join("\n") : "";
     const outlineItems = Array.isArray(context.outlineItems) ? context.outlineItems.slice(0, 6).map((item) => `${String(item.title ?? "")}：${String(item.summary ?? "")}`).join("\n") : "";
     const relatedChapters = Array.isArray(context.relatedChapters) ? context.relatedChapters.slice(0, 2).map((item, index) => {
       const record = item;
@@ -112,6 +206,9 @@ ${worldviewEntries || "暂无"}
 相关角色：
 ${characters || "暂无"}
 
+当前可用灵感：
+${inspirationEntries || "暂无"}
+
 相关大纲：
 ${outlineItems || "暂无"}
 
@@ -130,9 +227,10 @@ ${recentMessages || "暂无"}
 4. 如果请求是分析或建议，请给出清晰可执行的建议
 5. 避免与最近几条对话重复表达，除非用户明确要求重写
 6. 如果是续写，请尽量与相邻章节和当前分卷的情绪、节奏保持连续
-7. ${modeInstruction}
-8. ${lengthInstruction}
-9. ${quickActionInstruction}`
+7. 若当前可用灵感不为空，可优先借用其中最贴合的一条，把它自然落到正文、桥段或冲突推进中
+8. ${modeInstruction}
+9. ${lengthInstruction}
+10. ${quickActionInstruction}`
     };
   }
   return {
@@ -284,6 +382,9 @@ function resolveMaxTokens(task) {
   switch (task?.task) {
     case "project-bootstrap":
       return 1500;
+    case "chapter-analysis":
+    case "inspiration-pack":
+      return 1200;
     case "chapter-assistant":
       switch (String(task.context.responseLength ?? "medium")) {
         case "short":
@@ -586,6 +687,42 @@ function normalizeProjectBootstrapResult(result) {
     outlineItems
   };
 }
+function normalizeChapterAnalysisResult(result) {
+  const payload = result;
+  const toList = (value, fallback) => {
+    if (!Array.isArray(value)) {
+      return fallback;
+    }
+    const normalized = value.map((item) => String(item).trim()).filter(Boolean).slice(0, 5);
+    return normalized.length ? normalized : fallback;
+  };
+  return {
+    overview: payload.overview?.trim() || "这一章已经形成基础场景与推进，但还需要进一步打磨节奏和信息聚焦。",
+    pacing: payload.pacing?.trim() || "节奏判断暂不稳定，建议重新检查铺垫与推进的比例。",
+    tension: payload.tension?.trim() || "张力表达仍有提升空间，需要强化冲突触发点和情绪落点。",
+    continuity: payload.continuity?.trim() || "连续性基本成立，但还需要核对角色动机、设定引用和上下章衔接。",
+    highlights: toList(payload.highlights, ["章节已经建立了基本情境，可以继续沿当前方向深化。"]),
+    risks: toList(payload.risks, ["当前分析未提取到明确风险，建议人工复核逻辑与节奏。"]),
+    revisionActions: toList(payload.revisionActions, ["先挑一段关键正文，按冲突、节奏和画面感三个维度逐句重写。"])
+  };
+}
+function normalizeInspirationResult(result) {
+  const entry = result;
+  const tags = Array.isArray(entry.tags) ? entry.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 4) : [];
+  return {
+    type: entry.type?.trim() || "场景火花",
+    title: entry.title?.trim() || "新的灵感切口",
+    content: entry.content?.trim() || "AI 未返回有效灵感内容",
+    tags: tags.length ? tags : ["待扩写", "灵感"]
+  };
+}
+function normalizeInspirationPackResult(result) {
+  const payload = result;
+  const entries = Array.isArray(payload.entries) ? payload.entries.slice(0, 6).map((entry) => normalizeInspirationResult(entry)) : [];
+  return {
+    entries
+  };
+}
 function isTaskResultUsable(task, result) {
   if (task.task === "chapter-assistant") {
     return Boolean(result.content?.trim());
@@ -593,6 +730,16 @@ function isTaskResultUsable(task, result) {
   if (task.task === "project-bootstrap") {
     const payload = result;
     return payload.worldviewEntries.length > 0 && payload.outlineItems.length > 0;
+  }
+  if (task.task === "chapter-analysis") {
+    const analysis = result;
+    return Boolean(
+      analysis.overview.trim() && analysis.pacing.trim() && analysis.tension.trim() && analysis.continuity.trim() && analysis.highlights.length > 0 && analysis.risks.length > 0 && analysis.revisionActions.length > 0
+    );
+  }
+  if (task.task === "inspiration-pack") {
+    const payload = result;
+    return payload.entries.length > 0;
   }
   if (task.task === "worldview-entry") {
     const entry = result;
@@ -617,6 +764,10 @@ function normalizeTaskResult(task, rawText) {
       return normalizeCharacterResult(parsed);
     case "project-bootstrap":
       return normalizeProjectBootstrapResult(parsed);
+    case "chapter-analysis":
+      return normalizeChapterAnalysisResult(parsed);
+    case "inspiration-pack":
+      return normalizeInspirationPackResult(parsed);
     case "outline-item":
     default:
       return normalizeOutlineResult(parsed);
@@ -903,6 +1054,20 @@ async function ensureWorkspaceDb() {
       FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS inspiration_entries (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      tags_json TEXT NOT NULL,
+      source TEXT NOT NULL,
+      sort_order INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS outline_volumes (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
@@ -1021,7 +1186,7 @@ function ensureChapterColumns(db) {
 }
 function ensureProjectScopedColumns(db) {
   const defaultProjectId = db.prepare(`SELECT selected_project_id AS projectId FROM app_settings WHERE id = 1`).get()?.projectId || db.prepare(`SELECT id FROM projects ORDER BY rowid ASC LIMIT 1`).get()?.id || "project-1";
-  const projectScopedTables = ["worldview_entries", "characters", "outline_volumes", "outline_items", "chapters", "chapter_versions", "ai_messages"];
+  const projectScopedTables = ["worldview_entries", "characters", "inspiration_entries", "outline_volumes", "outline_items", "chapters", "chapter_versions", "ai_messages"];
   for (const tableName of projectScopedTables) {
     const columns = db.prepare(`PRAGMA table_info('${tableName}')`).all();
     const columnNames = new Set(columns.map((column) => column.name));
@@ -1094,6 +1259,14 @@ function normalizeWorkspacePayload(payload) {
           updatedAt: entry.updatedAt || entry.createdAt || normalizedTimestamp
         })) : [],
         characters: project.id === selectedProjectId ? legacyPayload.characters ?? [] : [],
+        inspirationEntries: project.id === selectedProjectId ? (legacyPayload.inspirationEntries ?? []).map((entry, index) => ({
+          ...entry,
+          tags: Array.isArray(entry.tags) ? entry.tags.map((tag) => String(tag).trim()).filter(Boolean) : [],
+          source: entry.source === "manual" ? "manual" : "ai",
+          sortOrder: entry.sortOrder ?? index,
+          createdAt: entry.createdAt || normalizedTimestamp,
+          updatedAt: entry.updatedAt || entry.createdAt || normalizedTimestamp
+        })) : [],
         outlineItems: project.id === selectedProjectId ? (legacyPayload.outlineItems ?? []).map((item, index) => ({
           ...item,
           volumeId: item.volumeId || legacyPayload.outlineVolumes?.[0]?.id || "volume-legacy-default",
@@ -1143,6 +1316,22 @@ function readWorkspaceSnapshot(db) {
     avatar: row.avatar,
     tags: JSON.parse(row.tagsJson)
   }));
+  const inspirationEntries = db.prepare(`
+    SELECT project_id AS projectId, id, type, title, content, tags_json AS tagsJson, source, sort_order AS sortOrder, created_at AS createdAt, updated_at AS updatedAt
+    FROM inspiration_entries
+    ORDER BY project_id ASC, sort_order ASC
+  `).all().map((row) => ({
+    projectId: row.projectId,
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    content: row.content,
+    tags: JSON.parse(row.tagsJson),
+    source: row.source === "manual" ? "manual" : "ai",
+    sortOrder: row.sortOrder,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  }));
   const outlineVolumes = db.prepare(`
     SELECT project_id AS projectId, id, title, word_target AS wordTarget, summary
     FROM outline_volumes
@@ -1183,6 +1372,7 @@ function readWorkspaceSnapshot(db) {
       {
         worldviewEntries: worldviewEntries.filter((entry) => entry.projectId === project.id).map(({ projectId: _projectId, ...entry }) => entry),
         characters: characters.filter((character) => character.projectId === project.id).map(({ projectId: _projectId, ...character }) => character),
+        inspirationEntries: inspirationEntries.filter((entry) => entry.projectId === project.id).map(({ projectId: _projectId, ...entry }) => entry),
         outlineVolumes: outlineVolumes.filter((volume) => volume.projectId === project.id).map(({ projectId: _projectId, ...volume }) => volume),
         outlineItems: outlineItems.filter((item) => item.projectId === project.id).map(({ projectId: _projectId, ...item }) => item),
         chapters: chapters.filter((chapter) => chapter.projectId === project.id).map(({ projectId: _projectId, ...chapter }) => chapter),
@@ -1215,6 +1405,7 @@ function writeWorkspaceSnapshot(db, payload) {
       DELETE FROM projects;
       DELETE FROM worldview_entries;
       DELETE FROM characters;
+      DELETE FROM inspiration_entries;
       DELETE FROM outline_volumes;
       DELETE FROM outline_items;
       DELETE FROM chapter_versions;
@@ -1236,6 +1427,10 @@ function writeWorkspaceSnapshot(db, payload) {
     const insertCharacter = db.prepare(`
       INSERT INTO characters (id, project_id, name, role, description, avatar, tags_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insertInspiration = db.prepare(`
+      INSERT INTO inspiration_entries (id, project_id, type, title, content, tags_json, source, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertOutlineVolume = db.prepare(`
       INSERT INTO outline_volumes (id, project_id, title, word_target, summary, sort_order)
@@ -1261,6 +1456,7 @@ function writeWorkspaceSnapshot(db, payload) {
       const workspace = payload.workspaces[project.id] ?? {
         worldviewEntries: [],
         characters: [],
+        inspirationEntries: [],
         outlineVolumes: [],
         outlineItems: [],
         chapters: [],
@@ -1288,6 +1484,20 @@ function writeWorkspaceSnapshot(db, payload) {
           character.description,
           character.avatar,
           JSON.stringify(character.tags)
+        );
+      });
+      workspace.inspirationEntries.forEach((entry, index) => {
+        insertInspiration.run(
+          entry.id,
+          project.id,
+          entry.type,
+          entry.title,
+          entry.content,
+          JSON.stringify(entry.tags),
+          entry.source,
+          entry.sortOrder ?? index,
+          entry.createdAt,
+          entry.updatedAt
         );
       });
       workspace.outlineVolumes.forEach((volume, index) => {
@@ -1369,6 +1579,7 @@ function validateImportedWorkspace(payload) {
   const collectionChecks = [
     ["worldviewEntries", data.worldviewEntries],
     ["characters", data.characters],
+    ["inspirationEntries", data.inspirationEntries],
     ["outlineVolumes", data.outlineVolumes],
     ["outlineItems", data.outlineItems],
     ["chapters", data.chapters],
@@ -1387,6 +1598,16 @@ function validateImportedWorkspace(payload) {
     });
     if (invalidWorldview) {
       return { valid: false, message: "worldviewEntries 中存在字段缺失或格式错误的设定条目。" };
+    }
+  }
+  if (Array.isArray(data.inspirationEntries)) {
+    const invalidInspiration = data.inspirationEntries.find((item) => {
+      if (!item || typeof item !== "object") return true;
+      const inspiration = item;
+      return typeof inspiration.type !== "string" || typeof inspiration.title !== "string" || typeof inspiration.content !== "string" || !Array.isArray(inspiration.tags) || inspiration.source !== void 0 && inspiration.source !== "ai" && inspiration.source !== "manual" || inspiration.sortOrder !== void 0 && typeof inspiration.sortOrder !== "number" || inspiration.createdAt !== void 0 && typeof inspiration.createdAt !== "string" || inspiration.updatedAt !== void 0 && typeof inspiration.updatedAt !== "string";
+    });
+    if (invalidInspiration) {
+      return { valid: false, message: "inspirationEntries 中存在字段缺失或格式错误的灵感条目。" };
     }
   }
   if (Array.isArray(data.outlineVolumes)) {

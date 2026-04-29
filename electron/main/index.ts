@@ -290,6 +290,20 @@ async function ensureWorkspaceDb(): Promise<DatabaseSync> {
       FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS inspiration_entries (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      tags_json TEXT NOT NULL,
+      source TEXT NOT NULL,
+      sort_order INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS outline_volumes (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
@@ -427,7 +441,7 @@ function ensureProjectScopedColumns(db: DatabaseSync): void {
     (db.prepare(`SELECT id FROM projects ORDER BY rowid ASC LIMIT 1`).get() as { id?: string } | undefined)?.id ||
     'project-1'
 
-  const projectScopedTables = ['worldview_entries', 'characters', 'outline_volumes', 'outline_items', 'chapters', 'chapter_versions', 'ai_messages']
+  const projectScopedTables = ['worldview_entries', 'characters', 'inspiration_entries', 'outline_volumes', 'outline_items', 'chapters', 'chapter_versions', 'ai_messages']
   for (const tableName of projectScopedTables) {
     const columns = db.prepare(`PRAGMA table_info('${tableName}')`).all() as Array<{ name: string }>
     const columnNames = new Set(columns.map((column) => column.name))
@@ -499,6 +513,17 @@ type WorkspacePayload = {
         avatar: string
         tags: Array<{ label: string; tone?: string }>
       }>
+      inspirationEntries: Array<{
+        id: string
+        type: string
+        title: string
+        content: string
+        tags: string[]
+        source: 'ai' | 'manual'
+        sortOrder: number
+        createdAt: string
+        updatedAt: string
+      }>
       outlineVolumes: Array<{
         id: string
         title: string
@@ -567,6 +592,17 @@ type LegacyWorkspacePayload = Omit<WorkspacePayload, 'workspaces'> & {
     description: string
     avatar: string
     tags: Array<{ label: string; tone?: string }>
+  }>
+  inspirationEntries?: Array<{
+    id: string
+    type: string
+    title: string
+    content: string
+    tags: string[]
+    source?: 'ai' | 'manual'
+    sortOrder?: number
+    createdAt?: string
+    updatedAt?: string
   }>
   outlineVolumes?: Array<{
     id: string
@@ -666,6 +702,17 @@ function normalizeWorkspacePayload(payload: WorkspacePayload | LegacyWorkspacePa
               }))
             : [],
         characters: project.id === selectedProjectId ? legacyPayload.characters ?? [] : [],
+        inspirationEntries:
+          project.id === selectedProjectId
+            ? (legacyPayload.inspirationEntries ?? []).map((entry, index) => ({
+                ...entry,
+                tags: Array.isArray(entry.tags) ? entry.tags.map((tag) => String(tag).trim()).filter(Boolean) : [],
+                source: (entry.source === 'manual' ? 'manual' : 'ai') as 'ai' | 'manual',
+                sortOrder: entry.sortOrder ?? index,
+                createdAt: entry.createdAt || normalizedTimestamp,
+                updatedAt: entry.updatedAt || entry.createdAt || normalizedTimestamp
+              }))
+            : [],
         outlineItems:
           project.id === selectedProjectId
             ? (legacyPayload.outlineItems ?? []).map((item, index) => ({
@@ -726,6 +773,23 @@ function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null {
     avatar: row.avatar as string,
     tags: JSON.parse(row.tagsJson as string) as Array<{ label: string; tone?: string }>
   })) as Array<WorkspacePayload['workspaces'][string]['characters'][number] & { projectId: string }>
+
+  const inspirationEntries = db.prepare(`
+    SELECT project_id AS projectId, id, type, title, content, tags_json AS tagsJson, source, sort_order AS sortOrder, created_at AS createdAt, updated_at AS updatedAt
+    FROM inspiration_entries
+    ORDER BY project_id ASC, sort_order ASC
+  `).all().map((row) => ({
+    projectId: row.projectId as string,
+    id: row.id as string,
+    type: row.type as string,
+    title: row.title as string,
+    content: row.content as string,
+    tags: JSON.parse(row.tagsJson as string) as string[],
+    source: ((row.source as string) === 'manual' ? 'manual' : 'ai') as 'ai' | 'manual',
+    sortOrder: row.sortOrder as number,
+    createdAt: row.createdAt as string,
+    updatedAt: row.updatedAt as string
+  })) as Array<WorkspacePayload['workspaces'][string]['inspirationEntries'][number] & { projectId: string }>
 
   const outlineVolumes = db.prepare(`
     SELECT project_id AS projectId, id, title, word_target AS wordTarget, summary
@@ -789,6 +853,9 @@ function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null {
         characters: characters
           .filter((character) => character.projectId === project.id)
           .map(({ projectId: _projectId, ...character }) => character),
+        inspirationEntries: inspirationEntries
+          .filter((entry) => entry.projectId === project.id)
+          .map(({ projectId: _projectId, ...entry }) => entry),
         outlineVolumes: outlineVolumes
           .filter((volume) => volume.projectId === project.id)
           .map(({ projectId: _projectId, ...volume }) => volume),
@@ -833,6 +900,7 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
       DELETE FROM projects;
       DELETE FROM worldview_entries;
       DELETE FROM characters;
+      DELETE FROM inspiration_entries;
       DELETE FROM outline_volumes;
       DELETE FROM outline_items;
       DELETE FROM chapter_versions;
@@ -857,6 +925,11 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
     const insertCharacter = db.prepare(`
       INSERT INTO characters (id, project_id, name, role, description, avatar, tags_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    const insertInspiration = db.prepare(`
+      INSERT INTO inspiration_entries (id, project_id, type, title, content, tags_json, source, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertOutlineVolume = db.prepare(`
@@ -888,6 +961,7 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
       const workspace = payload.workspaces[project.id] ?? {
         worldviewEntries: [],
         characters: [],
+        inspirationEntries: [],
         outlineVolumes: [],
         outlineItems: [],
         chapters: [],
@@ -917,6 +991,21 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
           character.description,
           character.avatar,
           JSON.stringify(character.tags)
+        )
+      })
+
+      workspace.inspirationEntries.forEach((entry, index) => {
+        insertInspiration.run(
+          entry.id,
+          project.id,
+          entry.type,
+          entry.title,
+          entry.content,
+          JSON.stringify(entry.tags),
+          entry.source,
+          entry.sortOrder ?? index,
+          entry.createdAt,
+          entry.updatedAt
         )
       })
 
@@ -1009,6 +1098,7 @@ function validateImportedWorkspace(payload: unknown): { valid: true } | { valid:
   const collectionChecks: Array<[string, unknown]> = [
     ['worldviewEntries', data.worldviewEntries],
     ['characters', data.characters],
+    ['inspirationEntries', data.inspirationEntries],
     ['outlineVolumes', data.outlineVolumes],
     ['outlineItems', data.outlineItems],
     ['chapters', data.chapters],
@@ -1037,6 +1127,27 @@ function validateImportedWorkspace(payload: unknown): { valid: true } | { valid:
 
     if (invalidWorldview) {
       return { valid: false, message: 'worldviewEntries 中存在字段缺失或格式错误的设定条目。' }
+    }
+  }
+
+  if (Array.isArray(data.inspirationEntries)) {
+    const invalidInspiration = data.inspirationEntries.find((item) => {
+      if (!item || typeof item !== 'object') return true
+      const inspiration = item as Record<string, unknown>
+      return (
+        typeof inspiration.type !== 'string' ||
+        typeof inspiration.title !== 'string' ||
+        typeof inspiration.content !== 'string' ||
+        !Array.isArray(inspiration.tags) ||
+        (inspiration.source !== undefined && inspiration.source !== 'ai' && inspiration.source !== 'manual') ||
+        (inspiration.sortOrder !== undefined && typeof inspiration.sortOrder !== 'number') ||
+        (inspiration.createdAt !== undefined && typeof inspiration.createdAt !== 'string') ||
+        (inspiration.updatedAt !== undefined && typeof inspiration.updatedAt !== 'string')
+      )
+    })
+
+    if (invalidInspiration) {
+      return { valid: false, message: 'inspirationEntries 中存在字段缺失或格式错误的灵感条目。' }
     }
   }
 

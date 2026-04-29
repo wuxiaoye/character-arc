@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { BookOpenText, FileText, GitMerge, Globe2, Search, Sparkles, Users } from 'lucide-vue-next'
+import { BookOpenText, FileText, GitMerge, Globe2, Lightbulb, Search, Sparkles, Users } from 'lucide-vue-next'
 import { getChapterCharacterCount, getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { useAppStore } from '@/stores/app'
 import type { PanelName } from '@/types/app'
@@ -69,6 +69,15 @@ const resultGroups = computed<ResultGroup[]>(() => {
       meta: item.wordTarget
     }))
 
+  const inspirationItems = appStore.inspirationEntries
+    .filter((entry) => `${entry.type} ${entry.title} ${entry.content} ${entry.tags.join(' ')}`.toLowerCase().includes(query))
+    .map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      summary: entry.content,
+      meta: `${entry.type} · ${entry.source === 'ai' ? 'AI' : '手记'}`
+    }))
+
   const chapterItems = appStore.chapters
     .filter((chapter) =>
       `${chapter.title} ${chapter.summary} ${chapter.wordTarget} ${chapter.status} ${getPlainTextFromEditorContent(chapter.content)}`
@@ -99,6 +108,14 @@ const resultGroups = computed<ResultGroup[]>(() => {
       icon: Users,
       accent: 'rgba(244, 114, 182, 0.12)',
       items: characterItems
+    },
+    {
+      id: 'inspiration',
+      label: '灵感模块',
+      panel: 'inspiration' as PanelName,
+      icon: Lightbulb,
+      accent: 'rgba(59, 130, 246, 0.1)',
+      items: inspirationItems
     },
     {
       id: 'outline',
@@ -138,7 +155,7 @@ function openGroupResult(group: ResultGroup, item: ResultGroup['items'][number])
           <span>项目级搜索</span>
         </div>
         <h2>“{{ query }}”的搜索结果</h2>
-        <p>跨世界观、角色、大纲与章节统一检索，帮你更快回到需要继续处理的内容。</p>
+        <p>跨世界观、角色、灵感、大纲与章节统一检索，帮你更快回到需要继续处理的内容。</p>
       </div>
       <div class="search-summary">
         <strong>{{ totalCount }}</strong>
@@ -188,7 +205,7 @@ function openGroupResult(group: ResultGroup, item: ResultGroup['items'][number])
         <BookOpenText :size="22" />
       </div>
       <h3>没有找到匹配内容</h3>
-      <p>可以换一个关键词，或者尝试搜索角色名、设定词条、章节标题和剧情片段。</p>
+      <p>可以换一个关键词，或者尝试搜索角色名、灵感标题、设定词条、章节标题和剧情片段。</p>
     </div>
   </section>
 </template>

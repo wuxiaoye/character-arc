@@ -139,6 +139,7 @@ async function sendPrompt(promptText?: string, quickAction?: string): Promise<vo
         recentMessages: recentAssistantMessages.value,
         worldviewEntries: appStore.worldviewEntries,
         characters: appStore.characters,
+        inspirationEntries: appStore.inspirationEntries,
         outlineItems: appStore.outlineItems,
         selectedText: selectedExcerpt.value,
         responseMode: responseMode.value,

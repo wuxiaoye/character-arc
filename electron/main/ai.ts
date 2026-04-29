@@ -7,11 +7,14 @@ import {
   normalizeSettings,
   validateSettings,
   type AiStreamHandlers,
+  type ChapterAnalysisResult,
   type AiTaskPayload,
   type AiTaskResult,
   type AppSettings,
   type ChapterAssistantResult,
   type CharacterResult,
+  type InspirationPackResult,
+  type InspirationResult,
   type OutlineResult,
   type ProjectBootstrapResult,
   type WorldviewResult
@@ -91,6 +94,57 @@ function normalizeProjectBootstrapResult(result: AiTaskResult): ProjectBootstrap
   }
 }
 
+function normalizeChapterAnalysisResult(result: AiTaskResult): ChapterAnalysisResult {
+  const payload = result as Partial<ChapterAnalysisResult>
+  const toList = (value: unknown, fallback: string[]): string[] => {
+    if (!Array.isArray(value)) {
+      return fallback
+    }
+
+    const normalized = value
+      .map((item) => String(item).trim())
+      .filter(Boolean)
+      .slice(0, 5)
+
+    return normalized.length ? normalized : fallback
+  }
+
+  return {
+    overview: payload.overview?.trim() || '这一章已经形成基础场景与推进，但还需要进一步打磨节奏和信息聚焦。',
+    pacing: payload.pacing?.trim() || '节奏判断暂不稳定，建议重新检查铺垫与推进的比例。',
+    tension: payload.tension?.trim() || '张力表达仍有提升空间，需要强化冲突触发点和情绪落点。',
+    continuity: payload.continuity?.trim() || '连续性基本成立，但还需要核对角色动机、设定引用和上下章衔接。',
+    highlights: toList(payload.highlights, ['章节已经建立了基本情境，可以继续沿当前方向深化。']),
+    risks: toList(payload.risks, ['当前分析未提取到明确风险，建议人工复核逻辑与节奏。']),
+    revisionActions: toList(payload.revisionActions, ['先挑一段关键正文，按冲突、节奏和画面感三个维度逐句重写。'])
+  }
+}
+
+function normalizeInspirationResult(result: AiTaskResult): InspirationResult {
+  const entry = result as Partial<InspirationResult>
+  const tags = Array.isArray(entry.tags)
+    ? entry.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 4)
+    : []
+
+  return {
+    type: entry.type?.trim() || '场景火花',
+    title: entry.title?.trim() || '新的灵感切口',
+    content: entry.content?.trim() || 'AI 未返回有效灵感内容',
+    tags: tags.length ? tags : ['待扩写', '灵感']
+  }
+}
+
+function normalizeInspirationPackResult(result: AiTaskResult): InspirationPackResult {
+  const payload = result as Partial<InspirationPackResult>
+  const entries = Array.isArray(payload.entries)
+    ? payload.entries.slice(0, 6).map((entry) => normalizeInspirationResult(entry as AiTaskResult))
+    : []
+
+  return {
+    entries
+  }
+}
+
 function isTaskResultUsable(task: AiTaskPayload, result: AiTaskResult): boolean {
   if (task.task === 'chapter-assistant') {
     return Boolean((result as ChapterAssistantResult).content?.trim())
@@ -99,6 +153,24 @@ function isTaskResultUsable(task: AiTaskPayload, result: AiTaskResult): boolean 
   if (task.task === 'project-bootstrap') {
     const payload = result as ProjectBootstrapResult
     return payload.worldviewEntries.length > 0 && payload.outlineItems.length > 0
+  }
+
+  if (task.task === 'chapter-analysis') {
+    const analysis = result as ChapterAnalysisResult
+    return Boolean(
+      analysis.overview.trim() &&
+        analysis.pacing.trim() &&
+        analysis.tension.trim() &&
+        analysis.continuity.trim() &&
+        analysis.highlights.length > 0 &&
+        analysis.risks.length > 0 &&
+        analysis.revisionActions.length > 0
+    )
+  }
+
+  if (task.task === 'inspiration-pack') {
+    const payload = result as InspirationPackResult
+    return payload.entries.length > 0
   }
 
   if (task.task === 'worldview-entry') {
@@ -129,6 +201,10 @@ function normalizeTaskResult(task: AiTaskPayload, rawText: string): AiTaskResult
       return normalizeCharacterResult(parsed)
     case 'project-bootstrap':
       return normalizeProjectBootstrapResult(parsed)
+    case 'chapter-analysis':
+      return normalizeChapterAnalysisResult(parsed)
+    case 'inspiration-pack':
+      return normalizeInspirationPackResult(parsed)
     case 'outline-item':
     default:
       return normalizeOutlineResult(parsed)

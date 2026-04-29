@@ -5,6 +5,7 @@ import {
   FileText,
   Globe2,
   LayoutDashboard,
+  Lightbulb,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -16,6 +17,7 @@ import { useAppStore } from '@/stores/app'
 import OverviewPanel from '@/components/OverviewPanel.vue'
 import WorldviewPanel from '@/components/WorldviewPanel.vue'
 import CharactersPanel from '@/components/CharactersPanel.vue'
+import InspirationPanel from '@/components/InspirationPanel.vue'
 import OutlinePanel from '@/components/OutlinePanel.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import SearchResultsPanel from '@/components/SearchResultsPanel.vue'
@@ -28,6 +30,7 @@ const panelSearch = reactive<Record<string, string>>({
   overview: '',
   world: '',
   characters: '',
+  inspiration: '',
   outline: '',
   chapters: '',
   settings: ''
@@ -38,6 +41,7 @@ const sidebarItems = [
   { id: 'overview', label: '作品概览', description: '掌握项目进度与全局信息', icon: LayoutDashboard },
   { id: 'world', label: '世界观设定', description: '沉淀世界规则、地点与设定条目', icon: Globe2 },
   { id: 'characters', label: '角色图鉴', description: '维护人物卡、关系与成长线索', icon: Users },
+  { id: 'inspiration', label: '灵感模块', description: '收集标题、桥段、转折与人物动机', icon: Lightbulb },
   { id: 'outline', label: '剧情大纲', description: '组织卷宗结构与关键情节点', icon: GitMerge },
   { id: 'chapters', label: '章节创作', description: '进入正文草稿与章节推进流程', icon: FileText }
 ] as const
@@ -62,12 +66,14 @@ const sidebarBadgeMap = computed<Record<string, string | null>>(() => ({
   overview: null,
   world: String(appStore.worldviewEntries.length),
   characters: String(appStore.characters.length),
+  inspiration: String(appStore.inspirationEntries.length),
   outline: String(appStore.outlineItems.length),
   chapters: String(appStore.chapters.length),
   settings: null
 }))
 const sidebarSummary = computed(
-  () => `设定 ${appStore.worldviewEntries.length} · 角色 ${appStore.characters.length} · 章节 ${appStore.chapters.length}`
+  () =>
+    `设定 ${appStore.worldviewEntries.length} · 角色 ${appStore.characters.length} · 灵感 ${appStore.inspirationEntries.length} · 章节 ${appStore.chapters.length}`
 )
 
 const isCompactSidebar = computed(() => viewportWidth.value <= 1280)
@@ -222,7 +228,7 @@ watch(searchKeyword, (value) => {
         <div class="header-tools arc-no-drag">
           <div class="search-box arc-no-drag">
             <Search :size="14" />
-            <input v-model="searchKeyword" type="text" placeholder="搜索设定、角色或内容..." />
+            <input v-model="searchKeyword" type="text" placeholder="搜索设定、角色、灵感或章节内容..." />
           </div>
           <button class="profile-badge arc-no-drag">U</button>
         </div>
@@ -239,6 +245,7 @@ watch(searchKeyword, (value) => {
           <OverviewPanel v-else-if="appStore.activePanel === 'overview'" key="overview" :search-query="normalizedSearch" />
           <WorldviewPanel v-else-if="appStore.activePanel === 'world'" key="world" :search-query="normalizedSearch" />
           <CharactersPanel v-else-if="appStore.activePanel === 'characters'" key="characters" :search-query="normalizedSearch" />
+          <InspirationPanel v-else-if="appStore.activePanel === 'inspiration'" key="inspiration" :search-query="normalizedSearch" />
           <OutlinePanel v-else-if="appStore.activePanel === 'outline'" key="outline" :search-query="normalizedSearch" />
           <SettingsPanel v-else key="settings" />
         </Transition>

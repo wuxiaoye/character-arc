@@ -7,6 +7,7 @@ import type {
   ChapterVersion,
   ChatMessage,
   CharacterCard,
+  InspirationEntry,
   OutlineItem,
   OutlineVolume,
   ProjectSummary,
@@ -29,6 +30,7 @@ export interface LegacyStoredState {
   projects?: ProjectSummary[]
   worldviewEntries?: WorldviewEntry[]
   characters?: CharacterCard[]
+  inspirationEntries?: InspirationEntry[]
   outlineVolumes?: OutlineVolume[]
   outlineItems?: OutlineItem[]
   chapters?: ChapterDraft[]
@@ -107,6 +109,7 @@ export function normalizeProjectWorkspaceData(
   return {
     worldviewEntries: normalized.worldviewEntries,
     characters: normalized.characters,
+    inspirationEntries: normalized.inspirationEntries,
     outlineVolumes: normalized.outlineVolumes,
     outlineItems: normalized.outlineItems,
     chapters: normalized.chapters.map(normalizeChapterDraft),
@@ -166,6 +169,7 @@ export function buildWorkspaceMapFromLegacy(
         ? {
             worldviewEntries: payload.worldviewEntries,
             characters: payload.characters,
+            inspirationEntries: payload.inspirationEntries,
             outlineVolumes: payload.outlineVolumes,
             outlineItems: payload.outlineItems,
             chapters: payload.chapters,
