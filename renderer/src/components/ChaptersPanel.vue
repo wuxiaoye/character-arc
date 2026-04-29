@@ -613,7 +613,10 @@ onBeforeUnmount(() => {
                   <GripVertical :size="14" />
                 </span>
                 <span class="chapter-pill-main">
-                  <span class="chapter-pill-label">{{ chapter.title }}</span>
+                  <span class="chapter-pill-heading">
+                    <span class="chapter-pill-label">{{ chapter.title }}</span>
+                    <span v-if="appStore.selectedChapterId === chapter.id" class="chapter-pill-current">当前章节</span>
+                  </span>
                   <span class="chapter-pill-meta">
                     <span>{{ chapter.wordTarget }}</span>
                     <span class="chapter-pill-dot"></span>
@@ -650,17 +653,30 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="editor-floating-actions">
-            <div v-if="isCompactStudio && !readingMode" class="editor-action-group compact-utility-group">
-              <button class="tool-badge neutral compact-utility-button" @click="appStore.backToWorkbench()">
-                <ChevronLeft :size="15" />
-                <span>返回</span>
+            <div v-if="isCompactStudio && !readingMode" class="compact-utility-cluster">
+              <button class="tool-badge neutral compact-back-button" @click="appStore.backToWorkbench()">
+                <span class="compact-back-icon">
+                  <ChevronLeft :size="14" />
+                </span>
+                <span class="compact-back-label">返回</span>
               </button>
-              <button class="tool-badge neutral compact-utility-button" @click="openCompactSidebar">
-                <span>章节目录</span>
-              </button>
-              <button class="tool-badge neutral compact-utility-button" @click="openCompactInsights">
-                <span>章节参考</span>
-              </button>
+
+              <div class="compact-utility-switcher">
+                <button
+                  class="compact-utility-tab"
+                  :class="{ active: compactSidebarVisible }"
+                  @click="openCompactSidebar"
+                >
+                  <span>章节目录</span>
+                </button>
+                <button
+                  class="compact-utility-tab"
+                  :class="{ active: compactInsightsVisible }"
+                  @click="openCompactInsights"
+                >
+                  <span>章节参考</span>
+                </button>
+              </div>
             </div>
             <n-tooltip trigger="hover">
               <template #trigger>
@@ -945,7 +961,10 @@ onBeforeUnmount(() => {
                 @click="selectChapterFromCompact(chapter.id)"
               >
                 <span class="chapter-pill-main">
-                  <span class="chapter-pill-label">{{ chapter.title }}</span>
+                  <span class="chapter-pill-heading">
+                    <span class="chapter-pill-label">{{ chapter.title }}</span>
+                    <span v-if="appStore.selectedChapterId === chapter.id" class="chapter-pill-current">当前章节</span>
+                  </span>
                   <span class="chapter-pill-meta">
                     <span>{{ chapter.wordTarget }}</span>
                     <span class="chapter-pill-dot"></span>
@@ -1238,6 +1257,19 @@ onBeforeUnmount(() => {
 
 .chapter-back-button {
   flex-shrink: 0;
+  border-color: rgba(218, 226, 239, 0.96);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 253, 0.98));
+  color: #4f5f79;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 10px 22px rgba(15, 23, 42, 0.05);
+}
+
+.chapter-back-button:hover {
+  color: #1f4ea3;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    0 14px 28px rgba(59, 130, 246, 0.1);
 }
 
 .chapter-side-badge {
@@ -1398,12 +1430,16 @@ onBeforeUnmount(() => {
   background:
     linear-gradient(145deg, color-mix(in srgb, var(--arc-primary) 10%, white), rgba(255, 255, 255, 0.98));
   color: #1f4ea3;
-  box-shadow: 0 10px 20px color-mix(in srgb, var(--arc-primary) 10%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 12px 26px color-mix(in srgb, var(--arc-primary) 12%, transparent);
 }
 
 .chapter-pill.active::before {
   background: var(--arc-primary);
   opacity: 1;
+  width: 4px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--arc-primary) 12%, transparent);
 }
 
 .chapter-pill-grip {
@@ -1427,6 +1463,7 @@ onBeforeUnmount(() => {
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
   font-size: 13px;
   font-weight: 700;
 }
@@ -1439,6 +1476,13 @@ onBeforeUnmount(() => {
   gap: 3px;
 }
 
+.chapter-pill-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
 .chapter-pill-meta {
   display: inline-flex;
   align-items: center;
@@ -1446,6 +1490,22 @@ onBeforeUnmount(() => {
   color: #7a7f87;
   font-size: 11px;
   font-weight: 700;
+}
+
+.chapter-pill-current {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(147, 197, 253, 0.92);
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.98), rgba(219, 234, 254, 0.92));
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  padding: 0 8px;
 }
 
 .chapter-pill-dot {
@@ -1561,15 +1621,93 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.5);
 }
 
-.compact-utility-group {
+.compact-utility-cluster {
   display: inline-flex;
-  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
-.compact-utility-button {
+.compact-back-button {
   width: auto;
-  gap: 6px;
-  padding: 0 12px;
+  gap: 8px;
+  min-height: 38px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #475467;
+  font-weight: 700;
+  padding: 0 6px 0 2px;
+  flex-shrink: 0;
+  box-shadow: none;
+}
+
+.compact-back-button:hover {
+  color: #1f4ea3;
+  background: rgba(239, 246, 255, 0.72);
+}
+
+.compact-back-icon {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(218, 226, 239, 0.96);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.98));
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+}
+
+.compact-back-label {
+  line-height: 1;
+}
+
+.compact-utility-switcher {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 253, 0.95));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 10px 24px rgba(15, 23, 42, 0.04);
+  padding: 4px;
+}
+
+.compact-utility-tab {
+  display: inline-flex;
+  min-width: 92px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 14px;
+  white-space: nowrap;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.compact-utility-tab:hover {
+  color: #1f4ea3;
+  background: rgba(239, 246, 255, 0.82);
+}
+
+.compact-utility-tab.active {
+  background: linear-gradient(135deg, rgba(232, 241, 255, 0.96), rgba(244, 248, 255, 0.98));
+  color: #1f4ea3;
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.12);
 }
 
 .chapters-layout.compact-mode .chapters-shell {
@@ -1613,10 +1751,6 @@ onBeforeUnmount(() => {
 .chapters-layout.compact-mode .editor-status {
   width: min(100%, 1180px);
   margin-inline: auto;
-}
-
-.chapters-layout.compact-mode .compact-utility-group {
-  margin-right: 8px;
 }
 
 .chapters-layout.compact-mode .chapter-editor-instance {
