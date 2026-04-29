@@ -167,6 +167,17 @@ const saveStatusText = computed(() => {
 
   return '已保存草稿'
 })
+const saveStatusCompactText = computed(() => {
+  if (saveState.value === 'typing') {
+    return '整理中'
+  }
+
+  if (appStore.isPersistencePending) {
+    return appStore.isLiveAutoSave ? '排队保存' : '自动保存中'
+  }
+
+  return '已保存'
+})
 const filteredChapterGroups = computed(() => {
   const query = props.searchQuery?.trim().toLowerCase() ?? ''
   if (!query) {
@@ -504,7 +515,15 @@ onBeforeUnmount(() => {
     <div class="chapters-shell" :class="{ 'reading-mode': readingMode }">
       <aside v-if="!readingMode" class="chapter-sidebar">
         <div class="chapter-side-head">
-          <div>
+          <div class="chapter-side-head-main">
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <button class="tool-badge neutral chapter-back-button" @click="appStore.backToWorkbench()">
+                  <ChevronLeft :size="16" />
+                </button>
+              </template>
+              返回工作台
+            </n-tooltip>
             <strong>章节目录</strong>
           </div>
           <span class="chapter-side-badge">{{ totalVisibleChapters }} / {{ appStore.chapters.length }}</span>
@@ -577,7 +596,8 @@ onBeforeUnmount(() => {
           <div class="editor-context">
             <div class="editor-context-main">
               <strong>{{ readingMode ? currentChapterTitle : currentVolumeLabel }}</strong>
-              <span>{{ readingMode ? `全书第 ${selectedChapterIndex} 章` : saveStatusText }}</span>
+              <span v-if="readingMode">全书第 {{ selectedChapterIndex }} 章</span>
+              <span v-else class="save-status-inline" :title="saveStatusText">{{ saveStatusCompactText }}</span>
               <span v-if="readingMode">{{ readingWordCountLabel }}</span>
               <span v-else class="progress-inline">
                 {{ currentWordCount }} / {{ currentTargetWordCount || '自由字数' }} · {{ currentProgressPercent }}%
@@ -1023,12 +1043,23 @@ onBeforeUnmount(() => {
   margin-bottom: 12px;
 }
 
+.chapter-side-head-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
 .chapter-side-head strong {
   display: block;
   color: var(--chapter-ink);
   font-size: 15px;
   font-weight: 700;
   line-height: 1.4;
+}
+
+.chapter-back-button {
+  flex-shrink: 0;
 }
 
 .chapter-side-badge {
@@ -1218,6 +1249,7 @@ onBeforeUnmount(() => {
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -1234,7 +1266,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 5px;
   color: #7a7f87;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -1316,6 +1348,13 @@ onBeforeUnmount(() => {
 
 .editor-context-main .progress-inline {
   color: #1f4ea3;
+}
+
+.save-status-inline {
+  display: inline-flex;
+  min-width: 56px;
+  align-items: center;
+  justify-content: center;
 }
 
 .editor-floating-actions {
