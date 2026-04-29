@@ -4,51 +4,6 @@ const node_path = require("node:path");
 const promises = require("node:fs/promises");
 const node_sqlite = require("node:sqlite");
 const node_crypto = require("node:crypto");
-const AI_REQUEST_TIMEOUT_MS = 6e4;
-function resolveProviderDefaults(provider) {
-  switch (provider) {
-    case "openai":
-      return { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" };
-    case "deepseek":
-      return { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" };
-    case "anthropic":
-      return { baseUrl: "https://api.anthropic.com", model: "claude-3-5-sonnet-latest" };
-    case "ollama":
-      return { baseUrl: "http://127.0.0.1:11434/v1", model: "llama3.2" };
-    default:
-      return { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" };
-  }
-}
-function normalizeSettings(settings) {
-  const provider = settings.provider?.trim().toLowerCase() || "deepseek";
-  const defaults = resolveProviderDefaults(provider);
-  return {
-    provider,
-    model: settings.model?.trim() || defaults.model,
-    apiKey: settings.apiKey?.trim() || "",
-    baseUrl: settings.baseUrl?.trim() || defaults.baseUrl
-  };
-}
-function isLocalBaseUrl(baseUrl) {
-  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(baseUrl.trim());
-}
-function requiresApiKey(settings) {
-  if (settings.provider === "ollama") {
-    return false;
-  }
-  return !isLocalBaseUrl(settings.baseUrl);
-}
-function validateSettings(settings) {
-  if (!settings.model.trim()) {
-    throw new Error("请先填写模型名称。");
-  }
-  if (!settings.baseUrl.trim()) {
-    throw new Error("请先填写 Base URL。");
-  }
-  if (requiresApiKey(settings) && !settings.apiKey.trim()) {
-    throw new Error("当前模型供应商需要 API Key，请先在设置页填写。");
-  }
-}
 function buildTaskPrompt(task) {
   const { context } = task;
   if (task.task === "worldview-entry") {
@@ -209,13 +164,26 @@ ${String(context.chapterContent ?? "")}
 返回格式：{"title":"","wordTarget":"","conflict":"","summary":""}`
   };
 }
-function extractJsonObject(text) {
-  const fenced = text.match(/```json\s*([\s\S]*?)```/i);
-  const raw = fenced?.[1] ?? text;
-  const firstBrace = raw.indexOf("{");
-  const lastBrace = raw.lastIndexOf("}");
-  const jsonSlice = firstBrace >= 0 && lastBrace >= 0 ? raw.slice(firstBrace, lastBrace + 1) : raw;
-  return JSON.parse(jsonSlice);
+function buildRepairPrompt(task, brokenText) {
+  const originalPrompt = buildTaskPrompt(task);
+  return {
+    system: "你是 JSON 输出修复助手。你只负责把已有回复整理成合法 JSON，不能输出 Markdown、解释或额外文本。",
+    user: `请根据原始任务要求，把下面这段回复修正为严格合法的 JSON。
+
+原始系统要求：
+${originalPrompt.system}
+
+原始用户要求：
+${originalPrompt.user}
+
+模型原始回复：
+${brokenText}
+
+要求：
+1. 只返回一个合法 JSON 对象
+2. 不要补充与任务无关的解释
+3. 缺失字段时，根据原始任务要求补齐最合理的内容`
+  };
 }
 function resolveChapterAssistantModeInstruction(mode) {
   switch (mode) {
@@ -256,106 +224,81 @@ function resolveChapterAssistantQuickActionInstruction(quickAction) {
       return "如果快捷动作已经明确输出形态，请优先遵循该动作要求。";
   }
 }
-function buildRepairPrompt(task, brokenText) {
-  const originalPrompt = buildTaskPrompt(task);
-  return {
-    system: "你是 JSON 输出修复助手。你只负责把已有回复整理成合法 JSON，不能输出 Markdown、解释或额外文本。",
-    user: `请根据原始任务要求，把下面这段回复修正为严格合法的 JSON。
-
-原始系统要求：
-${originalPrompt.system}
-
-原始用户要求：
-${originalPrompt.user}
-
-模型原始回复：
-${brokenText}
-
-要求：
-1. 只返回一个合法 JSON 对象
-2. 不要补充与任务无关的解释
-3. 缺失字段时，根据原始任务要求补齐最合理的内容`
-  };
-}
-function isStructuredTask(task) {
-  return task.task !== "chapter-assistant";
-}
-function normalizeAssistantText(text) {
-  const cleaned = text.replace(/```[\w-]*\n?/g, "").replace(/```/g, "").trim();
-  return {
-    content: cleaned
-  };
-}
-function normalizeWorldviewResult(result) {
-  const entry = result;
-  return {
-    type: entry.type?.trim() || "地理",
-    title: entry.title?.trim() || "新世界观词条",
-    content: entry.content?.trim() || "AI 未返回有效内容"
-  };
-}
-function normalizeCharacterResult(result) {
-  const character = result;
-  const tags = Array.isArray(character.tags) ? character.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 4) : [];
-  return {
-    name: character.name?.trim() || "新角色",
-    role: character.role?.trim() || "待设定",
-    description: character.description?.trim() || "AI 未返回有效角色描述",
-    tags: tags.length ? tags : ["待完善"]
-  };
-}
-function normalizeOutlineResult(result) {
-  const item = result;
-  return {
-    title: item.title?.trim() || "第1章：新剧情节点",
-    wordTarget: item.wordTarget?.trim() || "预估 3000字",
-    conflict: item.conflict?.trim() || "新的冲突正在酝酿。",
-    summary: item.summary?.trim() || "AI 未返回有效剧情摘要"
-  };
-}
-function normalizeProjectBootstrapResult(result) {
-  const payload = result;
-  const worldviewEntries = Array.isArray(payload.worldviewEntries) ? payload.worldviewEntries.slice(0, 3).map((entry) => normalizeWorldviewResult(entry)) : [];
-  const outlineItems = Array.isArray(payload.outlineItems) ? payload.outlineItems.slice(0, 3).map((item) => normalizeOutlineResult(item)) : [];
-  return {
-    worldviewEntries,
-    outlineItems
-  };
-}
-function isTaskResultUsable(task, result) {
-  if (task.task === "chapter-assistant") {
-    return Boolean(result.content?.trim());
-  }
-  if (task.task === "project-bootstrap") {
-    const payload = result;
-    return payload.worldviewEntries.length > 0 && payload.outlineItems.length > 0;
-  }
-  if (task.task === "worldview-entry") {
-    const entry = result;
-    return Boolean(entry.title.trim() && entry.content.trim());
-  }
-  if (task.task === "character-card") {
-    const character = result;
-    return Boolean(character.name.trim() && character.description.trim());
-  }
-  const outline = result;
-  return Boolean(outline.title.trim() && outline.summary.trim());
-}
-function normalizeTaskResult(task, rawText) {
-  if (task.task === "chapter-assistant") {
-    return normalizeAssistantText(rawText);
-  }
-  const parsed = extractJsonObject(rawText);
-  switch (task.task) {
-    case "worldview-entry":
-      return normalizeWorldviewResult(parsed);
-    case "character-card":
-      return normalizeCharacterResult(parsed);
-    case "project-bootstrap":
-      return normalizeProjectBootstrapResult(parsed);
-    case "outline-item":
+const AI_REQUEST_TIMEOUT_MS = 6e4;
+function resolveProviderDefaults(provider) {
+  switch (provider) {
+    case "openai":
+      return { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" };
+    case "deepseek":
+      return { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" };
+    case "qwen":
+      return { baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" };
+    case "zhipu":
+      return { baseUrl: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4.7" };
+    case "moonshot":
+      return { baseUrl: "https://api.moonshot.cn/v1", model: "kimi-k2.5" };
+    case "siliconflow":
+      return { baseUrl: "https://api.siliconflow.cn/v1", model: "Qwen/Qwen2.5-72B-Instruct" };
+    case "anthropic":
+      return { baseUrl: "https://api.anthropic.com", model: "claude-3-5-sonnet-latest" };
+    case "ollama":
+      return { baseUrl: "http://127.0.0.1:11434/v1", model: "llama3.2" };
+    case "new-api":
+    case "one-api":
+      return { baseUrl: "http://127.0.0.1:3000/v1", model: "qwen-plus" };
     default:
-      return normalizeOutlineResult(parsed);
+      return { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" };
+  }
+}
+function normalizeSettings(settings) {
+  const provider = settings.provider?.trim().toLowerCase() || "deepseek";
+  const defaults = resolveProviderDefaults(provider);
+  return {
+    provider,
+    model: settings.model?.trim() || defaults.model,
+    apiKey: settings.apiKey?.trim() || "",
+    baseUrl: settings.baseUrl?.trim() || defaults.baseUrl
+  };
+}
+function isLocalBaseUrl(baseUrl) {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(baseUrl.trim());
+}
+function requiresApiKey(settings) {
+  if (settings.provider === "ollama") {
+    return false;
+  }
+  return !isLocalBaseUrl(settings.baseUrl);
+}
+function validateSettings(settings) {
+  if (!settings.model.trim()) {
+    throw new Error("请先填写模型名称。");
+  }
+  if (!settings.baseUrl.trim()) {
+    throw new Error("请先填写 Base URL。");
+  }
+  if (requiresApiKey(settings) && !settings.apiKey.trim()) {
+    throw new Error("当前模型供应商需要 API Key，请先在设置页填写。");
+  }
+}
+function resolveMaxTokens(task) {
+  switch (task?.task) {
+    case "project-bootstrap":
+      return 1500;
+    case "chapter-assistant":
+      switch (String(task.context.responseLength ?? "medium")) {
+        case "short":
+          return 500;
+        case "long":
+          return 1400;
+        default:
+          return 900;
+      }
+    case "worldview-entry":
+    case "character-card":
+    case "outline-item":
+      return 700;
+    default:
+      return void 0;
   }
 }
 async function readErrorMessage(response, fallbackLabel) {
@@ -388,27 +331,6 @@ async function performAiRequest(url, init, providerLabel) {
     throw error;
   } finally {
     clearTimeout(timer);
-  }
-}
-function resolveMaxTokens(task) {
-  switch (task?.task) {
-    case "project-bootstrap":
-      return 1500;
-    case "chapter-assistant":
-      switch (String(task.context.responseLength ?? "medium")) {
-        case "short":
-          return 500;
-        case "long":
-          return 1400;
-        default:
-          return 900;
-      }
-    case "worldview-entry":
-    case "character-card":
-    case "outline-item":
-      return 700;
-    default:
-      return void 0;
   }
 }
 async function requestOpenAiCompatible(settings, prompt, task) {
@@ -447,9 +369,7 @@ async function requestAnthropic(settings, prompt, task) {
       model: settings.model,
       max_tokens: resolveMaxTokens(task) ?? 600,
       system: prompt.system,
-      messages: [
-        { role: "user", content: prompt.user }
-      ]
+      messages: [{ role: "user", content: prompt.user }]
     })
   }, "Anthropic");
   const data = await response.json();
@@ -458,9 +378,6 @@ async function requestAnthropic(settings, prompt, task) {
     throw new Error("Anthropic 返回内容为空");
   }
   return content;
-}
-async function requestAiText(settings, prompt, task) {
-  return settings.provider === "anthropic" ? requestAnthropic(settings, prompt, task) : requestOpenAiCompatible(settings, prompt, task);
 }
 function extractOpenAiCompatibleDelta(payload) {
   const choice = Array.isArray(payload.choices) ? payload.choices[0] : void 0;
@@ -561,7 +478,7 @@ async function requestOpenAiCompatibleStream(settings, prompt, handlers, signal,
     throw new Error(await readErrorMessage(response, "OpenAI 兼容接口"));
   }
   let content = "";
-  await consumeSseResponse(response, (eventName, data) => {
+  await consumeSseResponse(response, (_eventName, data) => {
     if (!data || data === "[DONE]") {
       return;
     }
@@ -589,9 +506,7 @@ async function requestAnthropicStream(settings, prompt, handlers, signal, task) 
       stream: true,
       max_tokens: resolveMaxTokens(task) ?? 600,
       system: prompt.system,
-      messages: [
-        { role: "user", content: prompt.user }
-      ]
+      messages: [{ role: "user", content: prompt.user }]
     })
   });
   if (!response.ok) {
@@ -612,8 +527,100 @@ async function requestAnthropicStream(settings, prompt, handlers, signal, task) 
   });
   return content;
 }
+async function requestAiText(settings, prompt, task) {
+  return settings.provider === "anthropic" ? requestAnthropic(settings, prompt, task) : requestOpenAiCompatible(settings, prompt, task);
+}
 async function requestAiTextStream(settings, prompt, handlers, signal, task) {
   return settings.provider === "anthropic" ? requestAnthropicStream(settings, prompt, handlers, signal, task) : requestOpenAiCompatibleStream(settings, prompt, handlers, signal, task);
+}
+function extractJsonObject(text) {
+  const fenced = text.match(/```json\s*([\s\S]*?)```/i);
+  const raw = fenced?.[1] ?? text;
+  const firstBrace = raw.indexOf("{");
+  const lastBrace = raw.lastIndexOf("}");
+  const jsonSlice = firstBrace >= 0 && lastBrace >= 0 ? raw.slice(firstBrace, lastBrace + 1) : raw;
+  return JSON.parse(jsonSlice);
+}
+function isStructuredTask(task) {
+  return task.task !== "chapter-assistant";
+}
+function normalizeAssistantText(text) {
+  const cleaned = text.replace(/```[\w-]*\n?/g, "").replace(/```/g, "").trim();
+  return {
+    content: cleaned
+  };
+}
+function normalizeWorldviewResult(result) {
+  const entry = result;
+  return {
+    type: entry.type?.trim() || "地理",
+    title: entry.title?.trim() || "新世界观词条",
+    content: entry.content?.trim() || "AI 未返回有效内容"
+  };
+}
+function normalizeCharacterResult(result) {
+  const character = result;
+  const tags = Array.isArray(character.tags) ? character.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 4) : [];
+  return {
+    name: character.name?.trim() || "新角色",
+    role: character.role?.trim() || "待设定",
+    description: character.description?.trim() || "AI 未返回有效角色描述",
+    tags: tags.length ? tags : ["待完善"]
+  };
+}
+function normalizeOutlineResult(result) {
+  const item = result;
+  return {
+    title: item.title?.trim() || "第1章：新剧情节点",
+    wordTarget: item.wordTarget?.trim() || "预估 3000字",
+    conflict: item.conflict?.trim() || "新的冲突正在酝酿。",
+    summary: item.summary?.trim() || "AI 未返回有效剧情摘要"
+  };
+}
+function normalizeProjectBootstrapResult(result) {
+  const payload = result;
+  const worldviewEntries = Array.isArray(payload.worldviewEntries) ? payload.worldviewEntries.slice(0, 3).map((entry) => normalizeWorldviewResult(entry)) : [];
+  const outlineItems = Array.isArray(payload.outlineItems) ? payload.outlineItems.slice(0, 3).map((item) => normalizeOutlineResult(item)) : [];
+  return {
+    worldviewEntries,
+    outlineItems
+  };
+}
+function isTaskResultUsable(task, result) {
+  if (task.task === "chapter-assistant") {
+    return Boolean(result.content?.trim());
+  }
+  if (task.task === "project-bootstrap") {
+    const payload = result;
+    return payload.worldviewEntries.length > 0 && payload.outlineItems.length > 0;
+  }
+  if (task.task === "worldview-entry") {
+    const entry = result;
+    return Boolean(entry.title.trim() && entry.content.trim());
+  }
+  if (task.task === "character-card") {
+    const character = result;
+    return Boolean(character.name.trim() && character.description.trim());
+  }
+  const outline = result;
+  return Boolean(outline.title.trim() && outline.summary.trim());
+}
+function normalizeTaskResult(task, rawText) {
+  if (task.task === "chapter-assistant") {
+    return normalizeAssistantText(rawText);
+  }
+  const parsed = extractJsonObject(rawText);
+  switch (task.task) {
+    case "worldview-entry":
+      return normalizeWorldviewResult(parsed);
+    case "character-card":
+      return normalizeCharacterResult(parsed);
+    case "project-bootstrap":
+      return normalizeProjectBootstrapResult(parsed);
+    case "outline-item":
+    default:
+      return normalizeOutlineResult(parsed);
+  }
 }
 async function resolveTaskResult(task, settings, rawText) {
   try {

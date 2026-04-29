@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowDownToLine, Bot, Lightbulb, PenTool, RotateCcw, Rows3, ScrollText, SendHorizonal, Sparkles, Square } from 'lucide-vue-next'
+import { ArrowDownToLine, Bot, RotateCcw, SendHorizonal, Square } from 'lucide-vue-next'
 import { useMessage } from 'naive-ui'
+import { buildChapterAssistantContext } from '@/features/ai/chapterAssistantContext'
+import {
+  chapterAssistantLengthOptions,
+  chapterAssistantModeOptions,
+  chapterAssistantQuickActions,
+  type ChapterAssistantQuickAction
+} from '@/features/ai/chapterAssistantOptions'
 import { getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { useAppStore } from '@/stores/app'
 import type { ChapterInsertionMode } from '@/types/app'
@@ -21,95 +28,6 @@ let removeAiStreamListener: (() => void) | null = null
 function toIpcPayload<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
-
-const modeOptions = [
-  { label: '自由', value: 'freeform' as const },
-  { label: '润色', value: 'polish' as const },
-  { label: '续写', value: 'continue' as const },
-  { label: '建议', value: 'suggest' as const },
-  { label: '设定', value: 'reference' as const }
-] as const
-
-const lengthOptions = [
-  { label: '短', value: 'short' as const },
-  { label: '中', value: 'medium' as const },
-  { label: '长', value: 'long' as const }
-] as const
-
-const quickActions = [
-  {
-    label: '润色选中',
-    prompt: '请只针对当前选中的正文片段做一版润色，保留原意和剧情信息，提升节奏、画面感与表达准确度。直接输出润色后的最终文本。',
-    icon: PenTool,
-    mode: 'polish' as const,
-    length: 'medium' as const,
-    task: 'chat' as const,
-    requiresSelection: true
-  },
-  {
-    label: '下一章大纲',
-    prompt: '请基于当前章节、分卷目标和已有剧情，生成一条适合作为下一章的大纲草稿。',
-    icon: Rows3,
-    mode: 'suggest' as const,
-    length: 'medium' as const,
-    task: 'outline-draft' as const,
-    requiresSelection: false
-  },
-  {
-    label: '章节标题',
-    prompt: '请基于当前章节内容、分卷定位和剧情推进，拟定一个更贴切的章节标题。只保留一个最终标题，要求有小说感，简洁，不要解释。',
-    icon: PenTool,
-    mode: 'freeform' as const,
-    length: 'short' as const,
-    task: 'chat' as const,
-    requiresSelection: false
-  },
-  {
-    label: '章节摘要',
-    prompt: '请基于当前章节内容，生成一段适合作为章节摘要或本章定位的简洁文案，突出主要冲突与推进，控制在 60 到 100 字。',
-    icon: ScrollText,
-    mode: 'freeform' as const,
-    length: 'short' as const,
-    task: 'chat' as const,
-    requiresSelection: false
-  },
-  {
-    label: '描写环境',
-    prompt: '请基于当前章节氛围，补写一段可以直接插入正文的环境描写，让画面感更强。',
-    icon: ScrollText,
-    mode: 'continue' as const,
-    length: 'medium' as const,
-    task: 'chat' as const,
-    requiresSelection: false
-  },
-  {
-    label: '润色段落',
-    prompt: '请基于当前章节内容给出一版更有节奏感和画面感的润色稿，优先输出可直接插入正文的内容。',
-    icon: PenTool,
-    mode: 'polish' as const,
-    length: 'medium' as const,
-    task: 'chat' as const,
-    requiresSelection: false
-  },
-  {
-    label: '续写片段',
-    prompt: '请紧接当前章节正文往后续写一小段，保持人物语气、世界观和剧情方向一致。',
-    icon: Sparkles,
-    mode: 'continue' as const,
-    length: 'long' as const,
-    task: 'chat' as const,
-    requiresSelection: false
-  },
-  {
-    label: '下一章建议',
-    prompt: '请结合当前章节、分卷目标和已有大纲，给出 3 条下一章剧情推进建议。每条都要包含推进方向、核心冲突和一个能勾住读者的钩子。',
-    icon: Lightbulb,
-    mode: 'suggest' as const,
-    length: 'medium' as const,
-    task: 'chat' as const,
-    requiresSelection: false
-  }
-] as const
 
 const currentProject = computed(() => appStore.currentProject)
 const currentChapter = computed(() => appStore.selectedChapter)
@@ -173,41 +91,6 @@ async function scrollToBottom(): Promise<void> {
   }
 }
 
-function buildChapterAssistantContext(quickAction: string | undefined, content: string): Record<string, unknown> {
-  return {
-    projectTitle: currentProject.value?.title,
-    projectGenre: currentProject.value?.genre,
-    chapterVolume: appStore.selectedChapterVolume?.title,
-    chapterTitle: currentChapter.value?.title,
-    chapterSummary: currentChapter.value?.summary,
-    chapterStatus: currentChapter.value?.status,
-    chapterWordTarget: currentChapter.value?.wordTarget,
-    chapterContent: getPlainTextFromEditorContent(currentChapter.value?.content ?? ''),
-    chapterVolumeTitle: appStore.selectedChapterVolume?.title,
-    chapterVolumeSummary: appStore.selectedChapterVolume?.summary,
-    relatedChapters: relatedChapters.value,
-    recentMessages: recentAssistantMessages.value,
-    worldviewEntries: appStore.worldviewEntries.map((entry) => ({
-      title: entry.title,
-      content: entry.content
-    })),
-    characters: appStore.characters.map((character) => ({
-      name: character.name,
-      role: character.role,
-      description: character.description
-    })),
-    outlineItems: appStore.outlineItems.map((item) => ({
-      title: item.title,
-      summary: item.summary
-    })),
-    selectedText: selectedExcerpt.value,
-    responseMode: responseMode.value,
-    responseLength: responseLength.value,
-    quickAction,
-    userPrompt: content
-  }
-}
-
 function resetStreamingState(): void {
   activeStreamId.value = null
   streamingReply.value = ''
@@ -233,7 +116,22 @@ async function sendPrompt(promptText?: string, quickAction?: string): Promise<vo
     const result = await window.characterArc.startAiStream(toIpcPayload({
       task: 'chapter-assistant',
       settings: appStore.appSettings,
-      context: buildChapterAssistantContext(quickAction, content)
+      context: buildChapterAssistantContext({
+        project: currentProject.value,
+        chapter: currentChapter.value,
+        chapterVolume: appStore.selectedChapterVolume,
+        relatedChapters: relatedChapters.value,
+        recentMessages: recentAssistantMessages.value,
+        worldviewEntries: appStore.worldviewEntries,
+        characters: appStore.characters,
+        outlineItems: appStore.outlineItems,
+        selectedText: selectedExcerpt.value,
+        responseMode: responseMode.value,
+        responseLength: responseLength.value,
+        quickAction,
+        userPrompt: content,
+        chapterContent: getPlainTextFromEditorContent(currentChapter.value?.content ?? '')
+      })
     }))
 
     const streamId = (result.result as { streamId?: string } | undefined)?.streamId
@@ -322,7 +220,7 @@ async function createOutlineDraft(promptText: string, quickAction: string): Prom
   }
 }
 
-function handleQuickAction(action: (typeof quickActions)[number]): void {
+function handleQuickAction(action: ChapterAssistantQuickAction): void {
   if (action.requiresSelection && !selectedExcerpt.value) {
     message.warning('请先在正文中选中要处理的段落')
     return
@@ -512,7 +410,7 @@ watch(
 
     <div class="assistant-quick-actions">
       <button
-        v-for="action in quickActions"
+        v-for="action in chapterAssistantQuickActions"
         :key="action.label"
         class="quick-action"
         :disabled="isResponding || (action.requiresSelection && !selectedExcerpt)"
@@ -533,7 +431,7 @@ watch(
         <span class="control-label">模式</span>
         <div class="segmented-control">
           <button
-            v-for="option in modeOptions"
+            v-for="option in chapterAssistantModeOptions"
             :key="option.value"
             class="segment-button"
             :class="{ active: responseMode === option.value }"
@@ -549,7 +447,7 @@ watch(
         <span class="control-label">长度</span>
         <div class="segmented-control compact">
           <button
-            v-for="option in lengthOptions"
+            v-for="option in chapterAssistantLengthOptions"
             :key="option.value"
             class="segment-button"
             :class="{ active: responseLength === option.value }"
@@ -646,407 +544,4 @@ watch(
   </aside>
 </template>
 
-<style scoped>
-.assistant-shell {
-  display: flex;
-  width: clamp(260px, 20vw, 320px);
-  min-width: 260px;
-  flex-shrink: 0;
-  flex-direction: column;
-  border-left: 1px solid rgba(229, 231, 235, 0.82);
-  background:
-    linear-gradient(180deg, rgba(248, 250, 255, 0.96), rgba(255, 255, 255, 0.98)),
-    radial-gradient(circle at top right, color-mix(in srgb, var(--arc-primary) 10%, white), transparent 34%);
-}
-
-.assistant-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: calc(var(--arc-titlebar-height) + 12px) 18px 14px;
-  border-bottom: 1px solid rgba(229, 231, 235, 0.78);
-}
-
-.assistant-title {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.assistant-badge {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--arc-primary) 12%, white);
-  color: var(--arc-primary);
-  flex-shrink: 0;
-}
-
-.assistant-title strong {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 14px;
-}
-
-.assistant-title p {
-  margin: 0;
-  color: #6b7280;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.ghost-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid rgba(209, 213, 219, 0.88);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #4b5563;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 7px 10px;
-  white-space: nowrap;
-}
-
-.ghost-action:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.assistant-quick-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 16px 18px 14px;
-}
-
-.assistant-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 0 18px 14px;
-}
-
-.selection-preview {
-  margin: 0 18px 14px;
-  border: 1px solid rgba(229, 231, 235, 0.9);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.88);
-  padding: 10px 12px;
-}
-
-.selection-preview-label {
-  display: inline-flex;
-  margin-bottom: 6px;
-  color: #6b7280;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.selection-preview p {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  color: #374151;
-  font-size: 12px;
-  line-height: 1.6;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-.control-group {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.control-label {
-  color: #6b7280;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.segmented-control {
-  display: inline-flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.segmented-control.compact {
-  flex: 0 0 auto;
-}
-
-.segment-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(209, 213, 219, 0.9);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #4b5563;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 7px 11px;
-  transition: all 0.18s ease;
-}
-
-.segment-button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--arc-primary) 20%, white);
-  color: var(--arc-primary);
-}
-
-.segment-button.active {
-  border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
-  background: color-mix(in srgb, var(--arc-primary) 10%, white);
-  color: var(--arc-primary);
-}
-
-.segment-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.quick-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid rgba(229, 231, 235, 0.9);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #374151;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 650;
-  padding: 12px 10px;
-  transition: all 0.22s ease;
-}
-
-.quick-action:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
-  color: var(--arc-primary);
-  transform: translateY(-1px);
-}
-
-.quick-action:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.assistant-messages {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-  padding: 0 18px 16px;
-}
-
-.message-card {
-  border-radius: 18px;
-  padding: 14px 14px 12px;
-}
-
-.message-card.user {
-  background: color-mix(in srgb, var(--arc-primary) 9%, white);
-  border: 1px solid color-mix(in srgb, var(--arc-primary) 14%, white);
-}
-
-.message-card.assistant {
-  background: white;
-  border: 1px solid rgba(229, 231, 235, 0.9);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
-}
-
-.message-card.pending {
-  border-style: dashed;
-}
-
-.message-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-  color: #6b7280;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.message-card p {
-  margin: 0;
-  color: #1f2937;
-  font-size: 13px;
-  line-height: 1.75;
-  white-space: pre-wrap;
-}
-
-.message-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.insert-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: none;
-  border-radius: 999px;
-  background: #f5f7fb;
-  color: var(--arc-primary);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 7px 10px;
-}
-
-.insert-button.secondary {
-  background: #ffffff;
-  color: #4b5563;
-  border: 1px solid rgba(229, 231, 235, 0.9);
-}
-
-.assistant-composer {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  border-top: 1px solid rgba(229, 231, 235, 0.78);
-  background: rgba(255, 255, 255, 0.94);
-  padding: 16px 18px 18px;
-}
-
-.composer-input {
-  width: 100%;
-  min-height: 108px;
-  border: 1px solid rgba(209, 213, 219, 0.76);
-  border-radius: 18px;
-  background: white;
-  color: #1d1d1f;
-  font: inherit;
-  line-height: 1.7;
-  outline: none;
-  padding: 14px 15px;
-  resize: vertical;
-}
-
-.composer-input:focus {
-  border-color: color-mix(in srgb, var(--arc-primary) 26%, white);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--arc-primary) 10%, transparent);
-}
-
-.composer-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.composer-buttons {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.composer-hint {
-  color: #9ca3af;
-  font-size: 11px;
-}
-
-.send-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: none;
-  border-radius: 999px;
-  background: var(--arc-primary);
-  color: white;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 11px 16px;
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--arc-primary) 24%, transparent);
-}
-
-.send-button.danger {
-  background: #b42318;
-  box-shadow: none;
-}
-
-.send-button:disabled {
-  opacity: 0.58;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-@media (max-width: 1500px) {
-  .assistant-shell {
-    width: 280px;
-    min-width: 280px;
-  }
-}
-
-@media (max-width: 1320px) {
-  .assistant-shell {
-    width: 260px;
-    min-width: 260px;
-  }
-}
-
-@media (max-width: 1360px) {
-  .assistant-shell {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .assistant-head {
-    padding: 14px 18px 12px;
-  }
-
-  .assistant-quick-actions {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .assistant-messages {
-    padding-bottom: 12px;
-  }
-}
-
-@media (max-width: 920px) {
-  .assistant-quick-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .control-group {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .message-meta,
-  .composer-actions,
-  .assistant-head {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .message-actions,
-  .composer-buttons {
-    width: 100%;
-    justify-content: flex-start;
-  }
-}
-</style>
+<style scoped src="./AiAssistantPanel.css"></style>

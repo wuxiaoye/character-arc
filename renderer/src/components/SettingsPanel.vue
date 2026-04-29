@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Cpu, Download, FileJson, FileStack, FileText, FolderOutput, Palette, PlugZap, Save, Users } from 'lucide-vue-next'
 import { NButton, NCard, NFormItem, NInput, NSelect, useMessage } from 'naive-ui'
 import { getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
@@ -12,16 +12,91 @@ const appStore = useAppStore()
 const message = useMessage()
 const isTestingAiConnection = ref(false)
 
+type ProviderPreset = {
+  label: string
+  value: string
+  model: string
+  baseUrl: string
+  hint: string
+}
+
 const themeOptions = themePresets.map((preset) => ({
   label: preset.label,
   value: preset.name
 }))
-const providerOptions = [
-  { label: 'OpenAI (GPT-4o)', value: 'openai' },
-  { label: 'Anthropic (Claude 3.5)', value: 'anthropic' },
-  { label: 'DeepSeek (DeepSeek-Chat)', value: 'deepseek' },
-  { label: '本地模型 (Ollama)', value: 'ollama' }
+const providerPresets: ProviderPreset[] = [
+  {
+    label: 'DeepSeek',
+    value: 'deepseek',
+    model: 'deepseek-chat',
+    baseUrl: 'https://api.deepseek.com/v1',
+    hint: '官方直连，适合通用写作和对话。模型示例：deepseek-chat / deepseek-reasoner。'
+  },
+  {
+    label: '阿里云百炼 / 通义千问',
+    value: 'qwen',
+    model: 'qwen-plus',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    hint: 'OpenAI 兼容模式。模型示例：qwen-plus / qwen-max / qwen3-coder-plus。'
+  },
+  {
+    label: '智谱 GLM',
+    value: 'zhipu',
+    model: 'glm-4.7',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    hint: '官方通用端点。模型示例：glm-4.7 / glm-4.5-air。'
+  },
+  {
+    label: 'Moonshot / Kimi',
+    value: 'moonshot',
+    model: 'kimi-k2.5',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    hint: '官方 OpenAI 兼容接口。模型示例：kimi-k2.5 / moonshot-v1-128k。'
+  },
+  {
+    label: 'SiliconFlow',
+    value: 'siliconflow',
+    model: 'Qwen/Qwen2.5-72B-Instruct',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    hint: '聚合大量开源模型，模型名通常使用完整 ID。示例：Qwen/Qwen2.5-72B-Instruct。'
+  },
+  {
+    label: 'OpenAI',
+    value: 'openai',
+    model: 'gpt-4o-mini',
+    baseUrl: 'https://api.openai.com/v1',
+    hint: '官方 OpenAI 接口。'
+  },
+  {
+    label: 'Anthropic',
+    value: 'anthropic',
+    model: 'claude-3-5-sonnet-latest',
+    baseUrl: 'https://api.anthropic.com',
+    hint: 'Claude 原生协议，不走 OpenAI 兼容格式。'
+  },
+  {
+    label: '本地模型 / Ollama',
+    value: 'ollama',
+    model: 'llama3.2',
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    hint: '本地运行，无需外网。模型示例：llama3.2 / qwen2.5 / deepseek-r1。'
+  },
+  {
+    label: 'New API 网关',
+    value: 'new-api',
+    model: 'qwen-plus',
+    baseUrl: 'http://127.0.0.1:3000/v1',
+    hint: '开源聚合网关预设。把官方渠道接进 New API 后，这里填网关 token 即可。'
+  },
+  {
+    label: 'One API 网关',
+    value: 'one-api',
+    model: 'qwen-plus',
+    baseUrl: 'http://127.0.0.1:3000/v1',
+    hint: '开源统一分发网关预设。适合把多家国产模型统一到一个地址下。'
+  }
 ]
+const providerOptions = providerPresets.map(({ label, value }) => ({ label, value }))
 const autoSaveSelectOptions = [...autoSaveOptions]
 const uiScaleOptions = [
   { label: '75%', value: 0.75 },
@@ -32,18 +107,21 @@ const uiScaleOptions = [
   { label: '140%', value: 1.4 }
 ]
 
+const activeProviderPreset = computed(
+  () => providerPresets.find((item) => item.value === appStore.appSettings.provider) ?? providerPresets[0]
+)
+
 function resolveProviderDefaults(provider: string): { model: string; baseUrl: string } {
-  switch (provider) {
-    case 'openai':
-      return { model: 'gpt-4o-mini', baseUrl: 'https://api.openai.com/v1' }
-    case 'anthropic':
-      return { model: 'claude-3-5-sonnet-latest', baseUrl: 'https://api.anthropic.com' }
-    case 'ollama':
-      return { model: 'llama3.2', baseUrl: 'http://127.0.0.1:11434/v1' }
-    case 'deepseek':
-    default:
-      return { model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' }
-  }
+  const preset = providerPresets.find((item) => item.value === provider)
+  return preset
+    ? {
+        model: preset.model,
+        baseUrl: preset.baseUrl
+      }
+    : {
+        model: 'deepseek-chat',
+        baseUrl: 'https://api.deepseek.com/v1'
+      }
 }
 
 function handleProviderChange(provider: string): void {
@@ -256,11 +334,16 @@ async function handleImportJson(): Promise<void> {
             @update:value="(value) => handleProviderChange(value ?? 'deepseek')"
           />
         </n-form-item>
+        <div class="provider-hint-block">
+          <strong>{{ activeProviderPreset.label }}</strong>
+          <p>{{ activeProviderPreset.hint }}</p>
+          <code>{{ activeProviderPreset.baseUrl }}</code>
+        </div>
         <n-form-item label="模型名称">
           <n-input
             :value="appStore.appSettings.model"
             @update:value="(value) => appStore.updateAppSetting('model', value)"
-            placeholder="例如：deepseek-chat / gpt-4o-mini / claude-3-5-sonnet-latest"
+            :placeholder="`例如：${activeProviderPreset.model}`"
           />
         </n-form-item>
         <n-form-item label="API Key">
@@ -268,12 +351,14 @@ async function handleImportJson(): Promise<void> {
             type="password"
             :value="appStore.appSettings.apiKey"
             @update:value="(value) => appStore.updateAppSetting('apiKey', value)"
+            :placeholder="appStore.appSettings.provider === 'ollama' ? '本地 Ollama 通常不需要 API Key' : '填写对应平台或网关的 Token'"
           />
         </n-form-item>
         <n-form-item label="Base URL (自定义代理)">
           <n-input
             :value="appStore.appSettings.baseUrl"
             @update:value="(value) => appStore.updateAppSetting('baseUrl', value)"
+            placeholder="支持官方接口地址，也支持 OpenAI 兼容网关地址"
           />
         </n-form-item>
         <div class="setting-actions ai-actions">
@@ -437,6 +522,33 @@ async function handleImportJson(): Promise<void> {
   border-radius: var(--arc-radius-lg);
   background: var(--arc-bg-surface);
   box-shadow: var(--arc-shadow-sm);
+}
+
+.provider-hint-block {
+  margin: -2px 0 14px;
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 12px 14px;
+}
+
+.provider-hint-block strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.provider-hint-block p {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.provider-hint-block code {
+  color: #334155;
+  font-size: 12px;
 }
 
 .block-title {

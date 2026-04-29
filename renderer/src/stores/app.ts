@@ -1,4 +1,4 @@
-import { computed, ref, toRaw, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { FAST_PERSIST_DELAY_MS, formatAutoSaveIntervalLabel, isLiveAutoSaveInterval, resolveAutoSaveDelayMs } from '@/features/settings/autoSave'
 import {
@@ -6,7 +6,24 @@ import {
   createOutlineVolume as createWorkspaceVolume
 } from '@/features/workspace/outlineVolumes'
 import { getThemePreset } from '@/theme/presets'
-import { createDemoWorkspace, createEmptyWorkspace, normalizeWorkspace } from '@/features/workspace/projectWorkspace'
+import { createEmptyWorkspace } from '@/features/workspace/projectWorkspace'
+import {
+  buildStarterChapter,
+  buildWorkspaceMapFromLegacy,
+  defaultProjects,
+  loadStoredState,
+  normalizeAppSettings,
+  normalizeChapterDraft,
+  normalizeChapterVersion,
+  normalizeProjectWorkspaceData,
+  getChapterSequenceInVolume,
+  getOutlineSequenceInVolume,
+  getWorkspacePrimaryVolumeId,
+  insertIntoVolumeSection,
+  toSerializable,
+  type LegacyStoredState,
+  type StoredState
+} from '@/features/workspace/storeHelpers'
 import type {
   AssistantPromptRequest,
   AppSettings,
@@ -26,28 +43,6 @@ import type {
   WorldviewEntry
 } from '@/types/app'
 
-interface StoredState {
-  theme: ThemeName
-  selectedProjectId: string
-  projects: ProjectSummary[]
-  workspaces: Record<string, ProjectWorkspaceData>
-  appSettings: AppSettings
-}
-
-interface LegacyStoredState {
-  theme?: ThemeName
-  selectedProjectId?: string
-  projects?: ProjectSummary[]
-  worldviewEntries?: WorldviewEntry[]
-  characters?: CharacterCard[]
-  outlineVolumes?: OutlineVolume[]
-  outlineItems?: OutlineItem[]
-  chapters?: ChapterDraft[]
-  chapterVersions?: ChapterVersion[]
-  messages?: ChatMessage[]
-  appSettings?: AppSettings
-}
-
 interface ProjectWorkspacePayload {
   project: {
     title: string
@@ -64,149 +59,6 @@ interface ProjectWorkspacePayload {
   messages?: ChatMessage[]
 }
 
-const defaultProjects: ProjectSummary[] = [
-  {
-    id: 'project-1',
-    title: '赛博飞升指南',
-    genre: '科幻 / 赛博朋克',
-    wordCount: '12.5万字',
-    lastEdited: '10分钟前编辑',
-    cover: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)'
-  }
-]
-
-const defaultAppSettings: AppSettings = {
-  provider: 'deepseek',
-  model: 'deepseek-chat',
-  apiKey: 'sk-1234567890abcdef',
-  baseUrl: 'https://api.deepseek.com/v1',
-  autoSaveInterval: '5m',
-  uiScale: 1
-}
-
-function normalizeAppSettings(settings?: Partial<AppSettings> | null): AppSettings {
-  return {
-    ...defaultAppSettings,
-    ...settings,
-    uiScale:
-      settings?.uiScale !== undefined && Number.isFinite(settings.uiScale)
-        ? Math.min(1.75, Math.max(0.75, settings.uiScale))
-        : defaultAppSettings.uiScale
-  }
-}
-
-function loadStoredState(): StoredState {
-  return {
-    theme: 'ocean',
-    selectedProjectId: defaultProjects[0].id,
-    projects: defaultProjects,
-    workspaces: {
-      [defaultProjects[0].id]: createDemoWorkspace()
-    },
-    appSettings: defaultAppSettings
-  }
-}
-
-function normalizeChapterDraft(chapter: ChapterDraft): ChapterDraft {
-  return {
-    ...chapter,
-    summary: chapter.summary?.trim() || '待补充章节摘要',
-    status: chapter.status ?? 'draft',
-    wordTarget: chapter.wordTarget?.trim() || '预估 3000字'
-  }
-}
-
-function normalizeChapterVersion(version: ChapterVersion): ChapterVersion {
-  return {
-    ...version,
-    summary: version.summary?.trim() || '待补充章节摘要',
-    status: version.status ?? 'draft',
-    wordTarget: version.wordTarget?.trim() || '预估 3000字',
-    createdAt: version.createdAt || new Date().toISOString()
-  }
-}
-
-function normalizeProjectWorkspaceData(
-  workspace?: Partial<ProjectWorkspaceData> | null,
-  options?: { fallbackToDemo?: boolean }
-): ProjectWorkspaceData {
-  const normalized = normalizeWorkspace(workspace, options)
-  return {
-    worldviewEntries: normalized.worldviewEntries,
-    characters: normalized.characters,
-    outlineVolumes: normalized.outlineVolumes,
-    outlineItems: normalized.outlineItems,
-    chapters: normalized.chapters.map(normalizeChapterDraft),
-    chapterVersions: normalized.chapterVersions.map(normalizeChapterVersion),
-    messages: normalized.messages
-  }
-}
-
-function buildStarterChapter(volumeId: string, title = '第1章：开篇'): ChapterDraft {
-  return {
-    id: `chapter-${Date.now()}`,
-    volumeId,
-    title,
-    summary: '待补充章节摘要',
-    status: 'draft',
-    wordTarget: '预估 3000字',
-    content: ''
-  }
-}
-
-function getWorkspacePrimaryVolumeId(workspace: ProjectWorkspaceData): string {
-  return workspace.outlineVolumes[0]?.id ?? createWorkspaceVolume().id
-}
-
-function getChapterSequenceInVolume(chapters: ChapterDraft[], volumeId: string): number {
-  return chapters.filter((chapter) => chapter.volumeId === volumeId).length + 1
-}
-
-function getOutlineSequenceInVolume(outlineItems: OutlineItem[], volumeId: string): number {
-  return outlineItems.filter((item) => item.volumeId === volumeId).length + 1
-}
-
-function insertIntoVolumeSection<T extends { volumeId: string }>(items: T[], nextItem: T): T[] {
-  const nextItems = [...items]
-  const lastIndexInVolume = nextItems.reduce(
-    (lastMatchIndex, item, index) => (item.volumeId === nextItem.volumeId ? index : lastMatchIndex),
-    -1
-  )
-
-  if (lastIndexInVolume === -1) {
-    nextItems.push(nextItem)
-    return nextItems
-  }
-
-  nextItems.splice(lastIndexInVolume + 1, 0, nextItem)
-  return nextItems
-}
-
-function buildWorkspaceMapFromLegacy(payload: LegacyStoredState, selectedProjectId: string): Record<string, ProjectWorkspaceData> {
-  const workspaceEntries = payload.projects?.map((project, index) => [
-    project.id,
-    normalizeProjectWorkspaceData(
-      project.id === selectedProjectId
-        ? {
-            worldviewEntries: payload.worldviewEntries,
-            characters: payload.characters,
-            outlineVolumes: payload.outlineVolumes,
-            outlineItems: payload.outlineItems,
-            chapters: payload.chapters,
-            chapterVersions: payload.chapterVersions,
-            messages: payload.messages
-          }
-        : undefined,
-      { fallbackToDemo: index === 0 && project.id === defaultProjects[0].id }
-    )
-  ]) ?? []
-
-  return Object.fromEntries(workspaceEntries)
-}
-
-function toSerializable<T>(value: T): T {
-  return JSON.parse(JSON.stringify(toRaw(value))) as T
-}
 
 export const useAppStore = defineStore('app', () => {
   const stored = loadStoredState()
