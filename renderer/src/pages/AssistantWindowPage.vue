@@ -30,10 +30,11 @@ const hasChapterContext = computed(() => Boolean(appStore.currentProject && appS
   flex: 1;
   min-width: 0;
   min-height: 0;
-  padding: 16px;
+  padding: 18px;
   background:
-    linear-gradient(180deg, rgba(247, 248, 252, 0.98), rgba(255, 255, 255, 1)),
-    radial-gradient(circle at top right, color-mix(in srgb, var(--arc-primary) 10%, white), transparent 30%);
+    linear-gradient(180deg, #f1ede5, #f5f2eb 24%, #f4f4f1 100%),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--arc-primary) 12%, white), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.82), transparent 26%);
 }
 
 .assistant-window-frame {
@@ -42,10 +43,13 @@ const hasChapterContext = computed(() => Boolean(appStore.currentProject && appS
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(226, 232, 240, 0.92);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(220, 214, 204, 0.92);
+  border-radius: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 252, 247, 0.88));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 28px 70px rgba(15, 23, 42, 0.08);
 }
 
 .assistant-window-frame :deep(.assistant-shell) {
@@ -53,7 +57,7 @@ const hasChapterContext = computed(() => Boolean(appStore.currentProject && appS
   min-width: 0;
   border-left: none;
   background:
-    linear-gradient(180deg, rgba(248, 250, 255, 0.92), rgba(255, 255, 255, 0.98)),
+    linear-gradient(180deg, rgba(252, 250, 246, 0.94), rgba(248, 245, 238, 0.98)),
     radial-gradient(circle at top right, color-mix(in srgb, var(--arc-primary) 8%, white), transparent 32%);
 }
 
@@ -98,7 +102,7 @@ const hasChapterContext = computed(() => Boolean(appStore.currentProject && appS
   }
 
   .assistant-window-frame {
-    border-radius: 18px;
+    border-radius: 20px;
   }
 }
 </style>

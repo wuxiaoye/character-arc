@@ -444,8 +444,13 @@ watch(
           <Bot :size="16" />
         </div>
         <div class="assistant-title-copy">
+          <span class="assistant-kicker">Chapter Copilot</span>
           <strong>AI 创作助理</strong>
           <p>围绕当前章节给建议、润色或续写。</p>
+          <div class="assistant-context-pills">
+            <span class="assistant-context-pill">{{ currentProject?.title ?? '未命名项目' }}</span>
+            <span class="assistant-context-pill strong">{{ currentChapter?.title ?? '未命名章节' }}</span>
+          </div>
         </div>
       </div>
       <button
@@ -515,57 +520,59 @@ watch(
     </div>
 
     <div ref="messagesViewport" class="assistant-messages arc-scrollbar">
-      <article
-        v-for="messageItem in appStore.messages"
-        :key="messageItem.id"
-        class="message-card"
-        :class="messageItem.role"
-      >
-        <div class="message-meta">
-          <span>{{ messageItem.role === 'assistant' ? '创作助理' : '你' }}</span>
-          <div v-if="messageItem.role === 'assistant'" class="message-actions">
-            <button
-              class="insert-button"
-              @click="handleInsert(messageItem.content, 'cursor')"
-            >
-              <ArrowDownToLine :size="13" />
-              <span>插入</span>
-            </button>
-            <button
-              class="insert-button secondary"
-              @click="handleInsert(messageItem.content, 'replace-selection')"
-            >
-              <span>替换选区</span>
-            </button>
-            <button
-              class="insert-button secondary"
-              @click="handleInsert(messageItem.content, 'append')"
-            >
-              <span>追加末尾</span>
-            </button>
-            <button
-              class="insert-button secondary"
-              @click="handleUseAsTitle(messageItem.content)"
-            >
-              <span>设为标题</span>
-            </button>
-            <button
-              class="insert-button secondary"
-              @click="handleUseAsSummary(messageItem.content)"
-            >
-              <span>设为摘要</span>
-            </button>
+      <div class="assistant-messages-stack">
+        <article
+          v-for="messageItem in appStore.messages"
+          :key="messageItem.id"
+          class="message-card"
+          :class="messageItem.role"
+        >
+          <div class="message-meta">
+            <span>{{ messageItem.role === 'assistant' ? '创作助理' : '你' }}</span>
+            <div v-if="messageItem.role === 'assistant'" class="message-actions">
+              <button
+                class="insert-button"
+                @click="handleInsert(messageItem.content, 'cursor')"
+              >
+                <ArrowDownToLine :size="13" />
+                <span>插入</span>
+              </button>
+              <button
+                class="insert-button secondary"
+                @click="handleInsert(messageItem.content, 'replace-selection')"
+              >
+                <span>替换选区</span>
+              </button>
+              <button
+                class="insert-button secondary"
+                @click="handleInsert(messageItem.content, 'append')"
+              >
+                <span>追加末尾</span>
+              </button>
+              <button
+                class="insert-button secondary"
+                @click="handleUseAsTitle(messageItem.content)"
+              >
+                <span>设为标题</span>
+              </button>
+              <button
+                class="insert-button secondary"
+                @click="handleUseAsSummary(messageItem.content)"
+              >
+                <span>设为摘要</span>
+              </button>
+            </div>
           </div>
-        </div>
-        <p>{{ messageItem.content }}</p>
-      </article>
+          <p>{{ messageItem.content }}</p>
+        </article>
 
-      <article v-if="isResponding" class="message-card assistant pending">
-        <div class="message-meta">
-          <span>创作助理</span>
-        </div>
-        <p>{{ streamingReply || '正在整理当前章节上下文并生成回复...' }}</p>
-      </article>
+        <article v-if="isResponding" class="message-card assistant pending">
+          <div class="message-meta">
+            <span>创作助理</span>
+          </div>
+          <p>{{ streamingReply || '正在整理当前章节上下文并生成回复...' }}</p>
+        </article>
+      </div>
     </div>
 
     <footer class="assistant-composer">
