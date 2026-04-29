@@ -815,6 +815,7 @@ onBeforeUnmount(() => {
             <div class="editor-body" :class="{ compact: isCompactStudio }">
               <div class="editor-column">
                 <RichChapterEditor
+                  class="chapter-editor-instance"
                   :chapter-id="appStore.selectedChapter?.id ?? ''"
                   :model-value="appStore.selectedChapter?.content ?? ''"
                   :insertion-request="appStore.pendingChapterInsertion"
@@ -1576,12 +1577,15 @@ onBeforeUnmount(() => {
 }
 
 .chapters-layout.compact-mode .editor-topbar {
-  flex-wrap: wrap;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px 18px 14px;
 }
 
 .chapters-layout.compact-mode .editor-context {
-  width: 100%;
+  width: min(100%, 1180px);
+  margin: 0 auto;
 }
 
 .chapters-layout.compact-mode .editor-context-main {
@@ -1589,16 +1593,36 @@ onBeforeUnmount(() => {
 }
 
 .chapters-layout.compact-mode .editor-floating-actions {
-  width: 100%;
-  justify-content: space-between;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .chapters-layout.compact-mode .editor-action-group {
+  flex-wrap: wrap;
   max-width: 100%;
 }
 
 .chapters-layout.compact-mode .editor-manuscript {
   padding: 16px;
+}
+
+.chapters-layout.compact-mode .editor-manuscript-head,
+.chapters-layout.compact-mode .editor-body,
+.chapters-layout.compact-mode .editor-status {
+  width: min(100%, 1180px);
+  margin-inline: auto;
+}
+
+.chapters-layout.compact-mode .compact-utility-group {
+  margin-right: 8px;
+}
+
+.chapters-layout.compact-mode .chapter-editor-instance {
+  width: 100%;
+  max-width: none;
+  margin-right: 0;
 }
 
 .chapters-layout.compact-mode .editor-status {
