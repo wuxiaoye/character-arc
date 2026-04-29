@@ -504,9 +504,15 @@ onBeforeUnmount(() => {
                   :class="{ active: appStore.aiVisible }"
                   @click="appStore.toggleAi()"
                 >
-                  <Bot :size="16" />
-                  <PanelRightClose v-if="appStore.aiVisible" :size="14" />
-                  <PanelRightOpen v-else :size="14" />
+                  <span class="assistant-toggle-icons" aria-hidden="true">
+                    <Bot :size="16" />
+                    <PanelRightClose v-if="appStore.aiVisible" :size="14" />
+                    <PanelRightOpen v-else :size="14" />
+                  </span>
+                  <span class="assistant-toggle-copy">
+                    <span class="assistant-toggle-label">{{ appStore.aiVisible ? 'AI 助手已展开' : 'AI 助手已收起' }}</span>
+                    <span class="assistant-toggle-hint">{{ appStore.aiVisible ? '点击收起右栏' : '点击重新展开' }}</span>
+                  </span>
                 </button>
               </template>
               {{ appStore.aiVisible ? '隐藏 AI 助手' : '显示 AI 助手' }}
@@ -795,9 +801,39 @@ onBeforeUnmount(() => {
 
 .assistant-toggle {
   width: auto;
-  min-width: 52px;
+  min-width: 152px;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.assistant-toggle-icons {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  padding-inline: 12px;
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.assistant-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+}
+
+.assistant-toggle-label {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.assistant-toggle-hint {
+  color: #7a7f87;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .chapters-shell {
@@ -1242,8 +1278,8 @@ onBeforeUnmount(() => {
 
 .tool-badge {
   display: inline-flex;
-  width: 30px;
-  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--chapter-border);
@@ -1251,6 +1287,7 @@ onBeforeUnmount(() => {
   background: var(--chapter-surface);
   color: #60656d;
   cursor: pointer;
+  padding: 0;
   transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
 
@@ -1274,6 +1311,10 @@ onBeforeUnmount(() => {
 .tool-badge.neutral.active {
   background: var(--chapter-accent-soft);
   color: #1f4ea3;
+}
+
+.tool-badge.neutral.active .assistant-toggle-hint {
+  color: #3c63a9;
 }
 
 .tool-badge:disabled {
@@ -1592,6 +1633,10 @@ onBeforeUnmount(() => {
 
   .editor-floating-actions {
     gap: 8px;
+  }
+
+  .assistant-toggle {
+    min-width: 0;
   }
 }
 </style>

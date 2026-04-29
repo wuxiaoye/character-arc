@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowDownToLine, Bot, RotateCcw, SendHorizonal, Square } from 'lucide-vue-next'
+import { ArrowDownToLine, Bot, PanelRightClose, RotateCcw, SendHorizonal, Square } from 'lucide-vue-next'
 import { useMessage } from 'naive-ui'
 import { buildChapterAssistantContext } from '@/features/ai/chapterAssistantContext'
 import {
@@ -401,11 +401,20 @@ watch(
         <div class="assistant-badge">
           <Bot :size="16" />
         </div>
-        <div>
+        <div class="assistant-title-copy">
           <strong>AI 创作助理</strong>
           <p>围绕当前章节给建议、润色或续写。</p>
         </div>
       </div>
+      <button
+        type="button"
+        class="assistant-collapse"
+        title="收起右侧助手栏"
+        @click="appStore.toggleAi()"
+      >
+        <PanelRightClose :size="15" />
+        <span>收起侧栏</span>
+      </button>
     </header>
 
     <div class="assistant-quick-actions">

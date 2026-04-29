@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ChevronLeft, Search } from 'lucide-vue-next'
+import { Bot, ChevronLeft, PanelRightOpen, Search } from 'lucide-vue-next'
 import { useAppStore } from '@/stores/app'
 import ChaptersPanel from '@/components/ChaptersPanel.vue'
 import AiAssistantPanel from '@/components/AiAssistantPanel.vue'
@@ -9,6 +9,7 @@ const appStore = useAppStore()
 const searchKeyword = ref('')
 
 const normalizedSearch = computed(() => searchKeyword.value.trim())
+const canToggleAssistant = computed(() => normalizedSearch.value.length === 0)
 const shouldShowAssistant = computed(() => appStore.aiVisible && normalizedSearch.value.length === 0)
 const currentChapterTitle = computed(() => appStore.selectedChapter?.title || '未命名章节')
 const currentVolumeTitle = computed(() => appStore.selectedChapterVolume?.title || '未分卷')
@@ -51,12 +52,30 @@ watch(
       </div>
     </main>
 
+    <button
+      v-if="canToggleAssistant && !shouldShowAssistant"
+      type="button"
+      class="assistant-edge-toggle arc-no-drag"
+      title="展开右侧 AI 助手栏"
+      @click="appStore.toggleAi()"
+    >
+      <span class="assistant-edge-toggle-icon">
+        <Bot :size="15" />
+        <PanelRightOpen :size="14" />
+      </span>
+      <span class="assistant-edge-toggle-copy">
+        <strong>展开 AI 助手</strong>
+        <span>继续续写、润色或提建议</span>
+      </span>
+    </button>
+
     <AiAssistantPanel v-if="shouldShowAssistant" />
   </section>
 </template>
 
 <style scoped>
 .chapter-studio-page {
+  position: relative;
   display: flex;
   flex: 1;
   min-width: 0;
@@ -197,6 +216,75 @@ watch(
   padding: clamp(18px, 2vw, 28px);
 }
 
+.assistant-edge-toggle {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+  color: #334155;
+  cursor: pointer;
+  padding: 10px 14px;
+  transform: translateY(-50%);
+  transition:
+    border-color 0.22s ease,
+    background 0.22s ease,
+    color 0.22s ease,
+    box-shadow 0.22s ease,
+    transform 0.22s ease;
+}
+
+.assistant-edge-toggle:hover {
+  border-color: color-mix(in srgb, var(--arc-primary) 20%, white);
+  color: var(--arc-primary);
+  box-shadow: 0 22px 42px rgba(15, 23, 42, 0.14);
+  transform: translateY(calc(-50% - 1px));
+}
+
+.assistant-edge-toggle:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--arc-primary) 24%, white);
+  box-shadow:
+    0 22px 42px rgba(15, 23, 42, 0.14),
+    0 0 0 4px color-mix(in srgb, var(--arc-primary) 10%, transparent);
+}
+
+.assistant-edge-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.assistant-edge-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+
+.assistant-edge-toggle-copy strong {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.assistant-edge-toggle-copy span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 @media (max-width: 980px) {
   .studio-header {
     align-items: flex-start;
@@ -212,6 +300,17 @@ watch(
 @media (max-width: 1360px) {
   .chapter-studio-page {
     flex-direction: column;
+  }
+
+  .assistant-edge-toggle {
+    top: auto;
+    right: 18px;
+    bottom: 18px;
+    transform: none;
+  }
+
+  .assistant-edge-toggle:hover {
+    transform: translateY(-1px);
   }
 
   .chapter-studio-main {
@@ -230,6 +329,16 @@ watch(
 @media (max-width: 720px) {
   .studio-body {
     padding: 14px;
+  }
+
+  .assistant-edge-toggle {
+    right: 14px;
+    bottom: 14px;
+    padding: 10px 12px;
+  }
+
+  .assistant-edge-toggle-copy span {
+    display: none;
   }
 
   .studio-header {
