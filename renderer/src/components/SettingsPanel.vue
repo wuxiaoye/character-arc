@@ -7,6 +7,7 @@ import { autoSaveOptions } from '@/features/settings/autoSave'
 import { buildProjectWritingStyleContext, writingStylePresets } from '@/features/writingStyles/presets'
 import { themePresets } from '@/theme/presets'
 import { useAppStore } from '@/stores/app'
+import { toIpcPayload } from '@/utils/ipcPayload'
 import type {
   CharacterArcExportEnvelope,
   ImportConflictMode,
@@ -196,8 +197,7 @@ async function handleTestAiConnection(): Promise<void> {
   isTestingAiConnection.value = true
 
   try {
-    const safeSettings = JSON.parse(JSON.stringify(appStore.appSettings))
-    const result = await window.characterArc.testAiConnection(safeSettings)
+    const result = await window.characterArc.testAiConnection(toIpcPayload(appStore.appSettings))
     if (!result.success) {
       throw new Error(result.error ?? '模型连接测试失败')
     }
@@ -246,11 +246,11 @@ async function handleExportJson(): Promise<void> {
     chapterVersions: appStore.chapterVersions
   }
 
-  const result = await window.characterArc.exportJson({
+  const result = await window.characterArc.exportJson(toIpcPayload({
     data: buildExportEnvelope('project', payload),
     title: '导出完整项目 JSON',
     defaultPath: `${buildExportStem('project')}.json`
-  })
+  }))
   if (result.success) {
     message.success('项目数据已导出')
     return
@@ -274,11 +274,11 @@ async function handleExportText(): Promise<void> {
     exportedAt: new Date().toISOString()
   }
 
-  const result = await window.characterArc.exportText({
+  const result = await window.characterArc.exportText(toIpcPayload({
     data: payload,
     title: '导出章节正文 TXT',
     defaultPath: `${buildExportStem('chapters')}.txt`
-  })
+  }))
   if (result.success) {
     message.success('章节内容已导出')
     return
@@ -291,14 +291,14 @@ async function handleExportText(): Promise<void> {
 
 // 导出角色资料为 JSON 文件
 async function handleExportCharacters(): Promise<void> {
-  const result = await window.characterArc.exportJson({
+  const result = await window.characterArc.exportJson(toIpcPayload({
     data: buildExportEnvelope('characters', {
       project: appStore.currentProject,
       characters: appStore.characters
     }),
     title: '导出角色资料 JSON',
     defaultPath: `${buildExportStem('characters')}.json`
-  })
+  }))
 
   if (result.success) {
     message.success('角色资料已导出')
@@ -312,7 +312,7 @@ async function handleExportCharacters(): Promise<void> {
 
 // 导出大纲节点为 JSON 文件
 async function handleExportOutline(): Promise<void> {
-  const result = await window.characterArc.exportJson({
+  const result = await window.characterArc.exportJson(toIpcPayload({
     data: buildExportEnvelope('outline', {
       project: appStore.currentProject,
       outlineVolumes: appStore.outlineVolumes,
@@ -320,7 +320,7 @@ async function handleExportOutline(): Promise<void> {
     }),
     title: '导出大纲节点 JSON',
     defaultPath: `${buildExportStem('outline')}.json`
-  })
+  }))
 
   if (result.success) {
     message.success('大纲节点已导出')
@@ -334,14 +334,14 @@ async function handleExportOutline(): Promise<void> {
 
 // 导出灵感卡片为 JSON 文件
 async function handleExportInspiration(): Promise<void> {
-  const result = await window.characterArc.exportJson({
+  const result = await window.characterArc.exportJson(toIpcPayload({
     data: buildExportEnvelope('inspiration', {
       project: appStore.currentProject,
       inspirationEntries: appStore.inspirationEntries
     }),
     title: '导出灵感卡片 JSON',
     defaultPath: `${buildExportStem('inspiration')}.json`
-  })
+  }))
 
   if (result.success) {
     message.success('灵感卡片已导出')
@@ -355,7 +355,7 @@ async function handleExportInspiration(): Promise<void> {
 
 // 导出关系组织数据为 JSON 文件
 async function handleExportRelations(): Promise<void> {
-  const result = await window.characterArc.exportJson({
+  const result = await window.characterArc.exportJson(toIpcPayload({
     data: buildExportEnvelope('relations', {
       project: appStore.currentProject,
       characters: appStore.characters,
@@ -365,7 +365,7 @@ async function handleExportRelations(): Promise<void> {
     }),
     title: '导出关系组织 JSON',
     defaultPath: `${buildExportStem('relations')}.json`
-  })
+  }))
 
   if (result.success) {
     message.success('关系组织数据已导出')
@@ -379,7 +379,7 @@ async function handleExportRelations(): Promise<void> {
 
 // 导出章节数据（含正文和元信息）为 JSON 文件
 async function handleExportChaptersJson(): Promise<void> {
-  const result = await window.characterArc.exportJson({
+  const result = await window.characterArc.exportJson(toIpcPayload({
     data: buildExportEnvelope('chapters', {
       project: appStore.currentProject,
       outlineVolumes: appStore.outlineVolumes,
@@ -388,7 +388,7 @@ async function handleExportChaptersJson(): Promise<void> {
     }),
     title: '导出章节数据 JSON',
     defaultPath: `${buildExportStem('chapters')}.json`
-  })
+  }))
 
   if (result.success) {
     message.success('章节数据已导出')

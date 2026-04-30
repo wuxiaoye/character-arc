@@ -306,11 +306,11 @@ function handleInsert(content: string, mode: ChapterInsertionMode): void {
   }
 
   if (isAssistantWindow) {
-    void window.characterArc.publishAssistantCommand({
+    void window.characterArc.publishAssistantCommand(toIpcPayload({
       type: 'insert-into-chapter',
       content: insertion,
       mode
-    })
+    }))
 
     if (mode === 'append') {
       message.success('AI 内容已发送到主窗口并准备追加到正文末尾')

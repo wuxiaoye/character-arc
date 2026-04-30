@@ -28,6 +28,7 @@ import {
   type StoredState
 } from '@/features/workspace/storeHelpers'
 import { characterArcWindowKind, isAssistantWindow } from '@/utils/windowKind'
+import { toIpcPayload } from '@/utils/ipcPayload'
 import type {
   AssistantPromptRequest,
   AppSettings,
@@ -286,7 +287,7 @@ export const useAppStore = defineStore('app', () => {
     }
 
     workspaceSyncTimer = window.setTimeout(() => {
-      void window.characterArc.publishWorkspaceSync(serializeWorkspaceState())
+      void window.characterArc.publishWorkspaceSync(toIpcPayload(serializeWorkspaceState()))
     }, 120)
   }
 
@@ -296,7 +297,7 @@ export const useAppStore = defineStore('app', () => {
       return
     }
 
-    void window.characterArc.publishAssistantContext(serializeAssistantContext())
+    void window.characterArc.publishAssistantContext(toIpcPayload(serializeAssistantContext()))
   }
 
   /** 查询助手窗口是否打开，同步 aiVisible 状态 */
@@ -490,7 +491,7 @@ export const useAppStore = defineStore('app', () => {
       saveTimer = null
     }
 
-    const result = await window.characterArc.saveWorkspace(serializeWorkspaceState())
+    const result = await window.characterArc.saveWorkspace(toIpcPayload(serializeWorkspaceState()))
     if (!result.success) {
       console.error('[workspace] saveWorkspace failed:', result.error)
     }
@@ -1892,7 +1893,7 @@ export const useAppStore = defineStore('app', () => {
 
     aiVisible.value = true
     void openAssistantWindow()
-    void window.characterArc.publishAssistantPrompt(request)
+    void window.characterArc.publishAssistantPrompt(toIpcPayload(request))
   }
 
   /** 标记提示词请求已消费，清空待处理状态 */
