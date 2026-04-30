@@ -797,8 +797,6 @@ onBeforeUnmount(() => {
                   >
                     <span class="assistant-toggle-icons" aria-hidden="true">
                       <Bot :size="16" />
-                      <PanelRightClose v-if="appStore.aiVisible" :size="14" />
-                      <PanelRightOpen v-else :size="14" />
                     </span>
                     <span class="assistant-toggle-copy">
                       <span class="assistant-toggle-label">AI 助手</span>
