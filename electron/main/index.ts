@@ -371,6 +371,7 @@ async function ensureWorkspaceDb(): Promise<DatabaseSync> {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       genre TEXT NOT NULL,
+      novel_length TEXT NOT NULL DEFAULT 'long',
       word_count TEXT NOT NULL,
       last_edited TEXT NOT NULL,
       cover TEXT NOT NULL,
@@ -674,6 +675,7 @@ type WorkspacePayload = {
     id: string
     title: string
     genre: string
+    novelLength: 'short' | 'long'
     wordCount: string
     lastEdited: string
     cover: string
@@ -833,6 +835,10 @@ type WorkspacePayload = {
 function ensureProjectColumns(db: DatabaseSync): void {
   const columns = db.prepare(`PRAGMA table_info('projects')`).all() as Array<{ name: string }>
   const columnNames = new Set(columns.map((column) => column.name))
+
+  if (!columnNames.has('novel_length')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN novel_length TEXT NOT NULL DEFAULT 'long';`)
+  }
 
   if (!columnNames.has('writing_style_preset_id')) {
     db.exec(`ALTER TABLE projects ADD COLUMN writing_style_preset_id TEXT NOT NULL DEFAULT 'cinematic-cool';`)
@@ -998,6 +1004,7 @@ function normalizeProjectRecord(project: Partial<WorkspacePayload['projects'][nu
     id: project.id,
     title: project.title || '未命名作品',
     genre: project.genre || '未分类',
+    novelLength: project.novelLength === 'short' ? 'short' : 'long',
     wordCount: project.wordCount || '待统计',
     lastEdited: project.lastEdited || '刚刚更新',
     cover: project.cover || 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)',
@@ -1126,7 +1133,7 @@ function normalizeWorkspacePayload(payload: WorkspacePayload | LegacyWorkspacePa
  */
 function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null {
   const projectRows = db.prepare(`
-    SELECT id, title, genre, word_count AS wordCount, last_edited AS lastEdited, cover,
+    SELECT id, title, genre, novel_length AS novelLength, word_count AS wordCount, last_edited AS lastEdited, cover,
       target_platform AS targetPlatform,
       reference_works_json AS referenceWorksJson,
       writing_style_preset_id AS writingStylePresetId,
@@ -1391,14 +1398,15 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
     `)
 
     const insertProject = db.prepare(`
-      INSERT INTO projects (id, title, genre, word_count, last_edited, cover, target_platform, reference_works_json, writing_style_preset_id, writing_style_prompt, novel_workflow_stages_json, project_skills_json, chapter_assistant_templates_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO projects (id, title, genre, novel_length, word_count, last_edited, cover, target_platform, reference_works_json, writing_style_preset_id, writing_style_prompt, novel_workflow_stages_json, project_skills_json, chapter_assistant_templates_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     for (const project of payload.projects) {
       insertProject.run(
         project.id,
         project.title,
         project.genre,
+        project.novelLength,
         project.wordCount,
         project.lastEdited,
         project.cover,

@@ -1,4 +1,5 @@
 import type { AiTaskPayload, PromptPair } from './aiShared'
+import { resolveProjectBootstrapPromptParts } from './projectBootstrapPrompts'
 import {
   buildCapabilityPromptContext,
   resolveChapterAssistantLengthInstruction,
@@ -47,10 +48,11 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
 
   // ── 项目初始化任务（批量生成世界观 + 大纲） ──
   if (task.task === 'project-bootstrap') {
+    const { genreLabel, lengthLabel, strategyBlock } = resolveProjectBootstrapPromptParts(context)
     return wrapPrompt({
       system:
         '你是小说项目初始化助手。请只返回 JSON 对象，不要返回 Markdown。字段必须包含 worldviewEntries、outlineItems。',
-      user: `请基于以下信息，为小说项目生成首批世界观设定和剧情大纲。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n目标字数：${String(context.projectWordTarget ?? '')}\n核心点子：${String(context.projectPremise ?? '')}\n\n要求：\n1. worldviewEntries 返回 3 条设定，每条都包含 type、title、content\n2. worldviewEntries 的 type 必须是 地理 / 法则 / 物种 / 势力 / 历史 之一\n3. outlineItems 返回 3 条章节大纲，每条都包含 title、wordTarget、conflict、summary\n4. wordTarget 使用"预估 xxxx字"格式\n5. 所有内容使用中文，紧贴题材和核心点子，不要重复\n6. ${writingStyleInstruction}\n\n返回格式：{"worldviewEntries":[{"type":"","title":"","content":""}],"outlineItems":[{"title":"","wordTarget":"","conflict":"","summary":""}]}`
+      user: `请基于以下信息，为小说项目生成首批世界观设定和剧情大纲。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${genreLabel}\n作品长度：${lengthLabel}\n小说简介：${String(context.projectPremise ?? '')}\n\n题材与长度策略：\n${strategyBlock}\n\n要求：\n1. worldviewEntries 返回 3 条设定，每条都包含 type、title、content\n2. worldviewEntries 的 type 必须是 地理 / 法则 / 物种 / 势力 / 历史 之一\n3. outlineItems 返回 3 条章节大纲，每条都包含 title、wordTarget、conflict、summary\n4. wordTarget 使用"预估 xxxx字"格式，并与${lengthLabel}节奏相匹配\n5. 所有内容使用中文，必须紧贴题材、长度和小说简介，不要写成通用模板\n6. 三条世界观设定之间要能互相支撑，三条大纲之间要形成连续推进\n7. 如果简介里已经给出了主角目标、关系或异常事件，要优先围绕它展开，而不是另起炉灶\n8. ${writingStyleInstruction}\n\n返回格式：{"worldviewEntries":[{"type":"","title":"","content":""}],"outlineItems":[{"title":"","wordTarget":"","conflict":"","summary":""}]}`
     })
   }
 

@@ -15,6 +15,7 @@ import {
   Users,
   GitMerge
 } from 'lucide-vue-next'
+import { resolveNovelLengthLabel } from '@/features/wizard/projectGenres'
 import { useAppStore } from '@/stores/app'
 import NovelWorkflowPanel from '@/components/NovelWorkflowPanel.vue'
 import OverviewPanel from '@/components/OverviewPanel.vue'
@@ -80,9 +81,15 @@ const activeViewLabel = computed(() => {
   return sidebarItems.find((item) => item.id === appStore.activePanel)?.label ?? '项目工作台'
 })
 
-// 项目元信息（题材 + 字数），用于侧边栏项目标题下方显示
+// 项目元信息（题材 + 长短篇 + 字数展示），用于侧边栏项目标题下方显示
 const projectMeta = computed(() =>
-  [appStore.currentProject?.genre?.trim(), appStore.currentProject?.wordCount?.trim()].filter(Boolean).join(' · ')
+  [
+    appStore.currentProject?.genre?.trim(),
+    resolveNovelLengthLabel(appStore.currentProject?.novelLength),
+    appStore.currentProject?.wordCount?.trim()
+  ]
+    .filter(Boolean)
+    .join(' · ')
 )
 
 // 侧边栏各导航项的角标数字，展示各模块的数据条数

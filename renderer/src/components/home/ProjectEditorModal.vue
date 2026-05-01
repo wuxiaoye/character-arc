@@ -2,7 +2,8 @@
 import { reactive, watch } from 'vue'
 import { BookOpen, ImagePlus, X } from 'lucide-vue-next'
 import { NButton, NForm, NFormItem, NInput, NModal, useMessage } from 'naive-ui'
-import type { ProjectSummary } from '@/types/app'
+import { NOVEL_LENGTH_OPTIONS } from '@/features/wizard/projectGenres'
+import type { NovelLength, ProjectSummary } from '@/types/app'
 
 const props = defineProps<{
   show: boolean
@@ -11,7 +12,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:show', value: boolean): void
-  (e: 'submit', payload: { id: string; title: string; genre: string; wordCount: string; cover: string }): void
+  (e: 'submit', payload: {
+    id: string
+    title: string
+    genre: string
+    novelLength: NovelLength
+    wordCount: string
+    cover: string
+  }): void
   (e: 'pickCover'): void
 }>()
 
@@ -20,6 +28,7 @@ const message = useMessage()
 const form = reactive({
   title: '',
   genre: '',
+  novelLength: 'long' as NovelLength,
   wordCount: '',
   cover: ''
 })
@@ -29,6 +38,7 @@ watch(
   (project) => {
     form.title = project?.title ?? ''
     form.genre = project?.genre ?? ''
+    form.novelLength = project?.novelLength === 'short' ? 'short' : 'long'
     form.wordCount = project?.wordCount ?? ''
     form.cover = project?.cover ?? ''
   },
@@ -62,6 +72,7 @@ function submitForm(): void {
     id: props.project.id,
     title: form.title,
     genre: form.genre,
+    novelLength: form.novelLength,
     wordCount: form.wordCount,
     cover: form.cover
   })
@@ -116,8 +127,24 @@ function clearCover(): void {
         </n-form-item>
       </div>
 
+      <n-form-item label="作品长度">
+        <div class="length-grid">
+          <button
+            v-for="option in NOVEL_LENGTH_OPTIONS"
+            :key="option.value"
+            type="button"
+            class="length-card"
+            :class="{ active: form.novelLength === option.value }"
+            @click="form.novelLength = option.value"
+          >
+            <strong>{{ option.label }}</strong>
+            <span>{{ option.description }}</span>
+          </button>
+        </div>
+      </n-form-item>
+
       <n-form-item label="字数展示">
-        <n-input v-model:value="form.wordCount" placeholder="例如：12.5万字" />
+        <n-input v-model:value="form.wordCount" placeholder="例如：12.5万字 / 待统计" />
       </n-form-item>
     </n-form>
 
@@ -167,13 +194,56 @@ function clearCover(): void {
   gap: 14px;
 }
 
+.length-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.length-card {
+  display: flex;
+  min-height: 88px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  border: 2px solid transparent;
+  border-radius: 18px;
+  background: rgba(249, 250, 251, 0.9);
+  color: #4b5563;
+  cursor: pointer;
+  padding: 16px;
+  text-align: left;
+  transition: all 0.24s ease;
+}
+
+.length-card:hover {
+  background: rgba(243, 244, 246, 0.96);
+}
+
+.length-card.active {
+  border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
+  background: color-mix(in srgb, var(--arc-primary) 10%, white);
+  color: var(--arc-primary);
+}
+
+.length-card strong {
+  font-size: 16px;
+}
+
+.length-card span {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 @media (max-width: 720px) {
   .cover-editor {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .form-grid {
+  .form-grid,
+  .length-grid {
     grid-template-columns: 1fr;
     gap: 0;
   }

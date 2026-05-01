@@ -1,57 +1,63 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import {
-  ArrowLeft,
-  BookA,
-  CheckCircle2,
-  ChevronRight,
-  Info,
-  Sparkles,
-  Target
-} from 'lucide-vue-next'
+import { ArrowLeft, BookA, CheckCircle2, ChevronRight, Info, Sparkles } from 'lucide-vue-next'
 import { NCheckbox, useMessage } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { toIpcPayload } from '@/utils/ipcPayload'
 import { createProjectWorkspaceSeed, type ProjectBootstrapResult } from '@/features/wizard/projectSeed'
-
-const DEFAULT_TARGET_WORD_COUNT = '20'
-
-function sanitizeTargetWordCount(value: string): string {
-  return value.replace(/\D/g, '')
-}
-
-function formatTargetWordCount(value: string): string {
-  return value.trim() ? `${value.trim()}万字` : ''
-}
+import {
+  DEFAULT_PROJECT_GENRE,
+  DEFAULT_PROJECT_GENRE_KEY,
+  NOVEL_LENGTH_OPTIONS,
+  PROJECT_GENRE_GROUP_LABELS,
+  PROJECT_GENRE_GROUPS,
+  PROJECT_GENRE_OPTIONS,
+  resolveNovelLengthLabel
+} from '@/features/wizard/projectGenres'
+import type { NovelLength } from '@/types/app'
 
 const appStore = useAppStore()
 const message = useMessage()
 
-// 当前向导步骤（1=基础设定，2=核心点子，3=AI生成）
 const step = ref(1)
-// 是否正在调用 AI 生成中，控制加载状态和按钮禁用
 const isGenerating = ref(false)
 
-// 向导表单数据，收集用户输入的项目基础信息
 const formData = reactive({
-  title: '',           // 作品名称
-  genre: '科幻',       // 题材分类，默认科幻
-  targetWordCount: DEFAULT_TARGET_WORD_COUNT, // 目标总字数（仅输入数字，单位固定为万字）
-  premise: '',         // 故事核心点子/一句话简介
-  shouldGenerate: true // 是否调用 AI 自动生成初始世界观与大纲
+  title: '',
+  selectedGenreKey: DEFAULT_PROJECT_GENRE_KEY,
+  customGenre: '',
+  novelLength: 'long' as NovelLength,
+  premise: '',
+  shouldGenerate: true
 })
 
-// 向导步骤配置，定义每一步的标题和描述
 const steps = [
-  { num: 1, title: '基础设定', desc: '为作品起个响亮的名字' },
-  { num: 2, title: '核心点子', desc: '一句话描述你的故事' },
-  { num: 3, title: 'AI 生成', desc: '构建世界观与大纲' }
+  { num: 1, title: '基础设定', desc: '确定题材与作品长度' },
+  { num: 2, title: '小说简介', desc: '用一句话立住故事钩子' },
+  { num: 3, title: '创建方式', desc: '决定是否让 AI 先搭好骨架' }
 ] as const
 
-// 根据当前步骤判断是否可以继续：第1步要求标题和字数非空，第2步要求简介非空，第3步要求未在生成中
+const genreGroups = PROJECT_GENRE_GROUPS.map((groupId) => ({
+  id: groupId,
+  label: PROJECT_GENRE_GROUP_LABELS[groupId],
+  options: PROJECT_GENRE_OPTIONS.filter((option) => option.group === groupId)
+}))
+
+const selectedGenreOption = computed(() =>
+  PROJECT_GENRE_OPTIONS.find((option) => option.key === formData.selectedGenreKey)
+)
+const isCustomGenre = computed(() => selectedGenreOption.value?.isCustom === true)
+const resolvedGenre = computed(() =>
+  isCustomGenre.value ? formData.customGenre.trim() : selectedGenreOption.value?.label ?? DEFAULT_PROJECT_GENRE
+)
+const selectedGenreLabel = computed(() =>
+  isCustomGenre.value ? resolvedGenre.value || '自定义题材' : selectedGenreOption.value?.label ?? DEFAULT_PROJECT_GENRE
+)
+const novelLengthLabel = computed(() => resolveNovelLengthLabel(formData.novelLength))
+
 const canContinue = computed(() => {
   if (step.value === 1) {
-    return formData.title.trim().length > 0 && formData.targetWordCount.trim().length > 0
+    return formData.title.trim().length > 0 && resolvedGenre.value.length > 0
   }
   if (step.value === 2) {
     return formData.premise.trim().length > 0
@@ -59,67 +65,59 @@ const canContinue = computed(() => {
   return !isGenerating.value
 })
 
-/** 重置向导到初始状态，关闭弹窗后调用 */
 function resetWizard(): void {
   step.value = 1
   isGenerating.value = false
   formData.title = ''
-  formData.genre = '科幻'
-  formData.targetWordCount = DEFAULT_TARGET_WORD_COUNT
+  formData.selectedGenreKey = DEFAULT_PROJECT_GENRE_KEY
+  formData.customGenre = ''
+  formData.novelLength = 'long'
   formData.premise = ''
   formData.shouldGenerate = true
 }
 
-/** 返回上一步，若已在第一步则关闭向导 */
 function goBack(): void {
-  // 还有上一步可退时，回退步骤
   if (step.value > 1 && !isGenerating.value) {
     step.value -= 1
     return
   }
 
-  // 在第一步且未生成中，关闭向导
   if (!isGenerating.value) {
     appStore.closeWizard()
   }
 }
 
-function handleTargetWordCountInput(event: Event): void {
-  const target = event.target as HTMLInputElement
-  const sanitized = sanitizeTargetWordCount(target.value)
-  formData.targetWordCount = sanitized
-  target.value = sanitized
+function selectGenre(genreKey: string): void {
+  formData.selectedGenreKey = genreKey
 }
 
-/** 前进到下一步，或在最后一步执行项目创建（含可选的 AI 生成） */
 async function goNext(): Promise<void> {
   if (!canContinue.value || isGenerating.value) {
     return
   }
 
-  // 前两步仅切换步骤
   if (step.value < 3) {
     step.value += 1
     return
   }
 
-  // 第三步：执行项目创建流程
   isGenerating.value = true
   try {
     let bootstrapResult: ProjectBootstrapResult | null = null
 
-    // 仅在用户启用自动生成时调用 AI，生成初始世界观与大纲
     if (formData.shouldGenerate) {
-      const result = await window.characterArc.generateAi(toIpcPayload({
-        task: 'project-bootstrap',
-        settings: appStore.appSettings,
-        context: {
-          projectTitle: formData.title,
-          projectGenre: formData.genre,
-          projectWordTarget: formatTargetWordCount(formData.targetWordCount),
-          projectPremise: formData.premise
-        }
-      }))
+      const result = await window.characterArc.generateAi(
+        toIpcPayload({
+          task: 'project-bootstrap',
+          settings: appStore.appSettings,
+          context: {
+            projectTitle: formData.title,
+            projectGenre: resolvedGenre.value,
+            projectNovelLength: formData.novelLength,
+            projectPremise: formData.premise
+          }
+        })
+      )
 
       if (!result.success || !result.result) {
         throw new Error(result.error ?? 'AI 初始化项目失败')
@@ -128,8 +126,18 @@ async function goNext(): Promise<void> {
       bootstrapResult = result.result as ProjectBootstrapResult
     }
 
-    // 根据表单数据和 AI 结果创建工作区种子，创建项目
-    appStore.createProjectWorkspace(createProjectWorkspaceSeed(formData, bootstrapResult))
+    appStore.createProjectWorkspace(
+      createProjectWorkspaceSeed(
+        {
+          title: formData.title,
+          genre: resolvedGenre.value,
+          novelLength: formData.novelLength,
+          premise: formData.premise,
+          shouldGenerate: formData.shouldGenerate
+        },
+        bootstrapResult
+      )
+    )
     resetWizard()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '创建项目失败，请稍后重试')
@@ -185,32 +193,60 @@ async function goNext(): Promise<void> {
             </div>
 
             <div class="field">
-              <label>目标字数</label>
-              <div class="input-shell">
-                <Target :size="18" class="input-icon" />
-                <input
-                  :value="formData.targetWordCount"
-                  type="text"
-                  inputmode="numeric"
-                  placeholder="例如：20"
-                  class="wizard-input wizard-input-with-suffix"
-                  @input="handleTargetWordCountInput"
-                />
-                <span class="input-suffix">万字</span>
+              <label>作品题材</label>
+              <div class="genre-stack">
+                <section v-for="group in genreGroups" :key="group.id" class="genre-section">
+                  <h4>{{ group.label }}</h4>
+                  <div class="genre-grid">
+                    <button
+                      v-for="genre in group.options"
+                      :key="genre.key"
+                      type="button"
+                      class="genre-chip"
+                      :class="{ active: formData.selectedGenreKey === genre.key }"
+                      @click="selectGenre(genre.key)"
+                    >
+                      {{ genre.label }}
+                    </button>
+                  </div>
+                </section>
+
+                <section class="genre-section custom-genre-section">
+                  <h4>自定义题材</h4>
+                  <button
+                    type="button"
+                    class="genre-chip custom-genre-chip"
+                    :class="{ active: isCustomGenre }"
+                    @click="selectGenre('custom')"
+                  >
+                    自定义题材
+                  </button>
+                  <div v-if="isCustomGenre" class="custom-genre-input-wrap">
+                    <input
+                      v-model="formData.customGenre"
+                      type="text"
+                      placeholder="例如：废土美食 / 赛博修仙 / 民俗怪谈"
+                      class="wizard-input custom-genre-input"
+                    />
+                    <p class="field-hint">会直接按你填写的题材生成，题材名会被写入项目卡片。</p>
+                  </div>
+                </section>
               </div>
             </div>
 
             <div class="field">
-              <label>作品题材</label>
-              <div class="genre-grid">
+              <label>作品长度</label>
+              <div class="length-grid">
                 <button
-                  v-for="genre in ['科幻', '奇幻', '仙侠', '都市', '悬疑', '历史']"
-                  :key="genre"
-                  class="genre-chip"
-                  :class="{ active: formData.genre === genre }"
-                  @click="formData.genre = genre"
+                  v-for="option in NOVEL_LENGTH_OPTIONS"
+                  :key="option.value"
+                  type="button"
+                  class="length-card"
+                  :class="{ active: formData.novelLength === option.value }"
+                  @click="formData.novelLength = option.value"
                 >
-                  {{ genre }}
+                  <strong>{{ option.label }}</strong>
+                  <span>{{ option.description }}</span>
                 </button>
               </div>
             </div>
@@ -219,15 +255,15 @@ async function goNext(): Promise<void> {
           <div v-else-if="step === 2" key="step-2" class="step-pane">
             <div class="field grow">
               <label class="inline-label">
-                <span>一句话简介</span>
+                <span>小说简介</span>
                 <Info :size="14" />
               </label>
               <textarea
                 v-model="formData.premise"
                 class="wizard-textarea"
-                placeholder="描述这个故事的核心冲突、主角的目标或独特的世界观。例如：一个拥有回溯时间能力的侦探，在一次次重启中寻找末日危机的真相..."
+                placeholder="描述这个故事的主角、核心冲突、目标或最吸引人的设定。例如：一个能看见未来死亡片段的实习法医，被迫和自己即将解剖的尸体合作，追查一场还没发生的连环谋杀。"
               ></textarea>
-              <p class="field-hint">越详细的描述，AI 能够生成的设定越准确丰富。</p>
+              <p class="field-hint">AI 会优先根据题材、长短篇和这段简介来生成开局世界观与前三章大纲。</p>
             </div>
           </div>
 
@@ -244,10 +280,10 @@ async function goNext(): Promise<void> {
             <p>
               {{
                 isGenerating
-                  ? (formData.shouldGenerate
-                      ? '正在解析核心点子，生成初始世界观与剧情大纲，并同步创建可继续写作的章节草稿。'
-                      : '正在创建空白项目工作区，并为你准备第一个章节草稿。')
-                  : `项目名为"${formData.title || '未命名作品'}"，题材为 ${formData.genre}，目标字数 ${formatTargetWordCount(formData.targetWordCount) || '未填写'}。你可以选择直接创建，或让 AI 先帮你生成初始设定与大纲。`
+                  ? formData.shouldGenerate
+                    ? '正在根据题材、作品长度和小说简介生成首批世界观与剧情大纲，并同步创建章节草稿。'
+                    : '正在创建项目脚手架，并为你准备首卷与第一章草稿。'
+                  : `项目名为“${formData.title || '未命名作品'}”，题材为 ${selectedGenreLabel}，长度为 ${novelLengthLabel}。你可以直接创建，或让 AI 先帮你生成开局骨架。`
               }}
             </p>
 
@@ -256,14 +292,30 @@ async function goNext(): Promise<void> {
                 <span>初始化方式</span>
                 <span>{{ formData.shouldGenerate ? 'AI 生成初始内容' : '直接创建空白项目' }}</span>
               </div>
+
+              <dl class="summary-grid">
+                <div>
+                  <dt>题材</dt>
+                  <dd>{{ selectedGenreLabel }}</dd>
+                </div>
+                <div>
+                  <dt>篇幅</dt>
+                  <dd>{{ novelLengthLabel }}</dd>
+                </div>
+                <div class="summary-block">
+                  <dt>简介</dt>
+                  <dd>{{ formData.premise }}</dd>
+                </div>
+              </dl>
+
               <n-checkbox v-model:checked="formData.shouldGenerate" class="bootstrap-toggle">
                 自动调用 AI 生成初始世界观与大纲
               </n-checkbox>
               <ul>
-                <li><CheckCircle2 :size="16" /> 项目标题、题材与目标字数会直接写入项目卡片</li>
-                <li><CheckCircle2 :size="16" /> 自动生成时，会创建首批世界观词条和章节大纲</li>
-                <li><CheckCircle2 :size="16" /> 系统会同步创建可直接进入写作的章节草稿</li>
-                <li><CheckCircle2 :size="16" /> 关闭自动生成时，仅保留空白工作区和首章草稿</li>
+                <li><CheckCircle2 :size="16" /> 项目卡片会保存题材与长篇 / 短篇信息</li>
+                <li><CheckCircle2 :size="16" /> 自动生成时，会按题材、篇幅和简介生成首批设定与剧情骨架</li>
+                <li><CheckCircle2 :size="16" /> 系统会同步创建首卷和可直接进入写作的章节草稿</li>
+                <li><CheckCircle2 :size="16" /> 关闭自动生成时，仅保留项目脚手架与首章草稿</li>
               </ul>
             </div>
           </div>
@@ -324,8 +376,8 @@ async function goNext(): Promise<void> {
   z-index: 1;
   display: flex;
   width: 100%;
-  max-width: 840px;
-  min-height: min(620px, calc(100dvh - 48px));
+  max-width: 880px;
+  min-height: min(680px, calc(100dvh - 48px));
   max-height: calc(100dvh - 32px);
   flex-direction: column;
   overflow: auto;
@@ -465,17 +517,6 @@ async function goNext(): Promise<void> {
   color: #9ca3af;
 }
 
-.input-suffix {
-  position: absolute;
-  top: 50%;
-  right: 18px;
-  transform: translateY(-50%);
-  color: #6b7280;
-  font-size: 14px;
-  font-weight: 600;
-  pointer-events: none;
-}
-
 .wizard-input,
 .wizard-textarea {
   width: 100%;
@@ -499,40 +540,108 @@ async function goNext(): Promise<void> {
   font-size: 18px;
 }
 
-.wizard-input-with-suffix {
-  padding-right: 74px;
+.genre-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.genre-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.genre-section h4 {
+  margin: 0 0 2px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .genre-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
-.genre-chip {
+.genre-chip,
+.length-card {
   border: 2px solid transparent;
-  border-radius: 18px;
   background: rgba(249, 250, 251, 0.78);
+  transition: all 0.24s ease;
+}
+
+.genre-chip {
+  border-radius: 18px;
   color: #6b7280;
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
   padding: 14px 12px;
-  transition: all 0.24s ease;
 }
 
-.genre-chip:hover {
+.genre-chip:hover,
+.length-card:hover {
   background: rgba(243, 244, 246, 0.96);
 }
 
-.genre-chip.active {
+.genre-chip.active,
+.length-card.active {
   border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
   background: color-mix(in srgb, var(--arc-primary) 10%, white);
   color: var(--arc-primary);
 }
 
+.custom-genre-section {
+  align-items: flex-start;
+}
+
+.custom-genre-chip {
+  min-width: 160px;
+}
+
+.custom-genre-input-wrap {
+  width: 100%;
+}
+
+.custom-genre-input {
+  padding-left: 18px;
+  font-size: 15px;
+}
+
+.length-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.length-card {
+  display: flex;
+  min-height: 96px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 22px;
+  color: #4b5563;
+  cursor: pointer;
+  padding: 18px;
+  text-align: left;
+}
+
+.length-card strong {
+  font-size: 16px;
+}
+
+.length-card span {
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .wizard-textarea {
-  min-height: 220px;
+  min-height: 240px;
   resize: none;
   padding: 18px 20px;
   font-size: 15px;
@@ -597,7 +706,7 @@ async function goNext(): Promise<void> {
 }
 
 .step-generate p {
-  max-width: 420px;
+  max-width: 520px;
   margin: 0 0 28px;
   color: #6b7280;
   font-size: 14px;
@@ -606,7 +715,7 @@ async function goNext(): Promise<void> {
 
 .package-card {
   width: 100%;
-  max-width: 520px;
+  max-width: 560px;
   border: 1px solid rgba(229, 231, 235, 0.9);
   border-radius: 22px;
   background: rgba(249, 250, 251, 0.8);
@@ -618,7 +727,7 @@ async function goNext(): Promise<void> {
   display: flex;
   justify-content: space-between;
   padding-bottom: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
   border-bottom: 1px solid rgba(229, 231, 235, 0.9);
   color: #6b7280;
   font-size: 14px;
@@ -627,6 +736,35 @@ async function goNext(): Promise<void> {
 .package-head span:last-child {
   color: #374151;
   font-weight: 600;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin: 0 0 16px;
+}
+
+.summary-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-grid dt {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.summary-grid dd {
+  margin: 0;
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.summary-block {
+  grid-column: 1 / -1;
 }
 
 .bootstrap-toggle {
@@ -706,7 +844,7 @@ async function goNext(): Promise<void> {
   }
 
   .genre-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .package-head {
@@ -733,6 +871,14 @@ async function goNext(): Promise<void> {
   }
 }
 
+@media (max-width: 760px) {
+  .genre-grid,
+  .length-grid,
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .wizard-page {
     align-items: stretch;
@@ -746,17 +892,11 @@ async function goNext(): Promise<void> {
     transform: scale(0.92);
   }
 
-  .genre-grid {
-    grid-template-columns: 1fr;
-  }
-
   .wizard-textarea {
-    min-height: 180px;
+    min-height: 200px;
   }
 }
 
-/* wizard-step: 向导步骤切换，X轴横移传达"步进前进"的方向感
-   进入：ease-out 220ms，从右 16px 滑入；退出：ease-in 140ms，仅淡出不位移 */
 .wizard-step-enter-active {
   transition:
     opacity 0.22s cubic-bezier(0, 0, 0.2, 1),

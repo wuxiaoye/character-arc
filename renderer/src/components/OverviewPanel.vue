@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { BookCopy, Clock3, FileText, GitMerge, Lightbulb, Network, Sparkles, Users } from 'lucide-vue-next'
 import { getChapterCharacterCount, getChapterPreviewText } from '@/features/chapters/editorContent'
+import { resolveNovelLengthLabel } from '@/features/wizard/projectGenres'
 import { useAppStore } from '@/stores/app'
 import type { PanelName } from '@/types/app'
 
@@ -13,6 +14,11 @@ const appStore = useAppStore()
 
 const normalizedQuery = computed(() => props.searchQuery?.trim().toLowerCase() ?? '')
 const currentProject = computed(() => appStore.currentProject)
+const projectMeta = computed(() =>
+  [currentProject.value?.genre?.trim(), resolveNovelLengthLabel(currentProject.value?.novelLength)]
+    .filter(Boolean)
+    .join(' · ')
+)
 // 各维度的统计数据，用于概览仪表盘
 const totalCharacters = computed(() => appStore.characters.length)
 const totalOrganizations = computed(() => appStore.organizations.length)
@@ -199,7 +205,7 @@ function openEntry(type: string, title: string): void {
     <div class="overview-grid">
       <article class="hero-card">
         <div class="hero-card-top">
-          <span class="hero-genre">{{ currentProject?.genre }}</span>
+          <span class="hero-genre">{{ projectMeta }}</span>
           <button class="hero-action" @click="appStore.setPanel('chapters')">
             <Sparkles :size="16" />
             <span>继续创作</span>

@@ -12,6 +12,7 @@ import type {
   CharacterRelationship,
   CharacterCard,
   InspirationEntry,
+  NovelLength,
   OrganizationEntry,
   OrganizationMembership,
   OutlineItem,
@@ -55,6 +56,10 @@ export interface LegacyStoredState {
 // 默认项目列表：空列表，新用户通过向导创建第一个项目
 export const defaultProjects: ProjectSummary[] = []
 
+export function normalizeNovelLength(length?: string | null): NovelLength {
+  return length === 'short' ? 'short' : 'long'
+}
+
 export function normalizeChapterAssistantTemplates(
   templates?: ChapterAssistantPromptTemplate[] | null
 ): ChapterAssistantPromptTemplate[] {
@@ -75,6 +80,8 @@ export function normalizeChapterAssistantTemplates(
 export function normalizeProjectSummary(project: ProjectSummary): ProjectSummary {
   return {
     ...project,
+    novelLength: normalizeNovelLength(project.novelLength),
+    wordCount: project.wordCount?.trim() || '待统计',
     writingStylePresetId: project.writingStylePresetId?.trim() || 'cinematic-cool',
     writingStylePrompt: project.writingStylePrompt?.trim() || '',
     chapterAssistantTemplates: normalizeChapterAssistantTemplates(project.chapterAssistantTemplates),

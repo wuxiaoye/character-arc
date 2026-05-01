@@ -83,10 +83,18 @@ async function handlePickCover(): Promise<void> {
   message.success('项目封面已更新')
 }
 
-function submitProject(payload: { id: string; title: string; genre: string; wordCount: string; cover: string }): void {
+function submitProject(payload: {
+  id: string
+  title: string
+  genre: string
+  novelLength: ProjectSummary['novelLength']
+  wordCount: string
+  cover: string
+}): void {
   appStore.updateProject(payload.id, {
     title: payload.title,
     genre: payload.genre,
+    novelLength: payload.novelLength,
     wordCount: payload.wordCount,
     cover: payload.cover
   })

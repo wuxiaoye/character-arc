@@ -1,16 +1,22 @@
-import type { ChapterDraft, CharacterCard, OutlineItem, OutlineVolume, WorldviewEntry } from '@/types/app'
+import type {
+  ChapterAssistantPromptTemplate,
+  ChapterDraft,
+  CharacterCard,
+  NovelLength,
+  OutlineItem,
+  OutlineVolume,
+  WorldviewEntry
+} from '@/types/app'
 import { createOutlineVolume } from '@/features/workspace/outlineVolumes'
 
-// 项目向导中用户填写的表单值
 export interface ProjectWizardValues {
-  title: string            // 作品标题
-  genre: string            // 类型/题材
-  targetWordCount: string  // 目标总字数
-  premise: string          // 故事前提/梗概
-  shouldGenerate: boolean  // 是否让 AI 自动生成初始大纲和世界观
+  title: string
+  genre: string
+  novelLength: NovelLength
+  premise: string
+  shouldGenerate: boolean
 }
 
-// AI 引导生成的初始数据结构（来自 bootstrap 接口）
 export interface ProjectBootstrapResult {
   worldviewEntries?: Array<{
     type?: string
@@ -25,16 +31,16 @@ export interface ProjectBootstrapResult {
   }>
 }
 
-// 最终生成的项目工作区种子数据，包含项目信息和全部工作区集合
 export interface ProjectWorkspaceSeed {
   project: {
     title: string
     genre: string
+    novelLength: NovelLength
     wordCount: string
     cover: string
     writingStylePresetId: string
     writingStylePrompt: string
-    chapterAssistantTemplates: import('@/types/app').ChapterAssistantPromptTemplate[]
+    chapterAssistantTemplates: ChapterAssistantPromptTemplate[]
   }
   worldviewEntries: WorldviewEntry[]
   characters: CharacterCard[]
@@ -43,26 +49,43 @@ export interface ProjectWorkspaceSeed {
   chapters: ChapterDraft[]
 }
 
-// 新项目的默认封面渐变色
+interface NovelLengthPreset {
+  projectWordCount: string
+  volumeWordTarget: string
+  chapterWordTarget: string
+  volumeSummary: string
+}
+
 const DEFAULT_PROJECT_COVER = 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)'
 
-// 生成带前缀、索引和时间戳的唯一 ID，保证同一批次内不重复
 function createSeedId(prefix: string, index: number, timestamp: number): string {
   return `${prefix}-${timestamp}-${index + 1}`
 }
 
-// 标准化目标字数输入，统一按“万字”单位输出，空值回退到默认的 "20万字"
-function normalizeTargetWordCount(value: string): string {
-  const normalized = value.replace(/\D/g, '').trim()
-  if (!normalized) {
-    return '20万字'
+function resolveNovelLengthPreset(length: NovelLength): NovelLengthPreset {
+  if (length === 'short') {
+    return {
+      projectWordCount: '待统计',
+      volumeWordTarget: '预估 3万字',
+      chapterWordTarget: '预估 2000字',
+      volumeSummary: '用于集中推进故事主冲突，并在较短篇幅内完成完整闭环。'
+    }
   }
 
-  return `${normalized}万字`
+  return {
+    projectWordCount: '待统计',
+    volumeWordTarget: '预估 10万字',
+    chapterWordTarget: '预估 3000字',
+    volumeSummary: '用于承接作品最初的主线冲突、角色出场和后续长线铺垫。'
+  }
 }
 
-// 构建空白起始章节，用于没有 AI 生成大纲时的兜底章节
-function buildBlankStarterChapter(values: ProjectWizardValues, timestamp: number, volumeId: string): ChapterDraft {
+function buildBlankStarterChapter(
+  values: ProjectWizardValues,
+  timestamp: number,
+  volumeId: string,
+  preset: NovelLengthPreset
+): ChapterDraft {
   return {
     id: createSeedId('chapter', 0, timestamp),
     outlineItemId: '',
@@ -70,16 +93,11 @@ function buildBlankStarterChapter(values: ProjectWizardValues, timestamp: number
     title: '第1章：开篇',
     summary: values.premise.trim() || '待补充章节摘要',
     status: 'draft',
-    wordTarget: `预估 ${normalizeTargetWordCount(values.targetWordCount)}`,
+    wordTarget: preset.chapterWordTarget,
     content: ''
   }
 }
 
-// 根据向导表单值和可选的 AI 引导数据，构建完整的项目工作区种子：
-// 1. 创建第一个分卷
-// 2. 将 bootstrap 中的大纲条目转为 OutlineItem
-// 3. 将 bootstrap 中的世界观设定转为 WorldviewEntry
-// 4. 若有大纲条目，将其一一映射为章节草稿；否则创建一个空白起始章节
 export function createProjectWorkspaceSeed(
   values: ProjectWizardValues,
   bootstrap?: ProjectBootstrapResult | null
@@ -87,30 +105,29 @@ export function createProjectWorkspaceSeed(
   const timestamp = Date.now()
   const createdAt = new Date(timestamp).toISOString()
   const firstVolumeId = createSeedId('volume', 0, timestamp)
+  const novelLength: NovelLength = values.novelLength === 'short' ? 'short' : 'long'
+  const preset = resolveNovelLengthPreset(novelLength)
 
-  // 创建第一个分卷，使用向导中的字数目标和故事前提
   const outlineVolumes = [
     createOutlineVolume({
       id: firstVolumeId,
       title: '故事开端',
-      wordTarget: `目标 ${normalizeTargetWordCount(values.targetWordCount)}`,
-      summary: values.premise.trim() || '用于承接作品最初的主线冲突与人物出场。'
+      wordTarget: preset.volumeWordTarget,
+      summary: values.premise.trim() || preset.volumeSummary
     })
   ]
 
-  // 将 AI 生成的大纲条目转为带完整字段的 OutlineItem
   const outlineItems = (bootstrap?.outlineItems ?? []).map((item, index) => ({
     id: createSeedId('outline', index, timestamp),
     volumeId: firstVolumeId,
     title: item.title?.trim() || `第${index + 1}章：剧情节点`,
-    wordTarget: item.wordTarget?.trim() || `预估 ${normalizeTargetWordCount(values.targetWordCount)}`,
+    wordTarget: item.wordTarget?.trim() || preset.chapterWordTarget,
     conflict: item.conflict?.trim() || '新的冲突正在酝酿。',
     summary: item.summary?.trim() || '待补充剧情摘要。',
     status: 'planned' as const,
     sortOrder: index
   }))
 
-  // 将 AI 生成的世界观条目转为带完整字段的 WorldviewEntry
   const worldviewEntries = (bootstrap?.worldviewEntries ?? []).map((item, index) => ({
     id: createSeedId('world', index, timestamp),
     type: item.type?.trim() || '地理',
@@ -121,7 +138,6 @@ export function createProjectWorkspaceSeed(
     updatedAt: createdAt
   }))
 
-  // 若有大纲条目，每个条目对应创建一个章节草稿；否则创建空白起始章节
   const chapters = outlineItems.length
     ? outlineItems.map((item, index) => ({
         id: createSeedId('chapter', index, timestamp),
@@ -133,20 +149,21 @@ export function createProjectWorkspaceSeed(
         wordTarget: item.wordTarget,
         content: ''
       }))
-    : [buildBlankStarterChapter(values, timestamp, firstVolumeId)]
+    : [buildBlankStarterChapter(values, timestamp, firstVolumeId, preset)]
 
   return {
     project: {
       title: values.title.trim(),
       genre: values.genre.trim(),
-      wordCount: `目标 ${normalizeTargetWordCount(values.targetWordCount)}`,
+      novelLength,
+      wordCount: preset.projectWordCount,
       cover: DEFAULT_PROJECT_COVER,
-      writingStylePresetId: 'cinematic-cool', // 默认使用冷峻电影感写作风格
+      writingStylePresetId: 'cinematic-cool',
       writingStylePrompt: '',
       chapterAssistantTemplates: []
     },
     worldviewEntries,
-    characters: [],  // 初始项目无角色，由用户后续添加
+    characters: [],
     outlineVolumes,
     outlineItems,
     chapters

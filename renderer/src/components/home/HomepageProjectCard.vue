@@ -2,6 +2,7 @@
 import { Clock4, MoreHorizontal } from 'lucide-vue-next'
 import type { DropdownOption } from 'naive-ui'
 import { NDropdown } from 'naive-ui'
+import { resolveNovelLengthLabel } from '@/features/wizard/projectGenres'
 import type { ProjectSummary } from '@/types/app'
 
 const props = defineProps<{
@@ -26,7 +27,7 @@ const emit = defineEmits<{
     <div class="card-main">
       <div class="card-copy">
         <h3>{{ project.title }}</h3>
-        <p class="card-meta">{{ project.genre }} · {{ project.lastEdited }}</p>
+        <p class="card-meta">{{ project.genre }} · {{ resolveNovelLengthLabel(project.novelLength) }} · {{ project.lastEdited }}</p>
       </div>
 
       <n-dropdown

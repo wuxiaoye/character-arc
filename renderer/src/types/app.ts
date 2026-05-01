@@ -101,6 +101,9 @@ export interface ChapterAssistantPromptTemplate {
   requiresSelection: boolean
 }
 
+/** 小说长度分类 */
+export type NovelLength = 'short' | 'long'
+
 /** 项目摘要信息，用于项目列表页展示 */
 export interface ProjectSummary {
   /** 项目唯一标识 */
@@ -109,7 +112,9 @@ export interface ProjectSummary {
   title: string
   /** 题材分类，如"科幻"、"仙侠" */
   genre: string
-  /** 目标字数描述，如"目标 50万字" */
+  /** 小说长度分类：长篇 / 短篇 */
+  novelLength: NovelLength
+  /** 字数展示/进度文案，如"待统计"、"已写 12 万字" */
   wordCount: string
   /** 最后编辑时间的人类可读文本 */
   lastEdited: string

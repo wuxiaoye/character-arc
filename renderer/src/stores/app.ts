@@ -44,6 +44,7 @@ import type {
   InspirationEntry,
   ImportConflictMode,
   ImportExportModuleType,
+  NovelLength,
   OrganizationEntry,
   OrganizationMembership,
   OutlineItem,
@@ -61,6 +62,7 @@ interface ProjectWorkspacePayload {
   project: {
     title: string
     genre: string
+    novelLength: NovelLength
     wordCount: string
     cover?: string
     writingStylePresetId?: string
@@ -546,6 +548,7 @@ export const useAppStore = defineStore('app', () => {
       id: projectId,
       title: payload.project?.title?.trim() || '导入项目',
       genre: payload.project?.genre?.trim() || '未分类',
+      novelLength: payload.project?.novelLength === 'short' ? 'short' : 'long',
       wordCount: payload.project?.wordCount?.trim() || '已导入',
       lastEdited: '刚刚导入',
       cover: payload.project?.cover || 'linear-gradient(135deg, #9be15d 0%, #00e3ae 100%)',
@@ -879,6 +882,7 @@ export const useAppStore = defineStore('app', () => {
       id: projectId,
       title: payload.project.title,
       genre: payload.project.genre,
+      novelLength: payload.project.novelLength,
       wordCount: payload.project.wordCount,
       lastEdited: '刚刚创建',
       cover: payload.project.cover || 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)',
@@ -920,8 +924,8 @@ export const useAppStore = defineStore('app', () => {
     schedulePersist('fast')
   }
 
-  /** 快速创建项目（仅标题/题材/字数），自动生成默认分卷和首章 */
-  function createProject(payload: { title: string; genre: string; wordCount: string }): void {
+  /** 快速创建项目（仅标题/题材/长短篇/字数展示），自动生成默认分卷和首章 */
+  function createProject(payload: { title: string; genre: string; novelLength: NovelLength; wordCount: string }): void {
     const starterVolume = createWorkspaceVolume()
     createProjectWorkspace({
       project: payload,
@@ -958,6 +962,7 @@ export const useAppStore = defineStore('app', () => {
             ...project,
             title: payload.title?.trim() || project.title,
             genre: payload.genre?.trim() || project.genre,
+            novelLength: payload.novelLength !== undefined ? payload.novelLength : project.novelLength,
             wordCount: payload.wordCount?.trim() || project.wordCount,
             lastEdited: payload.lastEdited?.trim() || '刚刚更新',
             cover: payload.cover || project.cover,
