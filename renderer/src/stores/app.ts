@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { FAST_PERSIST_DELAY_MS, formatAutoSaveIntervalLabel, isLiveAutoSaveInterval, resolveAutoSaveDelayMs } from '@/features/settings/autoSave'
 import { createDefaultWorkflowDocuments } from '@/features/novelWorkflow/documents'
 import { createDefaultNovelWorkflowStages } from '@/features/novelWorkflow/stages'
+import { DEFAULT_CHAPTER_WORD_TARGET, normalizeChapterWordTarget } from '@/features/chapters/wordTarget'
 import {
   buildVolumeGroups,
   createOutlineVolume as createWorkspaceVolume
@@ -1510,7 +1511,7 @@ export const useAppStore = defineStore('app', () => {
         title: `第${nextIndex}章：新章节`,
         summary: '待补充章节摘要',
         status: 'draft',
-        wordTarget: '预估 3000字',
+        wordTarget: DEFAULT_CHAPTER_WORD_TARGET,
         content: ''
       }
       nextChapterId = nextChapter.id
@@ -1540,7 +1541,7 @@ export const useAppStore = defineStore('app', () => {
         title: item.title?.trim() || '新章节',
         summary: item.summary?.trim() || '待补充章节摘要',
         status: 'draft',
-        wordTarget: item.wordTarget?.trim() || '预估 3000字',
+        wordTarget: normalizeChapterWordTarget(item.wordTarget),
         content: ''
       }
       nextChapterId = nextChapter.id
@@ -1776,7 +1777,7 @@ export const useAppStore = defineStore('app', () => {
               summary: payload.summary !== undefined ? payload.summary.trim() || chapter.summary : chapter.summary,
               status: payload.status ?? chapter.status,
               wordTarget:
-                payload.wordTarget !== undefined ? payload.wordTarget.trim() || chapter.wordTarget : chapter.wordTarget,
+                payload.wordTarget !== undefined ? normalizeChapterWordTarget(payload.wordTarget) : chapter.wordTarget,
               content: payload.content !== undefined ? payload.content : chapter.content
             })
           : chapter

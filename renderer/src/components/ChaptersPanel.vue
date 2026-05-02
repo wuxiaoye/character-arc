@@ -16,14 +16,17 @@ import {
   PenTool,
   Plus,
   Save,
+  Sparkles,
   Trash2
 } from 'lucide-vue-next'
 import { NButton, NDropdown, NForm, NFormItem, NInput, NModal, NSelect, NTooltip, useDialog, useMessage } from 'naive-ui'
 import RichChapterEditor from '@/components/RichChapterEditor.vue'
 import { ensureEditorHtmlContent, getChapterCharacterCount, getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
+import { DEFAULT_CHAPTER_WORD_TARGET, formatChapterWordTargetLabel, normalizeChapterWordTarget, parseChapterWordTarget } from '@/features/chapters/wordTarget'
 import { pickRelevantInspirationEntries } from '@/features/inspiration/relevance'
 import { loadEnabledProjectSkillsContext } from '@/features/projectSkills/context'
 import { buildProjectWritingStyleContext } from '@/features/writingStyles/presets'
+import { buildChapterAssistantContext } from '@/features/ai/chapterAssistantContext'
 import { useAppStore } from '@/stores/app'
 import { toIpcPayload } from '@/utils/ipcPayload'
 import { formatVolumeLabel } from '@/features/workspace/outlineVolumes'
@@ -51,8 +54,15 @@ const writingStyle = computed(() => buildProjectWritingStyleContext(appStore.cur
 const saveState = ref<'typing' | 'idle'>('idle') // 输入状态指示：typing 表示用户正在编辑
 const editorVisible = ref(false) // 控制章节信息编辑弹窗
 const versionHistoryVisible = ref(false) // 控制历史版本弹窗
+const chapterDraftModalVisible = ref(false)
 const isGeneratingInspiration = ref(false) // AI 生成章节灵感时的加载状态
 const isGeneratingOutlineChain = ref(false)
+const isGeneratingChapterDraft = ref(false)
+const isStoppingChapterDraft = ref(false)
+const chapterDraftStreamId = ref<string | null>(null)
+const chapterDraftStreamingContent = ref('')
+const chapterDraftExecutionLabel = ref('')
+let removeChapterDraftStreamListener: (() => void) | null = null
 const readingMode = ref(false) // 是否处于阅读模式
 const compactSidebarVisible = ref(false) // 紧凑模式下章节目录抽屉的显示状态
 const compactInsightsVisible = ref(false) // 紧凑模式下章节参考抽屉的显示状态
@@ -176,17 +186,7 @@ const currentVolumeLabel = computed(() => {
 const currentChapterTitle = computed(() => appStore.selectedChapter?.title || '未命名章节')
 const chapterCountLabel = computed(() => `${appStore.chapters.length} 个章节`)
 const volumeCountLabel = computed(() => `${appStore.outlineVolumes.length} 个分卷`)
-// 解析章节目标字数：支持"万"单位和普通数字格式
-const currentTargetWordCount = computed(() => {
-  const wordTarget = appStore.selectedChapter?.wordTarget ?? ''
-  const wanMatch = wordTarget.match(/(\d+(?:\.\d+)?)\s*万/)
-  if (wanMatch) {
-    return Math.round(Number(wanMatch[1]) * 10000)
-  }
-
-  const digitMatch = wordTarget.replace(/,/g, '').match(/(\d+(?:\.\d+)?)/)
-  return digitMatch ? Math.round(Number(digitMatch[1])) : 0
-})
+const currentTargetWordCount = computed(() => parseChapterWordTarget(appStore.selectedChapter?.wordTarget))
 // 当前章节的写作进度百分比（0-100），无目标字数时为 0
 const currentProgressPercent = computed(() => {
   if (!currentTargetWordCount.value) {
@@ -224,6 +224,31 @@ const linkedOutlineStatusMeta = computed(() => {
   }
 })
 const canSyncOutlineBack = computed(() => Boolean(linkedOutlineItem.value && appStore.selectedChapter))
+const chapterDraftStreamingWordCount = computed(() => chapterDraftStreamingContent.value.trim().length)
+const chapterDraftProgressPercent = computed(() => {
+  if (!isGeneratingChapterDraft.value) {
+    return 0
+  }
+
+  if (!chapterDraftStreamingContent.value.trim()) {
+    return 12
+  }
+
+  const target = Math.max(currentTargetWordCount.value, 1)
+  const estimated = Math.round((chapterDraftStreamingWordCount.value / target) * 100)
+  return Math.min(95, Math.max(18, estimated))
+})
+const chapterDraftProgressText = computed(() => {
+  if (!isGeneratingChapterDraft.value) {
+    return ''
+  }
+
+  if (!chapterDraftStreamingContent.value.trim()) {
+    return '正在整理大纲、文风和角色关系上下文...'
+  }
+
+  return `正在生成初稿，当前约 ${chapterDraftStreamingWordCount.value} 字 / 目标 ${formatChapterWordTargetLabel(currentTargetWordCount.value)}`
+})
 // 章节灵感的焦点类型：用于 AI 生成灵感时指定方向
 const chapterInspirationFocuses = ['场景火花', '剧情转折', '人物动机'] as const
 // 从全局灵感池中选取与当前章节最相关的灵感卡片（最多 4 张）
@@ -488,8 +513,12 @@ function openChapterMetaEditor(chapter?: ChapterDraft | null): void {
   chapterForm.title = chapter.title
   chapterForm.summary = chapter.summary
   chapterForm.status = chapter.status
-  chapterForm.wordTarget = chapter.wordTarget
+  chapterForm.wordTarget = normalizeChapterWordTarget(chapter.wordTarget)
   editorVisible.value = true
+}
+
+function handleChapterWordTargetInput(value: string): void {
+  chapterForm.wordTarget = value.replace(/\D/g, '').slice(0, 6)
 }
 
 function mapChapterStatusToOutlineStatus(status: ChapterDraft['status']) {
@@ -645,6 +674,148 @@ async function generateNextOutlineChain(): Promise<void> {
   }
 }
 
+async function generateChapterFirstDraft(): Promise<void> {
+  const chapter = appStore.selectedChapter
+  const project = appStore.currentProject
+  const chapterVolume = appStore.selectedChapterVolume
+  if (!chapter || !project || !chapterVolume) {
+    message.warning('当前没有可生成初稿的章节')
+    return
+  }
+
+  if (isGeneratingChapterDraft.value) {
+    return
+  }
+
+  isGeneratingChapterDraft.value = true
+  isStoppingChapterDraft.value = false
+  chapterDraftStreamingContent.value = ''
+  chapterDraftExecutionLabel.value = '正在整理本章上下文'
+  chapterDraftModalVisible.value = true
+  try {
+    const targetWordCount = parseChapterWordTarget(chapter.wordTarget)
+    const relatedChapters = appStore.chapters
+      .filter((item) => item.id !== chapter.id)
+      .slice(-4)
+      .map((item) => ({
+        title: item.title,
+        summary: item.summary,
+        preview: getChapterPreviewText(item.content, '该章节暂无正文')
+      }))
+
+    const context = buildChapterAssistantContext({
+      project,
+      chapter,
+      chapterVolume,
+      relatedChapters,
+      recentMessages: appStore.messages.slice(-6).map((item) => ({
+        role: item.role,
+        content: item.content
+      })),
+      worldviewEntries: appStore.worldviewEntries,
+      characters: appStore.characters,
+      organizations: appStore.organizations,
+      characterRelationships: appStore.characterRelationships,
+      organizationMemberships: appStore.organizationMemberships,
+      inspirationEntries: appStore.inspirationEntries,
+      outlineItems: appStore.outlineItems.filter((item) => item.volumeId === chapter.volumeId),
+      selectedText: '',
+      responseMode: 'continue',
+      responseLength: targetWordCount >= 4500 ? 'long' : 'medium',
+      quickAction: 'AI 初稿',
+      userPrompt: `请直接生成当前章节的正文初稿，目标字数控制在 ${targetWordCount} 字左右，可上下浮动 10% 。务必严格参考当前章节标题、摘要、所属分卷剧情目标、已有大纲节点、当前项目文风、人物关系与组织立场，优先输出可直接进入编辑器继续改写的正文，不要解释，不要分点。`,
+      chapterContent: getPlainTextFromEditorContent(chapter.content ?? ''),
+      projectSkills: await loadEnabledProjectSkillsContext(project, 'draft')
+    })
+
+    const result = await window.characterArc.startAiStream(toIpcPayload({
+      task: 'chapter-assistant',
+      settings: appStore.appSettings,
+      context
+    }))
+
+    const streamId = (result.result as { streamId?: string } | undefined)?.streamId
+    if (!result.success || !streamId) {
+      throw new Error(result.error ?? 'AI 初稿生成启动失败')
+    }
+
+    chapterDraftStreamId.value = streamId
+    chapterDraftExecutionLabel.value = '正在生成正文初稿'
+  } catch (error) {
+    chapterDraftStreamId.value = null
+    chapterDraftStreamingContent.value = ''
+    chapterDraftExecutionLabel.value = ''
+    isStoppingChapterDraft.value = false
+    message.error(error instanceof Error ? error.message : 'AI 初稿生成失败')
+    isGeneratingChapterDraft.value = false
+  }
+}
+
+async function stopChapterFirstDraft(): Promise<void> {
+  if (!chapterDraftStreamId.value || isStoppingChapterDraft.value) {
+    return
+  }
+
+  isStoppingChapterDraft.value = true
+  const result = await window.characterArc.stopAiStream(chapterDraftStreamId.value)
+  if (!result.success) {
+    isStoppingChapterDraft.value = false
+    message.error(result.error ?? '停止 AI 初稿失败')
+  }
+}
+
+function resetChapterDraftStreamingState(): void {
+  chapterDraftStreamId.value = null
+  chapterDraftExecutionLabel.value = ''
+  isGeneratingChapterDraft.value = false
+  isStoppingChapterDraft.value = false
+}
+
+function closeChapterDraftModal(): void {
+  if (isGeneratingChapterDraft.value) {
+    return
+  }
+
+  chapterDraftModalVisible.value = false
+  chapterDraftStreamingContent.value = ''
+}
+
+function handleChapterDraftStreamEvent(payload: CharacterArcAiStreamEvent): void {
+  if (payload.streamId !== chapterDraftStreamId.value) {
+    return
+  }
+
+  if (payload.type === 'chunk') {
+    chapterDraftExecutionLabel.value = '正在生成正文初稿'
+    chapterDraftStreamingContent.value += payload.delta
+    return
+  }
+
+  if (payload.type === 'done') {
+    const finalReply = (payload.content ?? chapterDraftStreamingContent.value).trim()
+    if (finalReply) {
+      chapterDraftExecutionLabel.value = '正在覆盖当前章节'
+      appStore.updateChapterContent(ensureEditorHtmlContent(finalReply))
+      message.success(`AI 已覆盖当前章节，目标约 ${formatChapterWordTargetLabel(currentTargetWordCount.value)}`)
+    } else {
+      message.warning('AI 没有返回可用的初稿内容')
+    }
+    resetChapterDraftStreamingState()
+    return
+  }
+
+  if (payload.type === 'canceled') {
+    message.info('已停止 AI 初稿生成，当前章节内容保持不变')
+    resetChapterDraftStreamingState()
+    return
+  }
+
+  if (payload.type === 'error') {
+    message.error(payload.error || 'AI 初稿生成失败')
+    resetChapterDraftStreamingState()
+  }
+}
+
 // 格式化版本创建时间为中文简短格式
 function formatVersionTime(createdAt: string): string {
   const value = new Date(createdAt)
@@ -709,13 +880,17 @@ function submitChapterMeta(): void {
     return
   }
 
+  if (!chapterForm.wordTarget.trim()) {
+    chapterForm.wordTarget = DEFAULT_CHAPTER_WORD_TARGET
+  }
+
   appStore.updateChapter(chapter.id, {
     outlineItemId: chapterForm.outlineItemId,
     volumeId: chapterForm.volumeId,
     title: chapterForm.title,
     summary: chapterForm.summary,
     status: chapterForm.status,
-    wordTarget: chapterForm.wordTarget
+    wordTarget: normalizeChapterWordTarget(chapterForm.wordTarget)
   })
   editorVisible.value = false
   message.success('章节信息已更新')
@@ -814,9 +989,16 @@ watch(isCompactStudio, (compact) => {
 onMounted(() => {
   syncViewportWidth()
   window.addEventListener('resize', syncViewportWidth)
+  removeChapterDraftStreamListener = window.characterArc.onAiStreamEvent(handleChapterDraftStreamEvent)
 })
 
 onBeforeUnmount(() => {
+  if (chapterDraftStreamId.value) {
+    void window.characterArc.stopAiStream(chapterDraftStreamId.value)
+  }
+
+  removeChapterDraftStreamListener?.()
+  removeChapterDraftStreamListener = null
   window.removeEventListener('resize', syncViewportWidth)
   if (saveTimer) {
     window.clearTimeout(saveTimer)
@@ -892,7 +1074,7 @@ onBeforeUnmount(() => {
                     <span v-if="appStore.selectedChapterId === chapter.id" class="chapter-pill-current">当前章节</span>
                   </span>
                   <span class="chapter-pill-meta">
-                    <span>{{ chapter.wordTarget }}</span>
+                    <span>{{ formatChapterWordTargetLabel(chapter.wordTarget) }}</span>
                     <span class="chapter-pill-dot"></span>
                     <span>{{ chapterStatusOptions.find((option) => option.value === chapter.status)?.label ?? '草稿中' }}</span>
                   </span>
@@ -1008,6 +1190,31 @@ onBeforeUnmount(() => {
               </div>
 
               <div class="editor-action-group emphasis topbar-group topbar-group-assistant">
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <button
+                        class="tool-badge primary"
+                        :disabled="isGeneratingChapterDraft"
+                        @click="generateChapterFirstDraft()"
+                    >
+                      <Sparkles :size="16" />
+                      <span>{{ isGeneratingChapterDraft ? '生成中' : 'AI 初稿' }}</span>
+                    </button>
+                  </template>
+                  直接流式生成本章初稿，完成后覆盖当前章节全部内容
+                </n-tooltip>
+                <n-tooltip v-if="isGeneratingChapterDraft" trigger="hover">
+                  <template #trigger>
+                    <button
+                        class="tool-badge neutral danger"
+                        :disabled="isStoppingChapterDraft"
+                        @click="stopChapterFirstDraft()"
+                    >
+                      <span>{{ isStoppingChapterDraft ? '停止中' : '停止生成' }}</span>
+                    </button>
+                  </template>
+                  停止本次 AI 初稿生成，保持当前章节原内容不变
+                </n-tooltip>
                 <n-tooltip trigger="hover">
                   <template #trigger>
                     <button
@@ -1214,7 +1421,7 @@ onBeforeUnmount(() => {
 
             <div class="editor-status">
               <div class="editor-status-group">
-                <span class="status-metric">{{ currentWordCount }} 字</span>
+                <span class="status-metric">{{ currentWordCount }} / {{ formatChapterWordTargetLabel(appStore.selectedChapter?.wordTarget) }}</span>
                 <span class="status-metric">{{ currentChapterVersions.length }} 个历史版本</span>
                 <span v-if="!isTinyStudio" class="status-metric">全书第 {{ selectedChapterIndex }} 章</span>
               </div>
@@ -1280,7 +1487,7 @@ onBeforeUnmount(() => {
                     <span v-if="appStore.selectedChapterId === chapter.id" class="chapter-pill-current">当前章节</span>
                   </span>
                   <span class="chapter-pill-meta">
-                    <span>{{ chapter.wordTarget }}</span>
+                    <span>{{ formatChapterWordTargetLabel(chapter.wordTarget) }}</span>
                     <span class="chapter-pill-dot"></span>
                     <span>{{ chapterStatusOptions.find((option) => option.value === chapter.status)?.label ?? '草稿中' }}</span>
                   </span>
@@ -1396,6 +1603,63 @@ onBeforeUnmount(() => {
     </n-modal>
 
     <n-modal
+        :show="chapterDraftModalVisible"
+        preset="card"
+        class="arc-editor-modal arc-draft-modal"
+        title="AI 初稿执行中"
+        :mask-closable="false"
+        :closable="!isGeneratingChapterDraft"
+        :bordered="false"
+        @close="closeChapterDraftModal"
+    >
+      <div class="chapter-draft-progress-card modal-mode">
+        <div class="chapter-draft-progress-head">
+          <div class="chapter-draft-progress-copy-block">
+            <span class="chapter-draft-progress-label">AI 初稿执行中</span>
+            <strong>{{ chapterDraftExecutionLabel || '等待开始' }}</strong>
+          </div>
+          <span class="chapter-draft-progress-percent">
+            {{ isGeneratingChapterDraft ? `${chapterDraftProgressPercent}%` : '已结束' }}
+          </span>
+        </div>
+        <div class="chapter-draft-progress-track">
+          <div class="chapter-draft-progress-fill" :style="{ width: `${chapterDraftProgressPercent}%` }" />
+        </div>
+        <p class="chapter-draft-progress-copy">
+          {{ chapterDraftProgressText || '已停止或完成本次 AI 初稿生成。' }}
+        </p>
+        <div class="chapter-draft-stream-preview arc-scrollbar">
+          <pre>{{ chapterDraftStreamingContent || 'AI 正在准备本章初稿内容...' }}</pre>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="arc-modal-actions">
+          <n-button
+              v-if="isGeneratingChapterDraft"
+              round
+              strong
+              secondary
+              type="warning"
+              :loading="isStoppingChapterDraft"
+              @click="stopChapterFirstDraft"
+          >
+            停止生成
+          </n-button>
+          <n-button
+              v-else
+              round
+              strong
+              type="primary"
+              @click="closeChapterDraftModal"
+          >
+            关闭
+          </n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <n-modal
         :show="versionHistoryVisible"
         preset="card"
         class="arc-editor-modal arc-version-modal"
@@ -1428,7 +1692,7 @@ onBeforeUnmount(() => {
             >
               {{ chapterStatusOptions.find((option) => option.value === version.status)?.label ?? '草稿中' }}
             </span>
-            <span class="meta-chip neutral">{{ version.wordTarget }}</span>
+            <span class="meta-chip neutral">{{ formatChapterWordTargetLabel(version.wordTarget) }}</span>
             <span class="version-words">{{ getVersionWordCount(version) }} 字</span>
           </div>
 
@@ -1475,7 +1739,12 @@ onBeforeUnmount(() => {
           <n-select v-model:value="chapterForm.status" :options="chapterStatusOptions" />
         </n-form-item>
         <n-form-item label="预估字数">
-          <n-input v-model:value="chapterForm.wordTarget" placeholder="例如：预估 3200字" />
+          <n-input
+              :value="chapterForm.wordTarget"
+              inputmode="numeric"
+              placeholder="例如：3000"
+              @update:value="handleChapterWordTargetInput"
+          />
         </n-form-item>
       </n-form>
 
@@ -1643,6 +1912,113 @@ onBeforeUnmount(() => {
 .assistant-toggle-state { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(226, 232, 240, 0.92); border-radius: 999px; background: rgba(255, 255, 255, 0.82); color: #7a7f87; font-size: 10px; font-weight: 600; padding: 3px 7px; }
 .assistant-toggle-indicator { width: 6px; height: 6px; border-radius: 999px; background: rgba(148, 163, 184, 0.92); }
 .assistant-toggle-indicator.active { background: #1f4ea3; box-shadow: 0 0 0 3px color-mix(in srgb, var(--arc-primary) 18%, transparent); }
+
+.chapter-draft-progress-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(191, 219, 254, 0.9);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(239, 246, 255, 0.94));
+  box-shadow: 0 14px 28px rgba(59, 130, 246, 0.08);
+  padding: 16px 18px;
+}
+
+.chapter-draft-progress-card.modal-mode {
+  margin-bottom: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+
+.chapter-draft-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chapter-draft-progress-copy-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chapter-draft-progress-label {
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.chapter-draft-progress-copy-block strong {
+  color: #18212f;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.chapter-draft-progress-percent {
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.chapter-draft-progress-track {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(191, 219, 254, 0.45);
+}
+
+.chapter-draft-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #60a5fa, #2563eb);
+  transition: width 0.2s ease;
+}
+
+.chapter-draft-progress-copy {
+  margin: 0;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.chapter-draft-stream-preview {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid rgba(191, 219, 254, 0.8);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 14px 15px;
+}
+
+:deep(.arc-draft-modal) {
+  width: min(860px, calc(100vw - 32px));
+}
+
+:deep(.arc-draft-modal .n-card__content) {
+  padding-top: 10px;
+}
+
+:deep(.arc-draft-modal .n-card-header__main) {
+  font-weight: 700;
+}
+
+.chapter-draft-stream-preview pre {
+  margin: 0;
+  color: #233044;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 .compact-utility-switcher { display: inline-flex; align-items: center; border: 1px solid rgba(226, 232, 240, 0.96); border-radius: 18px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 253, 0.95)); padding: 4px; }
 .compact-utility-tab { min-width: 92px; min-height: 36px; border: none; border-radius: 14px; background: transparent; color: #64748b; font-size: 13px; font-weight: 700; padding: 0 14px; cursor: pointer; }

@@ -1,6 +1,7 @@
 import { toRaw } from 'vue'
 import { createDefaultWorkflowDocuments, normalizeWorkflowDocuments } from '@/features/novelWorkflow/documents'
 import { createDefaultNovelWorkflowStages, normalizeNovelWorkflowStages } from '@/features/novelWorkflow/stages'
+import { DEFAULT_CHAPTER_WORD_TARGET, normalizeChapterWordTarget } from '@/features/chapters/wordTarget'
 import { createOutlineVolume as createWorkspaceVolume } from '@/features/workspace/outlineVolumes'
 import { createDemoWorkspace, normalizeWorkspace } from '@/features/workspace/projectWorkspace'
 import type {
@@ -209,7 +210,7 @@ export function normalizeChapterDraft(chapter: ChapterDraft): ChapterDraft {
     outlineItemId: chapter.outlineItemId ?? '',
     summary: chapter.summary?.trim() || '待补充章节摘要',
     status: chapter.status ?? 'draft',
-    wordTarget: chapter.wordTarget?.trim() || '预估 3000字'
+    wordTarget: normalizeChapterWordTarget(chapter.wordTarget)
   }
 }
 
@@ -219,7 +220,7 @@ export function normalizeChapterVersion(version: ChapterVersion): ChapterVersion
     ...version,
     summary: version.summary?.trim() || '待补充章节摘要',
     status: version.status ?? 'draft',
-    wordTarget: version.wordTarget?.trim() || '预估 3000字',
+    wordTarget: normalizeChapterWordTarget(version.wordTarget),
     createdAt: version.createdAt || new Date().toISOString()
   }
 }
@@ -254,7 +255,7 @@ export function buildStarterChapter(volumeId: string, title = '第1章：开篇'
     title,
     summary: '待补充章节摘要',
     status: 'draft',
-    wordTarget: '预估 3000字',
+    wordTarget: DEFAULT_CHAPTER_WORD_TARGET,
     content: ''
   }
 }
