@@ -4,6 +4,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { generateAiTask, streamAiTask, testAiConnection, type AiTaskPayload } from './ai'
+import { fetchModels, type FetchedModel } from './aiTransport'
 import { extractReferenceNovelContext, type ReferenceStyleMetric } from './referenceAnalysis'
 import type { ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './aiShared'
 
@@ -2547,6 +2548,28 @@ ipcMain.handle('characterarc:ai-test-connection', async (_event, settings: unkno
     return {
       success: false,
       error: error instanceof Error ? error.message : 'AI 连接测试失败'
+    }
+  }
+})
+
+/** 获取 AI 供应商的可用模型列表 */
+ipcMain.handle('characterarc:ai-fetch-models', async (_event, settings: unknown) => {
+  try {
+    const result = await fetchModels(settings as {
+      provider: string
+      model: string
+      apiKey: string
+      baseUrl: string
+    })
+
+    return {
+      success: true,
+      result
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '获取模型列表失败'
     }
   }
 })

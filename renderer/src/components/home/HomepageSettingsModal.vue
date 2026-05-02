@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { Cpu, MonitorCog, Palette, PlugZap, Save } from 'lucide-vue-next'
+import { Cpu, Download, MonitorCog, Palette, PlugZap, RefreshCw, Save } from 'lucide-vue-next'
 import { NButton, NFormItem, NInput, NModal, NSelect, useMessage } from 'naive-ui'
 import { autoSaveOptions, formatAutoSaveIntervalLabel, isLiveAutoSaveInterval } from '@/features/settings/autoSave'
 import { getProviderPreset, providerOptions, resolveProviderDefaults } from '@/features/settings/providerPresets'
@@ -20,6 +20,8 @@ const emit = defineEmits<{
 const appStore = useAppStore()
 const message = useMessage()
 const isTestingAiConnection = ref(false)
+const isFetchingModels = ref(false)
+const fetchedModels = ref<Array<{ id: string; ownedBy: string | null }>>([])
 
 const autoSaveSelectOptions = [...autoSaveOptions]
 const themeOptions = themePresets.map((preset) => ({ label: preset.label, value: preset.name }))
@@ -46,6 +48,9 @@ const activeProviderPreset = computed(() => getProviderPreset(draftSettings.prov
 const activeThemePreset = computed(() => themePresets.find((preset) => preset.name === draftTheme.value) ?? themePresets[0])
 const draftAutoSaveLabel = computed(() => formatAutoSaveIntervalLabel(draftSettings.autoSaveInterval))
 const isDraftLiveAutoSave = computed(() => isLiveAutoSaveInterval(draftSettings.autoSaveInterval))
+const modelSelectOptions = computed(() =>
+  fetchedModels.value.map((m) => ({ label: m.id, value: m.id }))
+)
 const hasPendingChanges = computed(() =>
   draftTheme.value !== appStore.theme
   || draftSettings.provider !== appStore.appSettings.provider
@@ -86,6 +91,27 @@ function handleProviderChange(provider: string): void {
   draftSettings.provider = provider
   draftSettings.model = defaults.model
   draftSettings.baseUrl = defaults.baseUrl
+  fetchedModels.value = []
+}
+
+async function handleFetchModels(): Promise<void> {
+  if (isFetchingModels.value) return
+  isFetchingModels.value = true
+  try {
+    const result = await window.characterArc.fetchModels(toIpcPayload({ ...draftSettings }))
+    if (!result.success) throw new Error(result.error ?? '获取模型列表失败')
+    fetchedModels.value = result.result ?? []
+    if (fetchedModels.value.length === 0) {
+      message.warning('该供应商未返回任何可用模型，请手动输入模型名称。')
+    } else {
+      message.success(`获取到 ${fetchedModels.value.length} 个可用模型`)
+    }
+  } catch (error) {
+    fetchedModels.value = []
+    message.error(error instanceof Error ? error.message : '获取模型列表失败')
+  } finally {
+    isFetchingModels.value = false
+  }
 }
 
 async function handleTestAiConnection(): Promise<void> {
@@ -179,11 +205,34 @@ function saveSettings(): void {
               />
             </n-form-item>
             <n-form-item label="模型名称">
-              <n-input
-                :value="draftSettings.model"
-                :placeholder="`例如：${activeProviderPreset.model}`"
-                @update:value="(value) => { draftSettings.model = value }"
-              />
+              <div class="model-input-row">
+                <n-select
+                  v-if="fetchedModels.length > 0"
+                  :options="modelSelectOptions"
+                  :value="draftSettings.model"
+                  filterable
+                  tag
+                  placeholder="选择或输入模型名称"
+                  @update:value="(value: string) => { draftSettings.model = value }"
+                />
+                <n-input
+                  v-else
+                  :value="draftSettings.model"
+                  :placeholder="`例如：${activeProviderPreset.model}`"
+                  @update:value="(value) => { draftSettings.model = value }"
+                />
+                <n-button
+                  quaternary
+                  class="model-fetch-btn"
+                  :disabled="isFetchingModels"
+                  @click="handleFetchModels"
+                >
+                  <template #icon>
+                    <RefreshCw v-if="fetchedModels.length > 0" :size="16" :class="{ 'spin-icon': isFetchingModels }" />
+                    <Download v-else :size="16" :class="{ 'spin-icon': isFetchingModels }" />
+                  </template>
+                </n-button>
+              </div>
             </n-form-item>
           </div>
           <div class="provider-hint-block">
@@ -465,6 +514,33 @@ function saveSettings(): void {
   display: flex;
   gap: 12px;
   margin-top: 4px;
+}
+
+.model-input-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.model-input-row .n-select {
+  flex: 1;
+}
+
+.model-input-row .n-input {
+  flex: 1;
+}
+
+.model-fetch-btn {
+  flex-shrink: 0;
+}
+
+.spin-icon {
+  animation: arc-spin 1s linear infinite;
+}
+
+@keyframes arc-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .theme-swatches {

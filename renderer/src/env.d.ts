@@ -134,6 +134,11 @@ declare global {
         result?: unknown
         error?: string
       }>
+      fetchModels: (settings: unknown) => Promise<{
+        success: boolean
+        result?: Array<{ id: string; ownedBy: string | null }>
+        error?: string
+      }>
       exportJson: (payload: CharacterArcExportRequest | unknown) => Promise<{
         success: boolean
         canceled: boolean

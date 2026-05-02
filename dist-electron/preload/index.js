@@ -45,6 +45,8 @@ electron.contextBridge.exposeInMainWorld("characterArc", {
   },
   /** 测试 AI 连接是否通畅，发送探测请求验证鉴权和网络 */
   testAiConnection: (settings) => electron.ipcRenderer.invoke("characterarc:ai-test-connection", toIpcPayload(settings)),
+  /** 获取 AI 供应商的可用模型列表 */
+  fetchModels: (settings) => electron.ipcRenderer.invoke("characterarc:ai-fetch-models", toIpcPayload(settings)),
   // ── 缩放控制 ──
   /** 设置渲染进程页面缩放比例 */
   setZoomFactor: (factor) => electron.ipcRenderer.invoke("characterarc:set-zoom-factor", factor),
