@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell } from 'electron'
 import { join } from 'node:path'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -245,11 +245,11 @@ function createAssistantWindow(): BrowserWindow {
     titleBarOverlay:
       process.platform === 'win32'
         ? {
-            color: '#f4f7fb',
-            symbolColor: '#1d1d1f'
+            color: nativeTheme.shouldUseDarkColors ? '#0e0e12' : '#f4f7fb',
+            symbolColor: nativeTheme.shouldUseDarkColors ? '#f4f4f5' : '#1d1d1f'
           }
         : false,
-    backgroundColor: '#f4f7fb',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e0e12' : '#f4f7fb',
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -631,6 +631,10 @@ function ensureAppSettingsColumns(db: DatabaseSync): void {
   if (!columnNames.has('ui_scale')) {
     db.exec(`ALTER TABLE app_settings ADD COLUMN ui_scale REAL NOT NULL DEFAULT 1;`)
   }
+
+  if (!columnNames.has('dark_mode')) {
+    db.exec(`ALTER TABLE app_settings ADD COLUMN dark_mode INTEGER NOT NULL DEFAULT 0;`)
+  }
 }
 
 /** 确保 chapters 表包含 summary、status、word_target 列（schema 升级） */
@@ -936,6 +940,7 @@ type WorkspacePayload = {
     baseUrl: string
     autoSaveInterval: string
     uiScale: number
+    darkMode: boolean
   }
 }
 
@@ -1092,7 +1097,8 @@ function normalizeAppSettings(settings?: Partial<WorkspacePayload['appSettings']
     apiKey: settings?.apiKey || 'sk-1234567890abcdef',
     baseUrl: settings?.baseUrl || 'https://api.deepseek.com/v1',
     autoSaveInterval: settings?.autoSaveInterval || '5m',
-    uiScale
+    uiScale,
+    darkMode: Boolean(settings?.darkMode)
   }
 }
 
@@ -1463,7 +1469,7 @@ function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null {
 
   const settings = db.prepare(`
     SELECT theme, selected_project_id AS selectedProjectId, provider, api_key AS apiKey, base_url AS baseUrl, auto_save_interval AS autoSaveInterval
-    , model, ui_scale AS uiScale
+    , model, ui_scale AS uiScale, dark_mode AS darkMode
     FROM app_settings
     WHERE id = 1
   `).get() as
@@ -1476,6 +1482,7 @@ function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null {
         baseUrl: string
         autoSaveInterval: string
         uiScale: number
+        darkMode: number
       }
     | undefined
 
@@ -1545,7 +1552,8 @@ function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null {
         apiKey: settings.apiKey,
         baseUrl: settings.baseUrl,
         autoSaveInterval: settings.autoSaveInterval,
-        uiScale: settings.uiScale
+        uiScale: settings.uiScale,
+        darkMode: Boolean(settings.darkMode)
       })
     }
   }
@@ -1842,8 +1850,8 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
     }
 
     db.prepare(`
-      INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, auto_save_interval, ui_scale)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, auto_save_interval, ui_scale, dark_mode)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       payload.theme,
       payload.selectedProjectId,
@@ -1852,7 +1860,8 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
       normalizeAppSettings(payload.appSettings).apiKey,
       normalizeAppSettings(payload.appSettings).baseUrl,
       normalizeAppSettings(payload.appSettings).autoSaveInterval,
-      normalizeAppSettings(payload.appSettings).uiScale
+      normalizeAppSettings(payload.appSettings).uiScale,
+      normalizeAppSettings(payload.appSettings).darkMode ? 1 : 0
     )
 
     db.exec('COMMIT')
@@ -2816,6 +2825,8 @@ ipcMain.handle('characterarc:load-workspace', async () => {
       }
     }
 
+    nativeTheme.themeSource = workspace.appSettings.darkMode ? 'dark' : 'light'
+
     return {
       success: true,
       payload: workspace
@@ -2868,15 +2879,18 @@ ipcMain.handle('characterarc:set-zoom-factor', (_event, factor: unknown) => {
 
 /** 动态更新 Windows 原生标题栏 Overlay 颜色（随深色/浅色模式切换） */
 ipcMain.handle('characterarc:set-titlebar-overlay', (_event, options: { color: string; symbolColor: string }) => {
-  if (process.platform !== 'win32' || !mainWindow) return
-  mainWindow.setTitleBarOverlay(options)
+  if (process.platform !== 'win32') return
+  if (mainWindow) mainWindow.setTitleBarOverlay(options)
+  if (assistantWindow && !assistantWindow.isDestroyed()) assistantWindow.setTitleBarOverlay(options)
 })
 
 /** 将渲染进程的完整工作区快照写入 SQLite（全量覆盖） */
 ipcMain.handle('characterarc:save-workspace', async (_event, payload: unknown) => {
   try {
     const db = await ensureWorkspaceDb()
-    writeWorkspaceSnapshot(db, normalizeWorkspacePayload(payload as WorkspacePayload | LegacyWorkspacePayload))
+    const normalized = normalizeWorkspacePayload(payload as WorkspacePayload | LegacyWorkspacePayload)
+    writeWorkspaceSnapshot(db, normalized)
+    nativeTheme.themeSource = normalized.appSettings.darkMode ? 'dark' : 'light'
 
     return {
       success: true

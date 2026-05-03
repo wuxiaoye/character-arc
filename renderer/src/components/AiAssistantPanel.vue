@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowDownToLine, Bot, ChevronDown, RotateCcw, SendHorizonal, Square } from 'lucide-vue-next'
-import { useMessage } from 'naive-ui'
+import { ArrowDownToLine, Bot, RotateCcw, SendHorizonal, Square } from 'lucide-vue-next'
+import { NDropdown, useMessage } from 'naive-ui'
+import { marked } from 'marked'
 import { buildChapterAssistantContext } from '@/features/ai/chapterAssistantContext'
 import {
-  chapterAssistantLengthOptions,
-  chapterAssistantModeOptions,
-  chapterAssistantQuickActionGroups,
   getResolvedChapterAssistantTemplates,
   type ChapterAssistantQuickAction
 } from '@/features/ai/chapterAssistantOptions'
@@ -19,49 +17,45 @@ import type { ChapterInsertionMode } from '@/types/app'
 
 const appStore = useAppStore()
 const message = useMessage()
-const draft = ref('') // 用户输入框的草稿文本
-const isResponding = ref(false) // AI 是否正在生成回复
-const isStopping = ref(false) // 是否正在停止 AI 生成
-const activeStreamId = ref<string | null>(null) // 当前活跃的流式生成 ID
-const streamingReply = ref('') // 流式生成过程中逐步拼接的回复内容
-const messagesViewport = ref<HTMLElement | null>(null) // 消息列表的滚动容器引用
-// AI 回复模式：自由提问 / 润色 / 续写 / 建议 / 参考
+const draft = ref('')
+const isResponding = ref(false)
+const isStopping = ref(false)
+const activeStreamId = ref<string | null>(null)
+const streamingReply = ref('')
+const messagesViewport = ref<HTMLElement | null>(null)
 const responseMode = ref<'freeform' | 'polish' | 'continue' | 'suggest' | 'reference'>('freeform')
-// AI 回复长度偏好：简短 / 适中 / 详细
 const responseLength = ref<'short' | 'medium' | 'long'>('medium')
-// 工具箱是否折叠（独立窗口模式下默认折叠）
-const isToolboxCollapsed = ref(isAssistantWindow)
-// 当前选中的快捷操作分组 Tab
-const activeQuickGroup = ref<string>('write')
-let removeAiStreamListener: (() => void) | null = null // AI 流式事件监听器的清理函数
+let removeAiStreamListener: (() => void) | null = null
 
-// 将数据深拷贝为 IPC 可传输的格式（去掉 Vue 响应式代理）
 function toIpcPayload<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+const MORE_ACTION_OPTIONS = [
+  { label: '替换选区', key: 'replace-selection' },
+  { label: '追加末尾', key: 'append' },
+  { label: '设为标题', key: 'set-title' },
+  { label: '设为摘要', key: 'set-summary' }
+]
+
+function renderMarkdown(content: string): string {
+  return marked.parse(content, { async: false }) as string
 }
 
 const currentProject = computed(() => appStore.currentProject)
 const writingStyle = computed(() => buildProjectWritingStyleContext(currentProject.value))
 const currentChapter = computed(() => appStore.selectedChapter)
-// 当前选中的文本片段（仅当属于当前章节时有效）
 const selectedExcerpt = computed(() =>
   appStore.currentChapterSelection?.chapterId === currentChapter.value?.id
     ? appStore.currentChapterSelection.text
     : ''
 )
-// 当前章节的前后章节信息（用于 AI 理解上下文衔接，Tier 1）
 const relatedChapters = computed(() => {
   const chapter = currentChapter.value
-  if (!chapter) {
-    return []
-  }
-
+  if (!chapter) return []
   const chaptersInVolume = appStore.chapters.filter((item) => item.volumeId === chapter.volumeId)
   const currentIndex = chaptersInVolume.findIndex((item) => item.id === chapter.id)
-  if (currentIndex === -1) {
-    return []
-  }
-
+  if (currentIndex === -1) return []
   return [chaptersInVolume[currentIndex - 1], chaptersInVolume[currentIndex + 1]]
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
     .map((item) => ({
@@ -70,7 +64,6 @@ const relatedChapters = computed(() => {
       preview: getChapterPreviewText(item.content, '该章节暂无正文')
     }))
 })
-// 当前分卷内其他章节的摘要（Tier 2，排除已在 relatedChapters 中的章节）
 const volumeChapterSummaries = computed(() => {
   const chapter = currentChapter.value
   if (!chapter) return []
@@ -80,7 +73,6 @@ const volumeChapterSummaries = computed(() => {
     .filter((c) => c.volumeId === chapter.volumeId && c.id !== chapter.id && !relatedTitles.has(c.title))
     .map((c) => ({ title: c.title, summary: c.summary }))
 })
-// 全书第 1 章摘要（Tier 3，世界/角色基调参照，仅当不在前两层时才添加）
 const novelOpenerSummary = computed(() => {
   const first = appStore.chapters[0]
   if (!first) return undefined
@@ -90,69 +82,23 @@ const novelOpenerSummary = computed(() => {
   if (related.some((r) => r.title === first.title)) return undefined
   return { title: first.title, summary: first.summary }
 })
-// 最近 4 条对话消息（用于 AI 理解上下文）
 const recentAssistantMessages = computed(() =>
   appStore.messages
     .slice(-4)
-    .map((item) => ({
-      role: item.role,
-      content: item.content
-    }))
+    .map((item) => ({ role: item.role, content: item.content }))
 )
-// 最近一条用户消息（用于重试功能），同时解析是否包含快捷操作标签
 const lastUserPrompt = computed(() => {
   const lastUserMessage = [...appStore.messages].reverse().find((item) => item.role === 'user')
-  if (!lastUserMessage) {
-    return null
-  }
-
+  if (!lastUserMessage) return null
   const quickActionMatch = lastUserMessage.content.match(/^【([^】]+)】([\s\S]*)$/)
-  if (!quickActionMatch) {
-    return {
-      prompt: lastUserMessage.content,
-      quickAction: undefined
-    }
-  }
-
+  if (!quickActionMatch) return { prompt: lastUserMessage.content, quickAction: undefined }
   return {
     quickAction: quickActionMatch[1]?.trim() || undefined,
     prompt: quickActionMatch[2]?.trim() || lastUserMessage.content
   }
 })
-// 当前回复模式的中文标签
-const activeModeLabel = computed(
-  () => chapterAssistantModeOptions.find((option) => option.value === responseMode.value)?.label ?? '自由提问'
-)
-// 当前回复长度的中文标签
-const activeLengthLabel = computed(
-  () => chapterAssistantLengthOptions.find((option) => option.value === responseLength.value)?.label ?? '适中'
-)
 const quickActions = computed(() => getResolvedChapterAssistantTemplates(currentProject.value))
-// 工具箱折叠状态的摘要文本（如"模式 自由提问 · 长度 适中 · 含选中文本"）
-const toolboxSummary = computed(() => {
-  const summary = [`模式 ${activeModeLabel.value}`, `长度 ${activeLengthLabel.value}`]
-  if (selectedExcerpt.value) {
-    summary.push('含选中文本')
-  }
-  return summary.join(' · ')
-})
-// Group quick actions so the assistant can absorb page-level AI controls
-// without turning into one long, hard-to-scan button list.
-const quickActionGroups = computed(() =>
-  chapterAssistantQuickActionGroups
-    .map((group) => ({
-      ...group,
-      actions: quickActions.value.filter((action) => action.group === group.key)
-    }))
-    .filter((group) => group.actions.length)
-)
-// 当前激活分组的快捷动作列表
-const activeGroupActions = computed(() => {
-  const group = quickActionGroups.value.find((item) => item.key === activeQuickGroup.value)
-  return group?.actions ?? quickActionGroups.value[0]?.actions ?? []
-})
 
-// 将消息列表滚动到底部（等待 DOM 更新后执行）
 async function scrollToBottom(): Promise<void> {
   await nextTick()
   if (messagesViewport.value) {
@@ -160,7 +106,6 @@ async function scrollToBottom(): Promise<void> {
   }
 }
 
-// 重置流式生成状态
 function resetStreamingState(): void {
   activeStreamId.value = null
   streamingReply.value = ''
@@ -168,12 +113,9 @@ function resetStreamingState(): void {
   isStopping.value = false
 }
 
-// 发送用户 prompt 给 AI 助手，启动流式生成，构建包含完整上下文的请求
 async function sendPrompt(promptText?: string, quickAction?: string): Promise<void> {
   const content = (promptText ?? draft.value).trim()
-  if (!content || isResponding.value) {
-    return
-  }
+  if (!content || isResponding.value) return
 
   const userMessage = quickAction ? `【${quickAction}】${content}` : content
   appStore.pushUserMessage(userMessage)
@@ -214,10 +156,7 @@ async function sendPrompt(promptText?: string, quickAction?: string): Promise<vo
     }))
 
     const streamId = (result.result as { streamId?: string } | undefined)?.streamId
-    if (!result.success || !streamId) {
-      throw new Error(result.error ?? 'AI 流式生成启动失败')
-    }
-
+    if (!result.success || !streamId) throw new Error(result.error ?? 'AI 流式生成启动失败')
     activeStreamId.value = streamId
   } catch (error) {
     resetStreamingState()
@@ -225,20 +164,15 @@ async function sendPrompt(promptText?: string, quickAction?: string): Promise<vo
   }
 }
 
-// 调用 AI 生成下一章大纲草稿（非流式，直接写入大纲 store）
 async function createOutlineDraft(promptText: string, quickAction: string): Promise<void> {
   const content = promptText.trim()
-  if (!content || isResponding.value) {
-    return
-  }
+  if (!content || isResponding.value) return
 
   appStore.pushUserMessage(`【${quickAction}】${content}`)
   isResponding.value = true
   await scrollToBottom()
 
   try {
-    // Use the structured outline task here so the result can be written straight
-    // into the outline store instead of forcing the user to manually整理助手文本.
     const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'outline-item',
       settings: appStore.appSettings,
@@ -263,26 +197,14 @@ async function createOutlineDraft(promptText: string, quickAction: string): Prom
         currentVolumeOutlineItems: appStore.outlineItems
           .filter((item) => item.volumeId === appStore.selectedChapterVolume?.id)
           .slice(-4)
-          .map((item) => ({
-            title: item.title,
-            conflict: item.conflict,
-            summary: item.summary
-          })),
+          .map((item) => ({ title: item.title, conflict: item.conflict, summary: item.summary })),
         userPrompt: content
       }
     }))
 
-    if (!result.success || !result.result) {
-      throw new Error(result.error ?? 'AI 未返回有效大纲草稿')
-    }
+    if (!result.success || !result.result) throw new Error(result.error ?? 'AI 未返回有效大纲草稿')
 
-    const item = result.result as {
-      title?: string
-      wordTarget?: string
-      conflict?: string
-      summary?: string
-    }
-
+    const item = result.result as { title?: string; wordTarget?: string; conflict?: string; summary?: string }
     appStore.createOutlineItem({
       volumeId: appStore.selectedChapterVolume?.id || currentChapter.value?.volumeId,
       title: item.title,
@@ -302,7 +224,6 @@ async function createOutlineDraft(promptText: string, quickAction: string): Prom
   }
 }
 
-// 处理快捷操作按钮点击：设置模式和长度偏好后发送对应 prompt
 function handleQuickAction(action: ChapterAssistantQuickAction): void {
   if (action.requiresSelection && !selectedExcerpt.value) {
     message.warning('请先在正文中选中要处理的段落')
@@ -319,8 +240,6 @@ function handleQuickAction(action: ChapterAssistantQuickAction): void {
   void sendPrompt(action.prompt, action.label)
 }
 
-// 将 AI 回复内容插入到当前章节正文中，支持三种模式：光标处、替换选区、追加末尾
-// 独立窗口模式下通过 IPC 发送到主窗口
 function handleInsert(content: string, mode: ChapterInsertionMode): void {
   const insertion = content.trim()
   if (!appStore.selectedChapter || !insertion) {
@@ -329,99 +248,57 @@ function handleInsert(content: string, mode: ChapterInsertionMode): void {
   }
 
   if (isAssistantWindow) {
-    void window.characterArc.publishAssistantCommand(toIpcPayload({
-      type: 'insert-into-chapter',
-      content: insertion,
-      mode
-    }))
-
-    if (mode === 'append') {
-      message.success('AI 内容已发送到主窗口并准备追加到正文末尾')
-      return
-    }
-
-    if (mode === 'replace-selection') {
-      message.success('AI 内容已发送到主窗口并准备替换当前选区')
-      return
-    }
-
+    void window.characterArc.publishAssistantCommand(toIpcPayload({ type: 'insert-into-chapter', content: insertion, mode }))
+    if (mode === 'append') { message.success('AI 内容已发送到主窗口并准备追加到正文末尾'); return }
+    if (mode === 'replace-selection') { message.success('AI 内容已发送到主窗口并准备替换当前选区'); return }
     message.success('AI 内容已发送到主窗口，等待插入正文')
     return
   }
 
   const inserted = appStore.insertIntoChapter(content, mode)
-  if (!inserted) {
-    message.warning('当前没有可插入内容的章节')
-    return
-  }
-
-  if (mode === 'append') {
-    message.success('AI 内容已追加到正文末尾')
-    return
-  }
-
-  if (mode === 'replace-selection') {
-    message.success('AI 内容已尝试替换当前选区')
-    return
-  }
-
+  if (!inserted) { message.warning('当前没有可插入内容的章节'); return }
+  if (mode === 'append') { message.success('AI 内容已追加到正文末尾'); return }
+  if (mode === 'replace-selection') { message.success('AI 内容已尝试替换当前选区'); return }
   message.success('AI 内容已插入正文')
 }
 
-// 将 AI 回复设为当前章节的摘要
 function handleUseAsSummary(content: string): void {
   const nextSummary = content.trim()
-  if (!appStore.selectedChapter || !nextSummary) {
-    message.warning('当前没有可更新摘要的章节')
-    return
-  }
-
+  if (!appStore.selectedChapter || !nextSummary) { message.warning('当前没有可更新摘要的章节'); return }
   appStore.updateChapterSummary(nextSummary)
   message.success('AI 内容已设为本章摘要')
 }
 
-// 将 AI 回复的第一行设为章节标题（去除格式标记和引号）
 function handleUseAsTitle(content: string): void {
   const nextTitle = content
-    .split('\n')
-    .map((line) => line.trim())
-    .find(Boolean)
+    .split('\n').map((line) => line.trim()).find(Boolean)
     ?.replace(/^[-*#\d.\s]+/, '')
     .replace(/^标题[:：]\s*/, '')
-    .replace(/[「」"'“”]/g, '')
+    .replace(/[「」"'""]/g, '')
     .trim()
-
-  if (!appStore.selectedChapter || !nextTitle) {
-    message.warning('当前没有可更新标题的章节')
-    return
-  }
-
-  // Title application deliberately keeps only the first meaningful line so
-  // verbose AI replies do not overwrite the chapter title with a paragraph.
+  if (!appStore.selectedChapter || !nextTitle) { message.warning('当前没有可更新标题的章节'); return }
   appStore.updateChapterTitle(nextTitle)
   message.success('AI 内容已设为章节标题')
 }
 
-// 重试上一次用户请求（复用最近一条用户消息重新发送）
+function handleMoreAction(key: string, content: string): void {
+  switch (key) {
+    case 'replace-selection': handleInsert(content, 'replace-selection'); break
+    case 'append': handleInsert(content, 'append'); break
+    case 'set-title': handleUseAsTitle(content); break
+    case 'set-summary': handleUseAsSummary(content); break
+  }
+}
+
 function handleRegenerate(): void {
   const prompt = lastUserPrompt.value
-  if (!prompt || isResponding.value) {
-    return
-  }
-
-  // Reuse the latest author intent so the writer can quickly ask the model for
-  // another variation without retyping the whole request.
+  if (!prompt || isResponding.value) return
   void sendPrompt(prompt.prompt, prompt.quickAction)
 }
 
-// 停止当前正在进行的流式生成
 async function handleStopResponse(): Promise<void> {
-  if (!activeStreamId.value || isStopping.value) {
-    return
-  }
-
+  if (!activeStreamId.value || isStopping.value) return
   isStopping.value = true
-
   const result = await window.characterArc.stopAiStream(activeStreamId.value)
   if (!result.success) {
     isStopping.value = false
@@ -429,7 +306,6 @@ async function handleStopResponse(): Promise<void> {
   }
 }
 
-// 输入框键盘事件：Enter 发送，Shift+Enter 换行
 function handleComposerKeydown(event: KeyboardEvent): void {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
@@ -437,11 +313,8 @@ function handleComposerKeydown(event: KeyboardEvent): void {
   }
 }
 
-// 处理 AI 流式事件：逐块拼接回复内容，完成时存入消息历史，取消时保留已生成内容
 function handleAiStreamEvent(payload: CharacterArcAiStreamEvent): void {
-  if (payload.streamId !== activeStreamId.value) {
-    return
-  }
+  if (payload.streamId !== activeStreamId.value) return
 
   if (payload.type === 'chunk') {
     streamingReply.value += payload.delta
@@ -451,9 +324,7 @@ function handleAiStreamEvent(payload: CharacterArcAiStreamEvent): void {
 
   if (payload.type === 'done') {
     const finalReply = (payload.content ?? streamingReply.value).trim()
-    if (finalReply) {
-      appStore.pushAssistantMessage(finalReply)
-    }
+    if (finalReply) appStore.pushAssistantMessage(finalReply)
     resetStreamingState()
     void scrollToBottom()
     return
@@ -483,30 +354,20 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (activeStreamId.value) {
-    void window.characterArc.stopAiStream(activeStreamId.value)
-  }
-
+  if (activeStreamId.value) void window.characterArc.stopAiStream(activeStreamId.value)
   removeAiStreamListener?.()
   removeAiStreamListener = null
 })
 
-// 监听消息列表变化，自动滚动到底部
 watch(
   () => appStore.messages.length,
-  () => {
-    void scrollToBottom()
-  }
+  () => { void scrollToBottom() }
 )
 
-// 监听外部触发的灵感/续写请求，自动发送给 AI 助手
 watch(
   [() => appStore.pendingAssistantRequest, isResponding],
   async ([request, busy]) => {
-    if (!request || busy) {
-      return
-    }
-
+    if (!request || busy) return
     await sendPrompt(request.prompt, request.quickAction)
     appStore.consumeAssistantPrompt(request.id)
   },
@@ -531,85 +392,23 @@ watch(
           </div>
         </div>
       </div>
-      <button
-        type="button"
-        class="assistant-toolbox-toggle"
-        :class="{ collapsed: isToolboxCollapsed }"
-        :title="isToolboxCollapsed ? '展开工具抽屉' : '收起工具抽屉'"
-        @click="isToolboxCollapsed = !isToolboxCollapsed"
-      >
-        <span class="assistant-toolbox-toggle-copy">
-          <strong>{{ isToolboxCollapsed ? '展开工具' : '收起工具' }}</strong>
-          <span>{{ toolboxSummary }}</span>
-        </span>
-        <ChevronDown :size="15" class="assistant-toolbox-toggle-icon" />
-      </button>
     </header>
 
-    <div class="assistant-toolbox" :class="{ collapsed: isToolboxCollapsed }">
-      <div class="assistant-toolbox-inner">
-        <div class="assistant-quick-tabs">
-          <button
-            v-for="group in quickActionGroups"
-            :key="group.key"
-            class="quick-tab"
-            :class="{ active: activeQuickGroup === group.key }"
-            :title="group.description"
-            @click="activeQuickGroup = group.key"
-          >
-            {{ group.label }}
-          </button>
-        </div>
-
-        <div class="assistant-quick-actions">
-          <button
-            v-for="action in activeGroupActions"
-            :key="action.label"
-            class="quick-action"
-            :title="action.requiresSelection && !selectedExcerpt ? '请先在正文中选中需要处理的内容' : action.label"
-            :disabled="isResponding || (action.requiresSelection && !selectedExcerpt)"
-            @click="handleQuickAction(action)"
-          >
-            <component :is="action.icon" :size="14" />
-            <span>{{ action.label }}</span>
-          </button>
-        </div>
-
-        <div class="assistant-controls">
-          <div class="control-group">
-            <span class="control-label">模式</span>
-            <div class="segmented-control">
-              <button
-                v-for="option in chapterAssistantModeOptions"
-                :key="option.value"
-                class="segment-button"
-                :class="{ active: responseMode === option.value }"
-                :disabled="isResponding"
-                @click="responseMode = option.value"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-          </div>
-
-          <div class="control-group">
-            <span class="control-label">长度</span>
-            <div class="segmented-control compact">
-              <button
-                v-for="option in chapterAssistantLengthOptions"
-                :key="option.value"
-                class="segment-button"
-                :class="{ active: responseLength === option.value }"
-                :disabled="isResponding"
-                @click="responseLength = option.value"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-          </div>
-        </div>
+    <section class="assistant-quick-wrap">
+      <div class="assistant-quick-grid">
+        <button
+          v-for="action in quickActions"
+          :key="action.id"
+          class="quick-chip"
+          :disabled="isResponding || (action.requiresSelection && !selectedExcerpt)"
+          :title="action.requiresSelection && !selectedExcerpt ? '请先在正文中选中内容' : action.label"
+          @click="handleQuickAction(action)"
+        >
+          <component :is="action.icon" :size="11" />
+          <span>{{ action.label }}</span>
+        </button>
       </div>
-    </div>
+    </section>
 
     <div ref="messagesViewport" class="assistant-messages arc-scrollbar">
       <div class="assistant-messages-stack">
@@ -622,47 +421,36 @@ watch(
           <div class="message-meta">
             <span>{{ messageItem.role === 'assistant' ? '创作助理' : '你' }}</span>
             <div v-if="messageItem.role === 'assistant'" class="message-actions">
-              <button
-                class="insert-button"
-                @click="handleInsert(messageItem.content, 'cursor')"
-              >
+              <button class="insert-button" @click="handleInsert(messageItem.content, 'cursor')">
                 <ArrowDownToLine :size="13" />
                 <span>插入</span>
               </button>
-              <button
-                class="insert-button secondary"
-                @click="handleInsert(messageItem.content, 'replace-selection')"
+              <NDropdown
+                trigger="click"
+                placement="bottom-end"
+                :options="MORE_ACTION_OPTIONS"
+                @select="(key) => handleMoreAction(String(key), messageItem.content)"
               >
-                <span>替换选区</span>
-              </button>
-              <button
-                class="insert-button secondary"
-                @click="handleInsert(messageItem.content, 'append')"
-              >
-                <span>追加末尾</span>
-              </button>
-              <button
-                class="insert-button secondary"
-                @click="handleUseAsTitle(messageItem.content)"
-              >
-                <span>设为标题</span>
-              </button>
-              <button
-                class="insert-button secondary"
-                @click="handleUseAsSummary(messageItem.content)"
-              >
-                <span>设为摘要</span>
-              </button>
+                <button class="more-btn" title="更多操作">···</button>
+              </NDropdown>
             </div>
           </div>
-          <p>{{ messageItem.content }}</p>
+          <div
+            v-if="messageItem.role === 'assistant'"
+            class="message-body"
+            v-html="renderMarkdown(messageItem.content)"
+          />
+          <p v-else>{{ messageItem.content }}</p>
         </article>
 
         <article v-if="isResponding" class="message-card assistant pending">
           <div class="message-meta">
             <span>创作助理</span>
           </div>
-          <p>{{ streamingReply || '正在整理当前章节上下文并生成回复...' }}</p>
+          <div
+            class="message-body"
+            v-html="streamingReply ? renderMarkdown(streamingReply) : '正在整理当前章节上下文并生成回复...'"
+          />
         </article>
       </div>
     </div>

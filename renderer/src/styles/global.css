@@ -140,6 +140,10 @@ input {
   background: color-mix(in srgb, var(--arc-primary) 22%, white);
 }
 
+.dark-mode ::selection {
+  background: color-mix(in srgb, var(--arc-primary) 38%, #1c1c22);
+}
+
 .arc-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: #d1d1d6 transparent;
@@ -165,6 +169,158 @@ input {
 
 .dark-mode .arc-scrollbar::-webkit-scrollbar-thumb {
   background: #3a3a46;
+}
+
+/* ── AI 创作助理面板深色模式 ── */
+.dark-mode .assistant-shell {
+  --assistant-surface: rgba(30, 30, 36, 0.78);
+  --assistant-surface-strong: rgba(36, 36, 44, 0.94);
+  --assistant-border: rgba(63, 63, 70, 0.9);
+  --assistant-ink: #f4f4f5;
+  --assistant-muted: #a1a1aa;
+  --assistant-soft: color-mix(in srgb, var(--arc-primary) 14%, #1c1c22);
+  --assistant-soft-strong: color-mix(in srgb, var(--arc-primary) 22%, #1c1c22);
+  background:
+    linear-gradient(180deg, rgba(14, 14, 18, 0.98), rgba(12, 12, 16, 0.98)),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--arc-primary) 10%, #0c0c0e), transparent 34%);
+  border-left-color: rgba(63, 63, 70, 0.9);
+}
+
+.dark-mode .assistant-shell .assistant-head {
+  background: linear-gradient(180deg, rgba(24, 24, 29, 0.72), rgba(20, 20, 25, 0.4));
+  border-bottom-color: rgba(63, 63, 70, 0.9);
+}
+
+.dark-mode .assistant-shell .assistant-badge {
+  border-color: color-mix(in srgb, var(--arc-primary) 16%, rgba(63, 63, 70, 0.9));
+  background:
+    linear-gradient(145deg, rgba(36, 36, 44, 0.94), color-mix(in srgb, var(--arc-primary) 14%, #1c1c22));
+}
+
+.dark-mode .assistant-shell .assistant-kicker {
+  color: color-mix(in srgb, var(--arc-primary) 80%, #c4c4cc);
+}
+
+.dark-mode .assistant-shell .assistant-title strong {
+  color: #f4f4f5;
+}
+
+.dark-mode .assistant-shell .assistant-context-pill {
+  background: rgba(30, 30, 36, 0.74);
+  color: #a1a1aa;
+  border-color: rgba(63, 63, 70, 0.9);
+}
+
+.dark-mode .assistant-shell .assistant-context-pill.strong {
+  background: var(--assistant-soft-strong);
+  color: var(--arc-primary);
+  border-color: color-mix(in srgb, var(--arc-primary) 22%, rgba(63, 63, 70, 0.9));
+}
+
+.dark-mode .assistant-shell .assistant-quick-wrap {
+  background: rgba(20, 20, 26, 0.48);
+  border-bottom-color: rgba(63, 63, 70, 0.9);
+}
+
+.dark-mode .assistant-shell .quick-chip {
+  background: rgba(30, 30, 36, 0.88);
+  color: #d4d4d8;
+  border-color: rgba(63, 63, 70, 0.9);
+}
+
+.dark-mode .assistant-shell .quick-chip:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--arc-primary) 14%, #1c1c22);
+  border-color: color-mix(in srgb, var(--arc-primary) 28%, rgba(63, 63, 70, 0.9));
+  color: var(--arc-primary);
+}
+
+.dark-mode .assistant-shell .message-card.user {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--arc-primary) 16%, #1c1c22), rgba(28, 28, 34, 0.98));
+  border-color: color-mix(in srgb, var(--arc-primary) 22%, #27272a);
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--arc-primary) 12%, transparent);
+}
+
+.dark-mode .assistant-shell .message-card.assistant {
+  background: rgba(24, 24, 27, 0.96);
+  border-color: rgba(63, 63, 70, 0.94);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .assistant-shell .message-meta {
+  color: #71717a;
+}
+
+.dark-mode .assistant-shell .message-body code {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dark-mode .assistant-shell .message-body h1,
+.dark-mode .assistant-shell .message-body h2,
+.dark-mode .assistant-shell .message-body h3 {
+  color: #f4f4f5;
+}
+
+.dark-mode .assistant-shell .insert-button {
+  background: color-mix(in srgb, var(--arc-primary) 20%, #1c1c22);
+}
+
+.dark-mode .assistant-shell .more-btn {
+  background: rgba(30, 30, 36, 0.9);
+  color: #71717a;
+  border-color: rgba(63, 63, 70, 0.9);
+}
+
+.dark-mode .assistant-shell .more-btn:hover {
+  border-color: color-mix(in srgb, var(--arc-primary) 30%, #3f3f46);
+}
+
+.dark-mode .assistant-shell .assistant-composer {
+  background: linear-gradient(180deg, rgba(18, 18, 22, 0.84), rgba(14, 14, 18, 0.96));
+  border-top-color: rgba(63, 63, 70, 0.9);
+}
+
+.dark-mode .assistant-shell .composer-selection-preview {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--arc-primary) 8%, #1c1c22), rgba(28, 28, 34, 0.92));
+  border-color: color-mix(in srgb, var(--arc-primary) 16%, rgba(63, 63, 70, 0.9));
+}
+
+.dark-mode .assistant-shell .composer-selection-preview p {
+  color: #d4d4d8;
+}
+
+.dark-mode .assistant-shell .selection-preview-label {
+  color: #a1a1aa;
+}
+
+.dark-mode .assistant-shell .composer-selection-meta {
+  color: #71717a;
+}
+
+.dark-mode .assistant-shell .composer-input {
+  background: rgba(18, 18, 22, 0.98);
+  color: #f4f4f5;
+  border-color: rgba(63, 63, 70, 0.76);
+}
+
+.dark-mode .assistant-shell .composer-input:focus {
+  border-color: color-mix(in srgb, var(--arc-primary) 42%, #3f3f46);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--arc-primary) 14%, transparent);
+}
+
+.dark-mode .assistant-shell .composer-hint {
+  color: #52525b;
+}
+
+.dark-mode .assistant-shell .ghost-action {
+  background: rgba(30, 30, 36, 0.9);
+  color: #a1a1aa;
+  border-color: rgba(63, 63, 70, 0.9);
+}
+
+.dark-mode .assistant-shell .ghost-action:disabled {
+  opacity: 0.45;
 }
 
 /* view-fade: 页面级切换（项目中心 ↔ 工作台 ↔ 向导）

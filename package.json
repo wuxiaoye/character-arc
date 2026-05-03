@@ -22,6 +22,7 @@
     "cytoscape": "^3.33.3",
     "lucide-vue-next": "^0.525.0",
     "mammoth": "^1.12.0",
+    "marked": "^18.0.3",
     "naive-ui": "^2.43.1",
     "pinia": "^3.0.3",
     "vue": "^3.5.18"
@@ -63,7 +64,10 @@
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico",
       "installerHeaderIcon": "resources/icon.ico",
-      "installerLanguages": ["zh_CN", "en_US"],
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
       "language": "2052",
       "artifactName": "${productName}-${version}-setup.${ext}"
     }
