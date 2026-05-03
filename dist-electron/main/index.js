@@ -4322,6 +4322,10 @@ electron.ipcMain.handle("characterarc:set-zoom-factor", (_event, factor) => {
     factor: nextFactor
   };
 });
+electron.ipcMain.handle("characterarc:set-titlebar-overlay", (_event, options) => {
+  if (process.platform !== "win32" || !mainWindow) return;
+  mainWindow.setTitleBarOverlay(options);
+});
 electron.ipcMain.handle("characterarc:save-workspace", async (_event, payload) => {
   try {
     const db = await ensureWorkspaceDb();

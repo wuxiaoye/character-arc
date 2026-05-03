@@ -100,7 +100,7 @@ input {
   align-items: center;
   justify-content: center;
   gap: 14px;
-  color: #6b7280;
+  color: var(--arc-text-secondary);
   font-size: 14px;
 }
 
@@ -191,16 +191,16 @@ input {
 
 .arc-editor-modal {
   width: min(92vw, 560px);
-  border-radius: 8px;
+  border-radius: var(--arc-radius-lg);
 }
 
 .arc-settings-modal {
   width: min(96vw, 980px);
-  border-radius: 18px;
+  border-radius: var(--arc-radius-lg);
 }
 
 .arc-settings-modal .n-card {
-  border-radius: 28px;
+  border-radius: var(--arc-radius-lg);
 }
 
 .arc-modal-actions {

@@ -2866,6 +2866,12 @@ ipcMain.handle('characterarc:set-zoom-factor', (_event, factor: unknown) => {
   }
 })
 
+/** 动态更新 Windows 原生标题栏 Overlay 颜色（随深色/浅色模式切换） */
+ipcMain.handle('characterarc:set-titlebar-overlay', (_event, options: { color: string; symbolColor: string }) => {
+  if (process.platform !== 'win32' || !mainWindow) return
+  mainWindow.setTitleBarOverlay(options)
+})
+
 /** 将渲染进程的完整工作区快照写入 SQLite（全量覆盖） */
 ipcMain.handle('characterarc:save-workspace', async (_event, payload: unknown) => {
   try {

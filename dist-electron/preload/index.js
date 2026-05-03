@@ -56,6 +56,8 @@ electron.contextBridge.exposeInMainWorld("characterArc", {
   setZoomFactor: (factor) => electron.ipcRenderer.invoke("characterarc:set-zoom-factor", factor),
   /** 获取当前渲染进程页面缩放比例 */
   getZoomFactor: () => electron.ipcRenderer.invoke("characterarc:get-zoom-factor"),
+  /** 动态更新 Windows 原生标题栏 Overlay 颜色（随深色/浅色模式切换） */
+  setTitleBarOverlay: (options) => electron.ipcRenderer.invoke("characterarc:set-titlebar-overlay", options),
   // ── 助手窗口管理 ──
   /** 打开浮动 AI 助手窗口 */
   openAssistantWindow: () => electron.ipcRenderer.invoke("characterarc:assistant-window-open"),

@@ -74,6 +74,18 @@ watch(
   },
   { immediate: true }
 )
+
+// 监听深色模式切换，同步更新 Windows 原生标题栏 Overlay 颜色
+watch(
+  () => appStore.appSettings.darkMode,
+  (dark) => {
+    window.characterArc?.setTitleBarOverlay?.({
+      color: dark ? '#111115' : '#fafafa',
+      symbolColor: dark ? '#a1a1aa' : '#52525b'
+    })
+  },
+  { immediate: true }
+)
 </script>
 
 <template>

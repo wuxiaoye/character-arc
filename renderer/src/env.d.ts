@@ -159,6 +159,7 @@ declare global {
         factor?: number
         error?: string
       }>
+      setTitleBarOverlay: (options: { color: string; symbolColor: string }) => Promise<void>
       importJson: () => Promise<{
         success: boolean
         canceled: boolean
