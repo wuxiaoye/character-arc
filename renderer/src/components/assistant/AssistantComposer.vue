@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { NButton, NButtonGroup, NPopover, NSelect } from 'naive-ui'
 import type { ChapterAssistantQuickAction } from '@/features/ai/chapterAssistantOptions'
-import { SendHorizonal, Square } from 'lucide-vue-next'
+import { ArrowUp, Square } from 'lucide-vue-next'
 import AssistantInlineContextSections from './AssistantInlineContextSections.vue'
 import type { AiRunKnowledgeItem, AiRunRecord } from '@/types/app'
 
@@ -53,21 +53,52 @@ function handleQuickAction(action: ChapterAssistantQuickAction) {
       <p>{{ props.selectedExcerpt }}</p>
     </div>
 
-    <div class="claude-assistant-composer__controls">
+    <div class="claude-assistant-composer__input-wrap">
       <textarea
         v-model="draft"
         class="claude-assistant-composer__input"
-        rows="4"
-        placeholder="输入消息，或先选一段文字再发起命令。"
+        rows="2"
+        placeholder="发送消息..."
         @keydown="(event) => emit('keydown', event)"
       />
+      <button
+        type="button"
+        class="claude-assistant-composer__send"
+        :class="{ danger: props.isResponding }"
+        :disabled="(!props.isResponding && !draft.trim()) || props.isStopping"
+        @click="props.isResponding ? emit('stop') : emit('submit')"
+      >
+        <component :is="props.isResponding ? Square : ArrowUp" :size="16" />
+      </button>
+    </div>
 
-      <div class="claude-assistant-composer__toolbar">
+    <div class="claude-assistant-composer__bar">
+      <div class="claude-assistant-composer__bar-left">
+        <NPopover v-model:show="commandMenuOpen" trigger="click" placement="top-start" :show-arrow="false" content-class="claude-assistant-command-popover-shell">
+          <template #trigger>
+            <button type="button" class="claude-assistant-command-trigger">
+              <span class="claude-assistant-command-trigger__prefix">/</span>
+              <span>命令</span>
+            </button>
+          </template>
+          <div class="claude-assistant-command-popover">
+            <AssistantInlineContextSections
+              :quick-actions="props.quickActions"
+              :selected-excerpt="props.selectedExcerpt"
+              :latest-ai-run="props.latestAiRun"
+              :latest-ai-run-knowledge="props.latestAiRunKnowledge"
+              :latest-ai-run-status-text="props.latestAiRunStatusText"
+              :is-responding="props.isResponding"
+              command-only
+              @quick-action="handleQuickAction"
+            />
+          </div>
+        </NPopover>
         <n-select
           v-model:value="responseMode"
           :options="responseModeOptions"
           size="tiny"
-          style="width: 100px;"
+          style="width: 92px;"
           :disabled="props.isResponding"
         />
         <n-button-group size="tiny">
@@ -88,49 +119,14 @@ function handleQuickAction(action: ChapterAssistantQuickAction) {
           >长</n-button>
         </n-button-group>
       </div>
-
-      <div class="claude-assistant-composer__footer">
-        <div class="claude-assistant-composer__menu-area">
-          <NPopover v-model:show="commandMenuOpen" trigger="click" placement="top-start" :show-arrow="false" content-class="claude-assistant-command-popover-shell">
-            <template #trigger>
-              <button type="button" class="claude-assistant-command-trigger">
-                <span class="claude-assistant-command-trigger__prefix">/</span>
-                <span>命令菜单</span>
-              </button>
-            </template>
-
-            <div class="claude-assistant-command-popover">
-              <AssistantInlineContextSections
-                :quick-actions="props.quickActions"
-                :selected-excerpt="props.selectedExcerpt"
-                :latest-ai-run="props.latestAiRun"
-                :latest-ai-run-knowledge="props.latestAiRunKnowledge"
-                :latest-ai-run-status-text="props.latestAiRunStatusText"
-                :is-responding="props.isResponding"
-                command-only
-                @quick-action="handleQuickAction"
-              />
-            </div>
-          </NPopover>
-          <span class="claude-assistant-composer__hint">Enter 发送，Shift + Enter 换行</span>
-        </div>
-
-        <div class="claude-assistant-composer__actions">
-          <button type="button" class="claude-assistant-tool-btn" :disabled="props.isResponding || !props.canRegenerate" @click="emit('regenerate')">
-            重试
-          </button>
-          <button
-            type="button"
-            class="claude-assistant-send-btn"
-            :class="{ danger: props.isResponding }"
-            :disabled="(!props.isResponding && !draft.trim()) || props.isStopping"
-            @click="props.isResponding ? emit('stop') : emit('submit')"
-          >
-            <component :is="props.isResponding ? Square : SendHorizonal" :size="15" />
-            <span>{{ props.isResponding ? (props.isStopping ? '停止中...' : '停止生成') : '发送' }}</span>
-          </button>
-        </div>
-      </div>
+      <button
+        type="button"
+        class="claude-assistant-tool-btn"
+        :disabled="props.isResponding || !props.canRegenerate"
+        @click="emit('regenerate')"
+      >
+        重试
+      </button>
     </div>
   </footer>
 </template>
