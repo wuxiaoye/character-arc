@@ -21,6 +21,9 @@ export type AppSettings = {
   model: string
   apiKey: string
   baseUrl: string
+  imageModel: string
+  imageApiKey: string
+  imageBaseUrl: string
 }
 
 export type AiTaskName =

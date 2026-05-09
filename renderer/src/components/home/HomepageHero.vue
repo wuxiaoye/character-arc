@@ -11,26 +11,26 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <header class="homepage-hero arc-drag-region">
+  <header class="homepage-hero">
     <div class="hero-copy">
       <h1>我的作品</h1>
       <p>选择一个项目继续写作，或开始新的作品。</p>
     </div>
 
-    <div class="hero-actions arc-no-drag">
-      <n-button size="large" class="hero-btn arc-no-drag" @click="emit('openDeconstruction')">
+    <div class="hero-actions">
+      <n-button size="large" class="hero-btn" @click="emit('openDeconstruction')">
         <template #icon><LibraryBig :size="18" /></template>
         拆书知识库
       </n-button>
-      <n-button size="large" class="hero-btn arc-no-drag" @click="emit('openSkills')">
+      <n-button size="large" class="hero-btn" @click="emit('openSkills')">
         <template #icon><Wrench :size="18" /></template>
         Skills
       </n-button>
-      <n-button size="large" class="hero-btn arc-no-drag" @click="emit('openSettings')">
+      <n-button size="large" class="hero-btn" @click="emit('openSettings')">
         <template #icon><Settings2 :size="18" /></template>
         设置
       </n-button>
-      <n-button type="primary" size="large" class="hero-btn arc-no-drag" @click="emit('create')">
+      <n-button type="primary" size="large" class="hero-btn" @click="emit('create')">
         <template #icon><Plus :size="18" /></template>
         新建作品
       </n-button>

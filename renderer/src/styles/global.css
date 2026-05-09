@@ -75,16 +75,6 @@ input {
   background: var(--arc-bg-body);
 }
 
-/* A dedicated global drag strip is more reliable than relying on page headers. */
-.app-titlebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 9999;
-  height: calc(var(--arc-titlebar-height) + 10px);
-}
-
 .app-content {
   display: flex;
   flex: 1;
@@ -123,17 +113,6 @@ input {
 .app-error-banner strong {
   font-size: 13px;
   font-weight: 700;
-}
-
-.arc-drag-region {
-  -webkit-app-region: drag;
-  app-region: drag;
-}
-
-.arc-no-drag,
-.arc-no-drag * {
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
 }
 
 ::selection {
@@ -1206,11 +1185,13 @@ input {
 .arc-editor-modal {
   width: min(92vw, 560px);
   border-radius: var(--arc-radius-lg);
+  margin-top: max(10px, calc(var(--arc-titlebar-height) + 8px));
 }
 
 .arc-settings-modal {
   width: min(96vw, 980px);
   border-radius: var(--arc-radius-lg);
+  margin-top: max(10px, calc(var(--arc-titlebar-height) + 8px));
 }
 
 .arc-settings-modal .n-card {
@@ -1221,6 +1202,13 @@ input {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .arc-editor-modal,
+  .arc-settings-modal {
+    margin-top: max(8px, calc(var(--arc-titlebar-height) + 6px));
+  }
 }
 
 .arc-empty-state {

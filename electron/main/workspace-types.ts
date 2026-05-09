@@ -258,6 +258,9 @@ export type WorkspacePayload = {
     model: string
     apiKey: string
     baseUrl: string
+    imageModel: string
+    imageApiKey: string
+    imageBaseUrl: string
     autoSaveInterval: string
     uiScale: number
     darkMode: boolean
@@ -377,8 +380,11 @@ export function normalizeAppSettings(
   return {
     provider: settings?.provider || 'deepseek',
     model: settings?.model || 'deepseek-chat',
-    apiKey: settings?.apiKey || 'sk-1234567890abcdef',
+    apiKey: settings?.apiKey || '',
     baseUrl: settings?.baseUrl || 'https://api.deepseek.com/v1',
+    imageModel: settings?.imageModel || '',
+    imageApiKey: settings?.imageApiKey || '',
+    imageBaseUrl: settings?.imageBaseUrl || '',
     autoSaveInterval: settings?.autoSaveInterval || '5m',
     uiScale,
     darkMode: Boolean(settings?.darkMode)

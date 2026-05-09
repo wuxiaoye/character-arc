@@ -2,6 +2,7 @@
 import { Clock4, MoreHorizontal } from 'lucide-vue-next'
 import type { DropdownOption } from 'naive-ui'
 import { NDropdown } from 'naive-ui'
+import { resolveCoverStyle } from '@/features/cover/display'
 import { resolveNovelLengthLabel } from '@/features/wizard/projectGenres'
 import type { ProjectSummary } from '@/types/app'
 
@@ -25,6 +26,7 @@ const emit = defineEmits<{
     @click="emit('open', project.id)"
   >
     <div class="card-main">
+      <div class="card-cover" :style="resolveCoverStyle(project.cover, 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)')"></div>
       <div class="card-copy">
         <h3>{{ project.title }}</h3>
         <p class="card-meta">{{ project.genre }} · {{ resolveNovelLengthLabel(project.novelLength) }} · {{ project.lastEdited }}</p>
@@ -84,8 +86,17 @@ const emit = defineEmits<{
   gap: 12px;
 }
 
+.card-cover {
+  width: 58px;
+  height: 82px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
+}
+
 .card-copy {
   min-width: 0;
+  flex: 1;
 }
 
 .card-copy h3 {

@@ -220,6 +220,14 @@ declare global {
         result?: Array<{ id: string; ownedBy: string | null }>
         error?: string
       }>
+      generateImage: (payload: { settings: import('@/types/app').AppSettings; prompt: string }) => Promise<{
+        success: boolean
+        result?: {
+          dataUrl: string
+          revisedPrompt?: string
+        }
+        error?: string
+      }>
       exportJson: (payload: CharacterArcExportRequest | unknown) => Promise<{
         success: boolean
         canceled: boolean

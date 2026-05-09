@@ -33,7 +33,10 @@ export function normalizeSettings(settings: AppSettings): AppSettings {
     provider,
     model: settings.model?.trim() || defaults.model,
     apiKey: settings.apiKey?.trim() || '',
-    baseUrl: settings.baseUrl?.trim() || defaults.baseUrl
+    baseUrl: settings.baseUrl?.trim() || defaults.baseUrl,
+    imageModel: settings.imageModel?.trim() || '',
+    imageApiKey: settings.imageApiKey?.trim() || '',
+    imageBaseUrl: settings.imageBaseUrl?.trim() || ''
   }
 }
 

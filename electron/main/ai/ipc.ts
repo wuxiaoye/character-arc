@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { AiTaskPayload, AppSettings } from './shared-types'
-import { runAiTask, streamAiTask, testAiConnection, fetchModels } from './runtime'
+import { runAiTask, streamAiTask, testAiConnection, fetchModels, generateImage } from './runtime'
 import { retrieveKnowledgeContext } from '../knowledge-retrieval'
 
 type AiIpcDeps = {
@@ -110,6 +110,20 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
       return { success: true, result }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '获取模型列表失败' }
+    }
+  })
+
+  ipcMain.handle('characterarc:ai-generate-image', async (_event, payload: unknown) => {
+    try {
+      const request = payload as { settings?: AppSettings; prompt?: string }
+      const prompt = String(request?.prompt ?? '').trim()
+      if (!prompt) {
+        throw new Error('图片生成提示词不能为空。')
+      }
+      const result = await generateImage(request.settings as AppSettings, prompt)
+      return { success: true, result }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '图片生成失败' }
     }
   })
 }

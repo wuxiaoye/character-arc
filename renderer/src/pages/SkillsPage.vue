@@ -13,8 +13,8 @@ function backToProjectCenter(): void {
 
 <template>
   <section class="skills-page">
-    <header class="skills-header arc-drag-region">
-      <div class="skills-header-actions arc-no-drag">
+    <header class="skills-header">
+      <div class="skills-header-actions">
         <n-button quaternary @click="backToProjectCenter">
           <template #icon><ChevronLeft :size="16" /></template>
           返回项目中心

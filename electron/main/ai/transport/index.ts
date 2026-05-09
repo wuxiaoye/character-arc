@@ -3,6 +3,7 @@ import type { AgentRequestParams, AgentResponse } from '../agent/tools/types'
 import { requestOpenAiCompatible, requestOpenAiCompatibleStream, requestOpenAiCompatibleWithTools } from './openai-compat'
 import { requestAnthropic, requestAnthropicStream, requestAnthropicWithTools } from './anthropic'
 export { fetchModels, type FetchedModel } from './models'
+export { generateImage, type GeneratedImageResult } from './images'
 
 export type StructuredOutputMode = 'json_object' | 'tool_use' | 'prompt_only'
 

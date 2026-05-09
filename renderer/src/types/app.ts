@@ -741,6 +741,12 @@ export interface AppSettings {
   apiKey: string
   /** API 基础地址 */
   baseUrl: string
+  /** 图片生成模型名称 */
+  imageModel: string
+  /** 图片生成接口鉴权密钥 */
+  imageApiKey: string
+  /** 图片生成接口基础地址 */
+  imageBaseUrl: string
   /** 自动保存间隔选项值，如 '5m'、'live' */
   autoSaveInterval: string
   /** UI 缩放比例，范围 0.75-1.75 */

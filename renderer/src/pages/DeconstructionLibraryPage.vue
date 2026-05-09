@@ -13,8 +13,8 @@ function backToProjectCenter(): void {
 
 <template>
   <section class="deconstruction-page">
-    <header class="deconstruction-header arc-drag-region">
-      <div class="deconstruction-header-actions arc-no-drag">
+    <header class="deconstruction-header">
+      <div class="deconstruction-header-actions">
         <n-button quaternary @click="backToProjectCenter">
           <template #icon><ChevronLeft :size="16" /></template>
           返回项目中心

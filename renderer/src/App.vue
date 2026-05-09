@@ -16,8 +16,6 @@ import { isAssistantWindow } from '@/utils/windowKind'
 const appStore = useAppStore()
 // 当前运行平台（win32 / darwin / linux），用于适配标题栏高度
 const platform = window.characterArc?.platform ?? 'unknown'
-const appVersion = window.characterArc?.version ?? '0.0.0'
-const appTitle = `弧光 v${appVersion}`
 
 // 根据当前选中主题生成 Naive UI 主题覆盖变量
 const themeOverrides = computed(() => createNaiveThemeOverrides(appStore.theme))
@@ -57,13 +55,8 @@ const appStyleVars = computed(() => {
     '--arc-radius-sm': '4px',
     '--arc-radius-md': '6px',
     '--arc-radius-lg': '10px',
-    // 标题栏高度：Windows 使用系统安全区域，macOS 使用固定值，其他平台为 0
-    '--arc-titlebar-height': platform === 'win32' ? 'env(titlebar-area-height, 28px)' : platform === 'darwin' ? '24px' : '0px',
-    // 窗口控制按钮区域宽度：Windows 使用 CSS 环境变量自适应，macOS 控件在左侧不占右侧宽度
-    '--arc-window-controls-width':
-      platform === 'win32'
-        ? 'max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)))'
-        : '0px'
+    '--arc-titlebar-height': '0px',
+    '--arc-window-controls-width': '0px'
   }
 })
 
@@ -88,18 +81,6 @@ watch(
   { immediate: true }
 )
 
-// 监听深色模式切换，同步更新 Windows 原生标题栏 Overlay 颜色
-watch(
-  () => appStore.appSettings.darkMode,
-  (dark) => {
-    window.characterArc?.setTitleBarOverlay?.({
-      color: dark ? '#111115' : '#fafafa',
-      symbolColor: dark ? '#a1a1aa' : '#52525b'
-    })
-  },
-  { immediate: true }
-)
-
 // Ctrl+S 全局保存快捷键
 function handleGlobalKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -118,9 +99,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalKeydown)
       <n-dialog-provider>
         <n-global-style />
         <div class="app-shell" :style="appStyleVars" :class="{ 'dark-mode': appStore.appSettings.darkMode }">
-          <div class="app-titlebar arc-drag-region">
-            <span class="app-titlebar__label">{{ appTitle }}</span>
-          </div>
           <div class="app-content">
             <div v-if="appStore.persistenceError" class="app-error-banner">
               <strong>本地数据读写异常</strong>
@@ -145,31 +123,3 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalKeydown)
     </n-message-provider>
   </n-config-provider>
 </template>
-
-<style scoped>
-.app-titlebar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding-top: 4px;
-  padding-right: calc(var(--arc-window-controls-width) + 16px);
-  padding-left: 16px;
-  color: var(--arc-text-hint);
-  pointer-events: none;
-}
-
-.dark-mode .app-titlebar {
-  color: var(--arc-text-hint);
-}
-
-.app-titlebar__label {
-  max-width: min(60vw, 420px);
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-</style>

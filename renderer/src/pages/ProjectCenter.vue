@@ -5,6 +5,7 @@ import HomepageHero from '@/components/home/HomepageHero.vue'
 import HomepageProjectCollection from '@/components/home/HomepageProjectCollection.vue'
 import HomepageSettingsModal from '@/components/home/HomepageSettingsModal.vue'
 import ProjectEditorModal from '@/components/home/ProjectEditorModal.vue'
+import ProjectCoverWorkbenchModal from '@/components/home/ProjectCoverWorkbenchModal.vue'
 import { buildCoverPromptKnowledgeDocument, type CoverPromptWorkbenchInput } from '@/features/cover/promptWorkbench'
 import { useAppStore } from '@/stores/app'
 import type { ProjectSummary } from '@/types/app'
@@ -15,6 +16,7 @@ const message = useMessage()
 
 const settingsVisible = ref(false)
 const editorVisible = ref(false)
+const coverWorkbenchVisible = ref(false)
 const editingProject = ref<ProjectSummary | null>(null)
 
 const canDeleteProject = computed(() => appStore.projects.length > 1)
@@ -66,6 +68,28 @@ function openProjectEditor(project?: ProjectSummary): void {
   editorVisible.value = true
 }
 
+function updateEditingProjectDraft(payload: {
+  id: string
+  title: string
+  genre: string
+  novelLength: ProjectSummary['novelLength']
+  cover: string
+  targetPlatform: string
+}): void {
+  if (!editingProject.value || editingProject.value.id !== payload.id) {
+    return
+  }
+
+  editingProject.value = {
+    ...editingProject.value,
+    title: payload.title,
+    genre: payload.genre,
+    novelLength: payload.novelLength,
+    cover: payload.cover,
+    targetPlatform: payload.targetPlatform
+  }
+}
+
 function handleMenuSelect(action: string | number, projectId: string): void {
   if (action === 'open') {
     openProject(projectId)
@@ -85,21 +109,36 @@ function handleMenuSelect(action: string | number, projectId: string): void {
   }
 }
 
-async function handlePickCover(): Promise<void> {
-  if (!editingProject.value) {
+function openCoverWorkbench(payload: {
+  id: string
+  title: string
+  genre: string
+  novelLength: ProjectSummary['novelLength']
+  cover: string
+  targetPlatform: string
+}): void {
+  updateEditingProjectDraft(payload)
+  coverWorkbenchVisible.value = true
+}
+
+function handleUpdateCover(payload: { projectId: string; cover: string }): void {
+  const targetProject = editingProject.value && editingProject.value.id === payload.projectId
+    ? editingProject.value
+    : appStore.projects.find((project) => project.id === payload.projectId)
+  if (!targetProject) {
     return
   }
 
-  const result = await window.characterArc.pickCoverImage()
-  if (!result.success || result.canceled || !result.dataUrl) {
-    return
+  const nextProject = {
+    ...targetProject,
+    cover: payload.cover
   }
 
-  editingProject.value = {
-    ...editingProject.value,
-    cover: result.dataUrl
-  }
-  message.success('项目封面已更新')
+  editingProject.value = nextProject
+
+  appStore.updateProject(payload.projectId, {
+    cover: payload.cover
+  })
 }
 
 function submitProject(payload: {
@@ -168,9 +207,15 @@ function requestDeleteProject(projectId: string): void {
     <ProjectEditorModal
       v-model:show="editorVisible"
       :project="editingProject"
-      @pick-cover="handlePickCover"
-      @save-cover-prompt="handleSaveCoverPrompt"
+      @open-cover-workbench="openCoverWorkbench"
       @submit="submitProject"
+    />
+
+    <ProjectCoverWorkbenchModal
+      v-model:show="coverWorkbenchVisible"
+      :project="editingProject"
+      @update-cover="handleUpdateCover"
+      @save-cover-prompt="handleSaveCoverPrompt"
     />
 
     <HomepageSettingsModal v-model:show="settingsVisible" />

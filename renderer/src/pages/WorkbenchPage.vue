@@ -205,8 +205,8 @@ watch(searchKeyword, (value) => {
 <template>
   <section class="workspace">
     <aside class="sidebar" :class="{ collapsed: !isSidebarOpen || isCompactSidebar }">
-      <div class="sidebar-top arc-drag-region">
-        <button type="button" class="top-icon arc-no-drag" title="返回项目中心" @click="appStore.backToProjects()">
+      <div class="sidebar-top">
+        <button type="button" class="top-icon" title="返回项目中心" @click="appStore.backToProjects()">
           <ChevronLeft :size="18" />
         </button>
         <div v-if="shouldRenderSidebarLabels" class="sidebar-brand">
@@ -216,7 +216,7 @@ watch(searchKeyword, (value) => {
         </div>
         <button
           type="button"
-          class="top-icon arc-no-drag"
+          class="top-icon"
           :title="isSidebarOpen && !isCompactSidebar ? '收起导航' : '展开导航'"
           :disabled="isCompactSidebar"
           :class="{ disabled: isCompactSidebar }"
@@ -274,17 +274,17 @@ watch(searchKeyword, (value) => {
     </aside>
 
     <main class="main-shell">
-      <header class="workspace-header arc-drag-region">
+      <header class="workspace-header">
         <div class="breadcrumb">
           <span>项目工作台</span>
           <ChevronLeft :size="14" class="crumb-sep" />
           <span class="active-crumb">{{ activeViewLabel }}</span>
         </div>
 
-        <div class="header-tools arc-no-drag">
+        <div class="header-tools">
             <n-input
               v-model:value="searchKeyword"
-              class="search-input arc-no-drag"
+              class="search-input"
               placeholder="搜索设定、角色、知识或章节..."
               clearable
               size="small"

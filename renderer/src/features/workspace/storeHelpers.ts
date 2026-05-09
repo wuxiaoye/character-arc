@@ -202,6 +202,9 @@ export const defaultAppSettings: AppSettings = {
   model: 'deepseek-chat',
   apiKey: '',
   baseUrl: 'https://api.deepseek.com/v1',
+  imageModel: '',
+  imageApiKey: '',
+  imageBaseUrl: '',
   autoSaveInterval: '5m',
   uiScale: 1,
   darkMode: false
@@ -273,6 +276,9 @@ export function normalizeAppSettings(settings?: Partial<AppSettings> | null): Ap
   return {
     ...defaultAppSettings,
     ...settings,
+    imageModel: settings?.imageModel?.trim() || defaultAppSettings.imageModel,
+    imageApiKey: settings?.imageApiKey?.trim() || defaultAppSettings.imageApiKey,
+    imageBaseUrl: settings?.imageBaseUrl?.trim() || defaultAppSettings.imageBaseUrl,
     uiScale:
       settings?.uiScale !== undefined && Number.isFinite(settings.uiScale)
         ? Math.min(1.75, Math.max(0.75, settings.uiScale))

@@ -8,7 +8,7 @@ const props = defineProps<{
 </script>
 
 <template>
-  <header class="claude-assistant-topbar arc-no-drag">
+  <header class="claude-assistant-topbar">
     <div class="claude-assistant-topbar__identity">
       <div class="claude-assistant-topbar__icon">
         <Bot :size="14" />

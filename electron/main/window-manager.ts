@@ -116,16 +116,9 @@ export function createWindowManager(options: CreateWindowManagerOptions) {
       minWidth,
       minHeight,
       icon: windowIcon,
+      frame: true,
       autoHideMenuBar: true,
       title: `弧光 v${app.getVersion()}`,
-      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-      titleBarOverlay:
-        process.platform === 'win32'
-          ? {
-              color: '#f5f5f7',
-              symbolColor: '#1d1d1f'
-            }
-          : false,
       backgroundColor: '#f5f5f7',
       show: false,
       webPreferences: {
@@ -185,6 +178,7 @@ export function createWindowManager(options: CreateWindowManagerOptions) {
       minWidth: ASSISTANT_WINDOW_MIN_WIDTH,
       minHeight: ASSISTANT_WINDOW_MIN_HEIGHT,
       icon: windowIcon,
+      frame: true,
       x: assistantX,
       y: assistantY,
       parent: mainWindow ?? undefined,
@@ -192,14 +186,6 @@ export function createWindowManager(options: CreateWindowManagerOptions) {
       title: `character-arc v${app.getVersion()} - AI 创作助理`,
       maximizable: false,
       fullscreenable: false,
-      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-      titleBarOverlay:
-        process.platform === 'win32'
-          ? {
-              color: nativeTheme.shouldUseDarkColors ? '#0e0e12' : '#f4f7fb',
-              symbolColor: nativeTheme.shouldUseDarkColors ? '#f4f4f5' : '#1d1d1f'
-            }
-          : false,
       backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e0e12' : '#f4f7fb',
       show: false,
       webPreferences: {
@@ -260,13 +246,6 @@ export function createWindowManager(options: CreateWindowManagerOptions) {
   function setTitleBarOverlay(options: { color: string; symbolColor: string }): void {
     if (process.platform !== 'win32') {
       return
-    }
-
-    if (mainWindow) {
-      mainWindow.setTitleBarOverlay(options)
-    }
-    if (assistantWindow && !assistantWindow.isDestroyed()) {
-      assistantWindow.setTitleBarOverlay(options)
     }
   }
 

@@ -39,6 +39,9 @@ const draftSettings = reactive<AppSettings>({
   model: '',
   apiKey: '',
   baseUrl: '',
+  imageModel: '',
+  imageApiKey: '',
+  imageBaseUrl: '',
   autoSaveInterval: '5m',
   uiScale: 1,
   darkMode: false
@@ -58,6 +61,9 @@ const hasPendingChanges = computed(() =>
   || draftSettings.model !== appStore.appSettings.model
   || draftSettings.apiKey !== appStore.appSettings.apiKey
   || draftSettings.baseUrl !== appStore.appSettings.baseUrl
+  || draftSettings.imageModel !== appStore.appSettings.imageModel
+  || draftSettings.imageApiKey !== appStore.appSettings.imageApiKey
+  || draftSettings.imageBaseUrl !== appStore.appSettings.imageBaseUrl
   || draftSettings.autoSaveInterval !== appStore.appSettings.autoSaveInterval
   || draftSettings.uiScale !== appStore.appSettings.uiScale
   || draftSettings.darkMode !== appStore.appSettings.darkMode
@@ -68,6 +74,9 @@ function syncDraftFromStore(): void {
   draftSettings.model = appStore.appSettings.model
   draftSettings.apiKey = appStore.appSettings.apiKey
   draftSettings.baseUrl = appStore.appSettings.baseUrl
+  draftSettings.imageModel = appStore.appSettings.imageModel
+  draftSettings.imageApiKey = appStore.appSettings.imageApiKey
+  draftSettings.imageBaseUrl = appStore.appSettings.imageBaseUrl
   draftSettings.autoSaveInterval = appStore.appSettings.autoSaveInterval
   draftSettings.uiScale = appStore.appSettings.uiScale
   draftSettings.darkMode = appStore.appSettings.darkMode
@@ -137,6 +146,9 @@ function saveSettings(): void {
   appStore.updateAppSetting('model', draftSettings.model)
   appStore.updateAppSetting('apiKey', draftSettings.apiKey)
   appStore.updateAppSetting('baseUrl', draftSettings.baseUrl)
+  appStore.updateAppSetting('imageModel', draftSettings.imageModel)
+  appStore.updateAppSetting('imageApiKey', draftSettings.imageApiKey)
+  appStore.updateAppSetting('imageBaseUrl', draftSettings.imageBaseUrl)
   appStore.updateAppSetting('autoSaveInterval', draftSettings.autoSaveInterval)
   appStore.updateAppSetting('uiScale', draftSettings.uiScale)
   appStore.updateAppSetting('darkMode', draftSettings.darkMode)
@@ -265,6 +277,46 @@ function saveSettings(): void {
               </template>
               {{ isTestingAiConnection ? '测试中...' : '测试模型连接' }}
             </n-button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="section-title">
+            <Download :size="18" />
+            <div>
+              <strong>图片生成配置</strong>
+              <p>封面工作台会优先读取这里的配置；留空时自动回退到上方的文本模型接口。</p>
+            </div>
+          </div>
+          <div class="settings-grid">
+            <n-form-item label="图片模型名称">
+              <n-input
+                :value="draftSettings.imageModel"
+                placeholder="例如：gpt-image-1 / flux.1-dev / doubao-seedream-3.0"
+                @update:value="(value) => { draftSettings.imageModel = value }"
+              />
+            </n-form-item>
+            <n-form-item label="图片 Base URL">
+              <n-input
+                :value="draftSettings.imageBaseUrl"
+                placeholder="例如：https://api.openai.com/v1"
+                @update:value="(value) => { draftSettings.imageBaseUrl = value }"
+              />
+            </n-form-item>
+          </div>
+          <n-form-item label="图片 API Key">
+            <n-input
+              type="password"
+              show-password-on="click"
+              :value="draftSettings.imageApiKey"
+              placeholder="为空时自动回退到文本 API Key"
+              @update:value="(value) => { draftSettings.imageApiKey = value }"
+            />
+          </n-form-item>
+          <div class="provider-hint-block">
+            <strong>使用建议</strong>
+            <p>如果你的网关同时支持文本和图片，只填图片模型名称就够了；如果图片走独立服务，再补充专用 Base URL 和 API Key。</p>
+            <code>{{ draftSettings.imageBaseUrl || draftSettings.baseUrl || '未填写地址' }}</code>
           </div>
         </section>
 

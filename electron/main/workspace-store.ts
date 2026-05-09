@@ -267,8 +267,12 @@ export async function ensureWorkspaceDb(): Promise<DatabaseSync> {
       model TEXT NOT NULL,
       api_key TEXT NOT NULL,
       base_url TEXT NOT NULL,
+      image_model TEXT NOT NULL DEFAULT '',
+      image_api_key TEXT NOT NULL DEFAULT '',
+      image_base_url TEXT NOT NULL DEFAULT '',
       auto_save_interval TEXT NOT NULL,
-      ui_scale REAL NOT NULL DEFAULT 1
+      ui_scale REAL NOT NULL DEFAULT 1,
+      dark_mode INTEGER NOT NULL DEFAULT 0
     ) STRICT;
   `)
 
@@ -315,6 +319,18 @@ function ensureAppSettingsColumns(db: DatabaseSync): void {
 
   if (!columnNames.has('dark_mode')) {
     db.exec(`ALTER TABLE app_settings ADD COLUMN dark_mode INTEGER NOT NULL DEFAULT 0;`)
+  }
+
+  if (!columnNames.has('image_model')) {
+    db.exec(`ALTER TABLE app_settings ADD COLUMN image_model TEXT NOT NULL DEFAULT '';`)
+  }
+
+  if (!columnNames.has('image_api_key')) {
+    db.exec(`ALTER TABLE app_settings ADD COLUMN image_api_key TEXT NOT NULL DEFAULT '';`)
+  }
+
+  if (!columnNames.has('image_base_url')) {
+    db.exec(`ALTER TABLE app_settings ADD COLUMN image_base_url TEXT NOT NULL DEFAULT '';`)
   }
 }
 
@@ -684,7 +700,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
 
   const settings = db.prepare(`
     SELECT theme, selected_project_id AS selectedProjectId, provider, api_key AS apiKey, base_url AS baseUrl, auto_save_interval AS autoSaveInterval
-    , model, ui_scale AS uiScale, dark_mode AS darkMode
+    , model, image_model AS imageModel, image_api_key AS imageApiKey, image_base_url AS imageBaseUrl, ui_scale AS uiScale, dark_mode AS darkMode
     FROM app_settings
     WHERE id = 1
   `).get() as
@@ -695,6 +711,9 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
         model: string
         apiKey: string
         baseUrl: string
+        imageModel: string
+        imageApiKey: string
+        imageBaseUrl: string
         autoSaveInterval: string
         uiScale: number
         darkMode: number
@@ -778,6 +797,9 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
         model: settings.model,
         apiKey: settings.apiKey,
         baseUrl: settings.baseUrl,
+        imageModel: settings.imageModel,
+        imageApiKey: settings.imageApiKey,
+        imageBaseUrl: settings.imageBaseUrl,
         autoSaveInterval: settings.autoSaveInterval,
         uiScale: settings.uiScale,
         darkMode: Boolean(settings.darkMode)
@@ -1145,8 +1167,8 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
 
     const normalizedAppSettings = normalizeAppSettings(payload.appSettings)
     db.prepare(`
-      INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, auto_save_interval, ui_scale, dark_mode)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, image_model, image_api_key, image_base_url, auto_save_interval, ui_scale, dark_mode)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       payload.theme,
       payload.selectedProjectId,
@@ -1154,6 +1176,9 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       normalizedAppSettings.model,
       normalizedAppSettings.apiKey,
       normalizedAppSettings.baseUrl,
+      normalizedAppSettings.imageModel,
+      normalizedAppSettings.imageApiKey,
+      normalizedAppSettings.imageBaseUrl,
       normalizedAppSettings.autoSaveInterval,
       normalizedAppSettings.uiScale,
       normalizedAppSettings.darkMode ? 1 : 0
