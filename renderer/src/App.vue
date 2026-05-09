@@ -9,6 +9,7 @@ import WorkbenchPage from '@/pages/WorkbenchPage.vue'
 import ChapterStudioPage from '@/pages/ChapterStudioPage.vue'
 import DeconstructionLibraryPage from '@/pages/DeconstructionLibraryPage.vue'
 import SkillsPage from '@/pages/SkillsPage.vue'
+import CoverWorkbenchPage from '@/pages/CoverWorkbenchPage.vue'
 import AssistantWindowPage from '@/pages/AssistantWindowPage.vue'
 import { isAssistantWindow } from '@/utils/windowKind'
 
@@ -115,6 +116,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalKeydown)
               <ChapterStudioPage v-else-if="appStore.currentView === 'chapter-studio'" key="chapter-studio" />
               <DeconstructionLibraryPage v-else-if="appStore.currentView === 'deconstruction-library'" key="deconstruction-library" />
               <SkillsPage v-else-if="appStore.currentView === 'skills'" key="skills" />
+              <CoverWorkbenchPage v-else-if="appStore.currentView === 'cover-workbench'" key="cover-workbench" />
               <WorkbenchPage v-else key="workbench" />
             </Transition>
           </div>

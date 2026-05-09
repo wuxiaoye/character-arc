@@ -5,8 +5,6 @@ import HomepageHero from '@/components/home/HomepageHero.vue'
 import HomepageProjectCollection from '@/components/home/HomepageProjectCollection.vue'
 import HomepageSettingsModal from '@/components/home/HomepageSettingsModal.vue'
 import ProjectEditorModal from '@/components/home/ProjectEditorModal.vue'
-import ProjectCoverWorkbenchModal from '@/components/home/ProjectCoverWorkbenchModal.vue'
-import { buildCoverPromptKnowledgeDocument, type CoverPromptWorkbenchInput } from '@/features/cover/promptWorkbench'
 import { useAppStore } from '@/stores/app'
 import type { ProjectSummary } from '@/types/app'
 
@@ -16,7 +14,6 @@ const message = useMessage()
 
 const settingsVisible = ref(false)
 const editorVisible = ref(false)
-const coverWorkbenchVisible = ref(false)
 const editingProject = ref<ProjectSummary | null>(null)
 
 const canDeleteProject = computed(() => appStore.projects.length > 1)
@@ -63,31 +60,16 @@ function openSkillsPage(): void {
   appStore.openSkillsPage(targetProject?.id)
 }
 
+function openCoverWorkbenchPage(): void {
+  const targetProject = appStore.projects.find((project) => project.id === appStore.selectedProjectId)
+    ?? appStore.projects[0]
+
+  appStore.openCoverWorkbenchPage(targetProject?.id)
+}
+
 function openProjectEditor(project?: ProjectSummary): void {
   editingProject.value = project ?? null
   editorVisible.value = true
-}
-
-function updateEditingProjectDraft(payload: {
-  id: string
-  title: string
-  genre: string
-  novelLength: ProjectSummary['novelLength']
-  cover: string
-  targetPlatform: string
-}): void {
-  if (!editingProject.value || editingProject.value.id !== payload.id) {
-    return
-  }
-
-  editingProject.value = {
-    ...editingProject.value,
-    title: payload.title,
-    genre: payload.genre,
-    novelLength: payload.novelLength,
-    cover: payload.cover,
-    targetPlatform: payload.targetPlatform
-  }
 }
 
 function handleMenuSelect(action: string | number, projectId: string): void {
@@ -109,36 +91,21 @@ function handleMenuSelect(action: string | number, projectId: string): void {
   }
 }
 
-function openCoverWorkbench(payload: {
-  id: string
-  title: string
-  genre: string
-  novelLength: ProjectSummary['novelLength']
-  cover: string
-  targetPlatform: string
-}): void {
-  updateEditingProjectDraft(payload)
-  coverWorkbenchVisible.value = true
-}
-
-function handleUpdateCover(payload: { projectId: string; cover: string }): void {
-  const targetProject = editingProject.value && editingProject.value.id === payload.projectId
-    ? editingProject.value
-    : appStore.projects.find((project) => project.id === payload.projectId)
-  if (!targetProject) {
+async function handlePickCover(): Promise<void> {
+  if (!editingProject.value) {
     return
   }
 
-  const nextProject = {
-    ...targetProject,
-    cover: payload.cover
+  const result = await window.characterArc.pickCoverImage()
+  if (!result.success || result.canceled || !result.dataUrl) {
+    return
   }
 
-  editingProject.value = nextProject
-
-  appStore.updateProject(payload.projectId, {
-    cover: payload.cover
-  })
+  editingProject.value = {
+    ...editingProject.value,
+    cover: result.dataUrl
+  }
+  message.success('项目封面已更新')
 }
 
 function submitProject(payload: {
@@ -158,12 +125,6 @@ function submitProject(payload: {
   })
   editorVisible.value = false
   message.success('项目信息已更新')
-}
-
-function handleSaveCoverPrompt(payload: CoverPromptWorkbenchInput): void {
-  const document = buildCoverPromptKnowledgeDocument(payload.project.id, payload)
-  appStore.mergeKnowledgeDocuments(payload.project.id, [document])
-  message.success('封面提示词已保存到知识库')
 }
 
 function requestDeleteProject(projectId: string): void {
@@ -192,6 +153,7 @@ function requestDeleteProject(projectId: string): void {
       <HomepageHero
         @create="appStore.openWizard()"
         @open-deconstruction="openDeconstructionLibrary"
+        @open-cover-workbench="openCoverWorkbenchPage"
         @open-skills="openSkillsPage"
         @open-settings="settingsVisible = true"
       />
@@ -207,15 +169,8 @@ function requestDeleteProject(projectId: string): void {
     <ProjectEditorModal
       v-model:show="editorVisible"
       :project="editingProject"
-      @open-cover-workbench="openCoverWorkbench"
+      @pick-cover="handlePickCover"
       @submit="submitProject"
-    />
-
-    <ProjectCoverWorkbenchModal
-      v-model:show="coverWorkbenchVisible"
-      :project="editingProject"
-      @update-cover="handleUpdateCover"
-      @save-cover-prompt="handleSaveCoverPrompt"
     />
 
     <HomepageSettingsModal v-model:show="settingsVisible" />

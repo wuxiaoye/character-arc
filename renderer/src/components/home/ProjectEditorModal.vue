@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
-import { BookOpen, Sparkles } from 'lucide-vue-next'
+import { BookOpen, ImagePlus, X } from 'lucide-vue-next'
 import { NButton, NForm, NFormItem, NInput, NModal, NTag, useMessage } from 'naive-ui'
 import { resolveCoverStyle } from '@/features/cover/display'
 import { NOVEL_LENGTH_OPTIONS } from '@/features/wizard/projectGenres'
@@ -21,14 +21,7 @@ const emit = defineEmits<{
     cover: string
     targetPlatform: string
   }): void
-  (e: 'open-cover-workbench', payload: {
-    id: string
-    title: string
-    genre: string
-    novelLength: NovelLength
-    cover: string
-    targetPlatform: string
-  }): void
+  (e: 'pick-cover'): void
 }>()
 
 const message = useMessage()
@@ -104,20 +97,6 @@ function clearCover(): void {
   form.cover = ''
 }
 
-function openCoverWorkbench(): void {
-  if (!props.project?.id) {
-    return
-  }
-
-  emit('open-cover-workbench', {
-    id: props.project.id,
-    title: form.title.trim(),
-    genre: form.genre.trim(),
-    novelLength: form.novelLength,
-    cover: form.cover,
-    targetPlatform: form.targetPlatform.trim()
-  })
-}
 </script>
 
 <template>
@@ -137,18 +116,17 @@ function openCoverWorkbench(): void {
               <BookOpen :size="30" />
             </div>
             <div class="cover-actions">
-              <div class="cover-actions-copy">
-                <strong>封面相关能力已独立到封面工作台。</strong>
-                <p>在那里可以生成提示词、AI 画封面，也可以本地上传并即时预览。</p>
-              </div>
               <div class="cover-actions-row">
-                <n-button type="primary" round strong @click="openCoverWorkbench">
+                <n-button round strong @click="emit('pick-cover')">
                   <template #icon>
-                    <Sparkles :size="16" />
+                    <ImagePlus :size="16" />
                   </template>
-                  打开封面工作台
+                  选择本地图片
                 </n-button>
                 <n-button round strong secondary :disabled="!form.cover" @click="clearCover">
+                  <template #icon>
+                    <X :size="16" />
+                  </template>
                   清除封面
                 </n-button>
               </div>
@@ -248,18 +226,7 @@ function openCoverWorkbench(): void {
 .cover-actions {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-
-.cover-actions-copy strong {
-  color: var(--arc-text-primary);
-  font-size: 15px;
-}
-
-.cover-actions-copy p {
-  margin: 6px 0 0;
-  color: var(--arc-text-secondary);
-  line-height: 1.7;
+  gap: 10px;
 }
 
 .cover-actions-row {

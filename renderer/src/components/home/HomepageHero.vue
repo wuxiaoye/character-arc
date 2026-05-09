@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { LibraryBig, Plus, Settings2, Wrench } from 'lucide-vue-next'
+import { ImagePlus, LibraryBig, Plus, Settings2, Wrench } from 'lucide-vue-next'
 import { NButton } from 'naive-ui'
 
 const emit = defineEmits<{
   (e: 'create'): void
   (e: 'openDeconstruction'): void
+  (e: 'openCoverWorkbench'): void
   (e: 'openSkills'): void
   (e: 'openSettings'): void
 }>()
@@ -25,6 +26,10 @@ const emit = defineEmits<{
       <n-button size="large" class="hero-btn" @click="emit('openSkills')">
         <template #icon><Wrench :size="18" /></template>
         Skills
+      </n-button>
+      <n-button size="large" class="hero-btn" @click="emit('openCoverWorkbench')">
+        <template #icon><ImagePlus :size="18" /></template>
+        封面工作台
       </n-button>
       <n-button size="large" class="hero-btn" @click="emit('openSettings')">
         <template #icon><Settings2 :size="18" /></template>

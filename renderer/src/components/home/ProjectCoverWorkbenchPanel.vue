@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { BookOpen, ImagePlus, LoaderCircle, Sparkles, Upload, X } from 'lucide-vue-next'
-import { NAlert, NButton, NCard, NForm, NFormItem, NInput, NModal, NTag, useMessage } from 'naive-ui'
+import { NAlert, NButton, NForm, NFormItem, NInput, NTag, useMessage } from 'naive-ui'
 import {
   buildCoverPromptWorkbenchResult,
   type CoverPromptWorkbenchInput,
@@ -13,12 +13,10 @@ import { toIpcPayload } from '@/utils/ipcPayload'
 import type { ProjectSummary } from '@/types/app'
 
 const props = defineProps<{
-  show: boolean
   project: ProjectSummary | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:show', value: boolean): void
   (e: 'update-cover', payload: { projectId: string; cover: string }): void
   (e: 'save-cover-prompt', payload: CoverPromptWorkbenchInput): void
 }>()
@@ -39,7 +37,7 @@ const revisedPrompt = ref('')
 const referenceTitles = computed(() => props.project?.referenceWorks.map((work) => work.title).filter(Boolean) ?? [])
 const workbenchReferenceLabel = computed(() => {
   if (!referenceTitles.value.length) {
-    return '暂无拆书资产，本次会按通用商业网文封面逻辑生成。'
+    return '暂无拆书资产，本次将按通用商业网文封面逻辑生成。'
   }
 
   const previews = referenceTitles.value.slice(0, 3).join('、')
@@ -81,23 +79,12 @@ function resetWorkbench(): void {
 }
 
 watch(
-  () => [props.project?.id, props.show] as const,
-  ([projectId, show], previousValue) => {
-    if (!show) {
-      return
-    }
-
-    const [previousProjectId, previousShow] = previousValue ?? []
-    if (projectId !== previousProjectId || show !== previousShow) {
-      resetWorkbench()
-    }
+  () => props.project?.id,
+  () => {
+    resetWorkbench()
   },
   { immediate: true }
 )
-
-function closeModal(): void {
-  emit('update:show', false)
-}
 
 function createWorkbenchInput(): CoverPromptWorkbenchInput | null {
   if (!props.project) {
@@ -230,76 +217,21 @@ async function generateCoverImage(): Promise<void> {
 </script>
 
 <template>
-  <n-modal
-    :show="show"
-    preset="card"
-    class="arc-editor-modal cover-workbench-modal"
-    title="封面工作台"
-    :bordered="false"
-    @close="closeModal"
-  >
-    <div class="cover-workbench-layout">
-      <section class="cover-workbench-sidebar">
-        <n-card :bordered="false" class="cover-preview-card">
-          <div class="cover-preview-stage">
-            <div class="cover-preview" :style="coverPreviewStyle">
-              <BookOpen :size="34" />
-            </div>
-            <div class="cover-preview-copy">
-              <strong>{{ props.project?.title || '未命名作品' }}</strong>
-              <p>{{ props.project?.genre || '待补充题材' }}</p>
-              <span>{{ props.project?.targetPlatform || '通用网文平台' }}</span>
-            </div>
+  <div class="cover-workbench-panel">
+    <div class="cover-workbench-body">
+      <section class="prompt-section">
+        <div class="section-head">
+          <div>
+            <strong>封面提示词工作台</strong>
+            <p>把项目题材、平台和拆书资产翻译成可直接给画图模型或设计师使用的封面提示词。</p>
           </div>
+        </div>
 
-          <div class="cover-preview-actions">
-            <n-button round strong @click="pickLocalCover">
-              <template #icon>
-                <Upload :size="16" />
-              </template>
-              本地上传
-            </n-button>
-            <n-button type="primary" round strong :disabled="isGeneratingImage" @click="generateCoverImage">
-              <template #icon>
-                <LoaderCircle v-if="isGeneratingImage" :size="16" class="spin-icon" />
-                <Sparkles v-else :size="16" />
-              </template>
-              {{ isGeneratingImage ? '生成中...' : 'AI 生成封面' }}
-            </n-button>
-            <n-button round strong secondary :disabled="!props.project?.cover" @click="clearCover">
-              <template #icon>
-                <X :size="16" />
-              </template>
-              清除封面
-            </n-button>
-          </div>
+        <n-alert type="info" :show-icon="false" class="reference-alert">
+          {{ workbenchReferenceLabel }}
+        </n-alert>
 
-          <n-alert :type="resolvedImageConfig.model ? 'info' : 'warning'" :show-icon="false" class="cover-config-alert">
-            {{ imageConfigSummary }}
-          </n-alert>
-
-          <p class="cover-config-note">
-            图片生成默认读取主页设置中的图片 API 配置；如果留空，会自动回退到文本模型配置。
-          </p>
-
-          <n-alert v-if="revisedPrompt" type="success" :show-icon="false" class="cover-config-alert">
-            模型重写提示词：{{ revisedPrompt }}
-          </n-alert>
-        </n-card>
-      </section>
-
-      <section class="cover-workbench-main">
-        <n-card :bordered="false" class="cover-workbench-card">
-          <div class="cover-workbench-head">
-            <div>
-              <strong>封面提示词工作台</strong>
-              <p>先把项目题材、平台和拆书资产翻译成可直接给画图模型或设计师使用的封面提示词。</p>
-            </div>
-            <n-tag round :bordered="false" type="info">
-              {{ referenceTitles.length ? `已接入 ${referenceTitles.length} 个参考资产` : '通用模式' }}
-            </n-tag>
-          </div>
-
+        <div class="editor-block">
           <n-form label-placement="top">
             <div class="form-grid">
               <n-form-item label="作者署名">
@@ -309,22 +241,14 @@ async function generateCoverImage(): Promise<void> {
                 <n-input
                   v-model:value="workbench.extraNotes"
                   type="textarea"
-                  :autosize="{ minRows: 3, maxRows: 6 }"
+                  :autosize="{ minRows: 5, maxRows: 8 }"
                   placeholder="例如：偏电影海报感、避免 Q 版、不要过曝、强调主角神情"
                 />
               </n-form-item>
             </div>
           </n-form>
 
-          <n-alert type="info" :show-icon="false" class="cover-workbench-alert">
-            {{ workbenchReferenceLabel }}
-          </n-alert>
-
-          <p class="cover-workbench-note">
-            这里生成的是封面提示词资产；你可以先保存到知识库，也可以直接拿来驱动 AI 生成封面。
-          </p>
-
-          <div class="cover-workbench-actions">
+          <div class="toolbar">
             <n-button type="primary" round strong @click="generateCoverPrompt">
               <template #icon>
                 <ImagePlus :size="16" />
@@ -335,69 +259,101 @@ async function generateCoverImage(): Promise<void> {
               保存到知识库
             </n-button>
           </div>
+        </div>
 
-          <div v-if="generatedPrompt" class="cover-workbench-result">
-            <div class="cover-workbench-result-head">
-              <div>
-                <strong>{{ generatedPrompt.title }}</strong>
-                <p>{{ generatedPrompt.summary }}</p>
-              </div>
-              <n-tag round :bordered="false" :type="isPromptStale ? 'warning' : 'success'">
-                {{ isPromptStale ? '输入已变化' : '可直接生成' }}
-              </n-tag>
+        <div class="result-block">
+          <div class="result-head">
+            <div>
+              <strong>{{ generatedPrompt?.title || '提示词预览区' }}</strong>
+              <p>{{ generatedPrompt?.summary || '生成后会在这里展示完整提示词、状态和关键词。' }}</p>
             </div>
+            <n-tag v-if="generatedPrompt" round :bordered="false" :type="isPromptStale ? 'warning' : 'success'">
+              {{ isPromptStale ? '输入已变化' : '可直接生成' }}
+            </n-tag>
+          </div>
 
+          <template v-if="generatedPrompt">
             <n-input
               :value="generatedPrompt.prompt"
               type="textarea"
               readonly
-              :autosize="{ minRows: 10, maxRows: 20 }"
+              :autosize="{ minRows: 14, maxRows: 20 }"
             />
 
-            <div class="cover-workbench-keywords">
+            <div class="keyword-list">
               <span v-for="keyword in generatedPrompt.keywords" :key="keyword">{{ keyword }}</span>
             </div>
+          </template>
+
+          <div v-else class="empty-state">
+            <div class="empty-badge">
+              <Sparkles :size="20" />
+            </div>
+            <strong>先生成一版封面提示词</strong>
+            <p>建议先补充画风方向，再点击上方的“生成提示词”，这样后续 AI 出图会更稳。</p>
           </div>
-        </n-card>
+        </div>
       </section>
     </div>
-
-    <template #footer>
-      <div class="arc-modal-actions">
-        <n-button round strong @click="closeModal">完成</n-button>
-      </div>
-    </template>
-  </n-modal>
+  </div>
 </template>
 
 <style scoped>
-.cover-workbench-modal :deep(.n-card) {
-  width: min(1120px, 94vw);
-  border-radius: 14px;
-}
-
-.cover-workbench-layout {
-  display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-  gap: 18px;
-}
-
-.cover-workbench-sidebar,
-.cover-workbench-main {
+.cover-workbench-panel {
+  width: 100%;
   min-width: 0;
 }
 
-.cover-preview-card,
-.cover-workbench-card {
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--arc-bg-surface) 92%, white) 0%, var(--arc-bg-surface) 100%);
+.cover-workbench-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.cover-preview-stage {
+.cover-section,
+.prompt-section {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  border: 1px solid var(--arc-border);
+  border-radius: 16px;
+  background: var(--arc-bg-surface);
+  padding: 20px;
+}
+
+.section-head,
+.result-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-head strong,
+.result-head strong,
+.panel-block strong,
+.empty-state strong {
+  display: block;
+  color: var(--arc-text-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.section-head p,
+.result-head p,
+.panel-block p,
+.note-block,
+.empty-state p {
+  margin: 6px 0 0;
+  color: var(--arc-text-secondary);
+  line-height: 1.7;
+}
+
+.cover-stage-row {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
 }
 
 .cover-preview {
@@ -407,61 +363,37 @@ async function generateCoverImage(): Promise<void> {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: 16px;
   color: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
 }
 
-.cover-preview-copy strong {
-  display: block;
-  color: var(--arc-text-primary);
-  font-size: 18px;
-}
-
-.cover-preview-copy p,
-.cover-preview-copy span,
-.cover-config-note,
-.cover-workbench-head p,
-.cover-workbench-result-head p,
-.cover-workbench-note {
-  margin: 6px 0 0;
-  color: var(--arc-text-secondary);
-  line-height: 1.7;
-}
-
-.cover-preview-copy span {
-  display: inline-block;
-  font-size: 12px;
-}
-
-.cover-preview-actions {
-  display: grid;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.cover-config-alert {
-  margin-top: 14px;
-  border-radius: 14px;
-}
-
-.cover-config-note,
-.cover-workbench-note {
-  font-size: 13px;
-}
-
-.cover-workbench-head,
-.cover-workbench-result-head {
+.cover-side-panel {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.cover-workbench-head strong,
-.cover-workbench-result-head strong {
-  color: var(--arc-text-primary);
-  font-size: 16px;
+.panel-block,
+.editor-block,
+.result-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--arc-border);
+  border-radius: 14px;
+  background: var(--arc-bg-weak);
+  padding: 16px;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.action-grid > :last-child {
+  grid-column: 1 / -1;
 }
 
 .form-grid {
@@ -470,37 +402,48 @@ async function generateCoverImage(): Promise<void> {
   gap: 14px;
 }
 
-.cover-workbench-alert {
-  margin-top: 4px;
-  border-radius: 14px;
-}
-
-.cover-workbench-actions {
+.toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 14px;
 }
 
-.cover-workbench-result {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 18px;
+.reference-alert {
+  border-radius: 12px;
 }
 
-.cover-workbench-keywords {
+.keyword-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.cover-workbench-keywords span {
+.keyword-list span {
   border-radius: 999px;
   background: color-mix(in srgb, var(--arc-primary) 10%, transparent);
   color: var(--arc-primary);
   padding: 4px 10px;
   font-size: 12px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 220px;
+}
+
+.empty-badge {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--arc-primary) 10%, var(--arc-bg-mix));
+  color: var(--arc-primary);
 }
 
 .spin-icon {
@@ -512,20 +455,39 @@ async function generateCoverImage(): Promise<void> {
   to { transform: rotate(360deg); }
 }
 
-@media (max-width: 900px) {
-  .cover-workbench-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 720px) {
+@media (max-width: 960px) {
+  .cover-stage-row,
   .form-grid {
     grid-template-columns: 1fr;
   }
 
-  .cover-workbench-head,
-  .cover-workbench-result-head {
+  .cover-preview {
+    width: min(260px, 100%);
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .cover-section,
+  .prompt-section,
+  .panel-block,
+  .editor-block,
+  .result-block {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .section-head,
+  .result-head {
     flex-direction: column;
+  }
+
+  .action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .action-grid > :last-child {
+    grid-column: auto;
   }
 }
 </style>
