@@ -1185,13 +1185,11 @@ input {
 .arc-editor-modal {
   width: min(92vw, 560px);
   border-radius: var(--arc-radius-lg);
-  margin-top: max(10px, calc(var(--arc-titlebar-height) + 8px));
 }
 
 .arc-settings-modal {
   width: min(96vw, 980px);
   border-radius: var(--arc-radius-lg);
-  margin-top: max(10px, calc(var(--arc-titlebar-height) + 8px));
 }
 
 .arc-settings-modal .n-card {
@@ -1207,7 +1205,7 @@ input {
 @media (max-width: 720px) {
   .arc-editor-modal,
   .arc-settings-modal {
-    margin-top: max(8px, calc(var(--arc-titlebar-height) + 6px));
+    margin: 16px auto;
   }
 }
 
