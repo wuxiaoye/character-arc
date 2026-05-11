@@ -274,7 +274,7 @@ function clearCover(): void {
   border: 2px solid transparent;
   border-radius: 8px;
   background: var(--arc-bg-weak);
-  color: #4b5563;
+  color: var(--arc-text-secondary);
   cursor: pointer;
   padding: 16px;
   text-align: left;

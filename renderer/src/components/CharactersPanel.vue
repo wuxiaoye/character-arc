@@ -326,7 +326,7 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
 
 .section-head p {
   margin: 0;
-  color: #86868b;
+  color: var(--arc-text-secondary);
   font-size: 15px;
 }
 
@@ -346,8 +346,8 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
   gap: 8px;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: #f5f5f7;
-  color: #9ca3af;
+  background: var(--arc-bg-mix);
+  color: var(--arc-text-hint);
   padding: 10px 14px;
 }
 
@@ -384,8 +384,8 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
 }
 
 .soft-button {
-  background: #f5f5f7;
-  color: #1d1d1f;
+  background: var(--arc-bg-mix);
+  color: var(--arc-text-primary);
 }
 
 .soft-button :deep(svg) {
@@ -437,7 +437,7 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
 }
 
 .character-card:hover::after {
-  color: #9ca3af;
+  color: var(--arc-text-hint);
 }
 
 .avatar {
@@ -479,13 +479,13 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
   border: none;
   border-radius: 999px;
   background: transparent;
-  color: #c4cad4;
+  color: var(--arc-text-hint);
   cursor: pointer;
 }
 
 .more-button:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #6b7280;
+  background: var(--arc-bg-mix);
+  color: var(--arc-text-secondary);
 }
 
 .tag-row {

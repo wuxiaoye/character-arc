@@ -708,7 +708,7 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
 .section-head p {
   max-width: 660px;
   margin: 0;
-  color: #86868b;
+  color: var(--arc-text-secondary);
   font-size: 15px;
 }
 
@@ -733,8 +733,8 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
 }
 
 .soft-button.neutral {
-  background: #f5f5f7;
-  color: #1d1d1f;
+  background: var(--arc-bg-mix);
+  color: var(--arc-text-primary);
 }
 
 .soft-button:disabled {
@@ -799,7 +799,7 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
 
 .volume-copy h3 {
   margin: 0;
-  color: #111827;
+  color: var(--arc-text-primary);
   font-size: clamp(22px, 2.6vw, 28px);
   font-weight: 650;
   letter-spacing: -0.03em;
@@ -936,28 +936,28 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
 }
 
 .outline-status-pill.ghost {
-  background: rgba(241, 245, 249, 0.96);
+  background: var(--arc-bg-mix);
   color: var(--arc-text-hint);
 }
 
 .outline-status-pill.neutral {
-  background: rgba(219, 234, 254, 0.9);
-  color: #1d4ed8;
+  background: color-mix(in srgb, #1d4ed8 14%, var(--arc-bg-surface));
+  color: color-mix(in srgb, #1d4ed8 70%, var(--arc-text-primary));
 }
 
 .outline-status-pill.primary {
-  background: rgba(219, 234, 254, 0.98);
-  color: #2563eb;
+  background: color-mix(in srgb, #2563eb 14%, var(--arc-bg-surface));
+  color: color-mix(in srgb, #2563eb 70%, var(--arc-text-primary));
 }
 
 .outline-status-pill.warning {
-  background: rgba(254, 243, 199, 0.95);
-  color: #b45309;
+  background: color-mix(in srgb, #b45309 14%, var(--arc-bg-surface));
+  color: color-mix(in srgb, #b45309 70%, var(--arc-text-primary));
 }
 
 .outline-status-pill.success {
-  background: rgba(220, 252, 231, 0.96);
-  color: #15803d;
+  background: color-mix(in srgb, #15803d 14%, var(--arc-bg-surface));
+  color: color-mix(in srgb, #15803d 70%, var(--arc-text-primary));
 }
 
 .outline-status-pill.chapter {
@@ -968,12 +968,12 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #c4cad4;
+  color: var(--arc-text-hint);
   flex-shrink: 0;
 }
 
 .outline-item:hover .outline-grip {
-  color: #94a3b8;
+  color: var(--arc-text-secondary);
 }
 
 .outline-actions {
@@ -997,13 +997,13 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
   border: none;
   border-radius: 999px;
   background: transparent;
-  color: #c4cad4;
+  color: var(--arc-text-hint);
   cursor: pointer;
 }
 
 .more-button:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #6b7280;
+  background: var(--arc-bg-mix);
+  color: var(--arc-text-secondary);
 }
 
 .outline-desc {

@@ -408,7 +408,7 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
 
 .section-head h2 {
   margin: 0 0 8px;
-  color: #111827;
+  color: var(--arc-text-primary);
   font-size: clamp(30px, 3.4vw, 38px);
   font-weight: 650;
   letter-spacing: -0.04em;
@@ -416,7 +416,7 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
 
 .section-head p {
   margin: 0;
-  color: #6b7280;
+  color: var(--arc-text-secondary);
   font-size: 15px;
 }
 
@@ -610,7 +610,7 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
 }
 
 .stat-card small {
-  color: #94a3b8;
+  color: var(--arc-text-hint);
   font-size: 12px;
 }
 
@@ -684,18 +684,18 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
 }
 
 .entry-source {
-  background: #f8fafc;
+  background: var(--arc-bg-mix);
   color: var(--arc-text-secondary);
 }
 
 .entry-source.ai {
-  background: rgba(224, 242, 254, 0.94);
-  color: #0369a1;
+  background: color-mix(in srgb, #0369a1 14%, var(--arc-bg-surface));
+  color: color-mix(in srgb, #0369a1 70%, var(--arc-text-primary));
 }
 
 .entry-source.manual {
-  background: rgba(241, 245, 249, 0.96);
-  color: #475569;
+  background: var(--arc-bg-mix);
+  color: var(--arc-text-secondary);
 }
 
 .more-button,
@@ -716,7 +716,7 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
 }
 
 .more-button:hover {
-  background: #eef2ff;
+  background: color-mix(in srgb, var(--arc-primary) 10%, var(--arc-bg-mix));
   color: var(--arc-primary);
 }
 
@@ -730,7 +730,7 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
 
 .inspiration-card p {
   margin: 0;
-  color: #475569;
+  color: var(--arc-text-secondary);
   font-size: 14px;
   line-height: 1.8;
 }
@@ -747,7 +747,7 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: #94a3b8;
+  color: var(--arc-text-hint);
   font-size: 12px;
 }
 
@@ -784,8 +784,8 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
   min-height: 40px;
   border: 1px solid var(--arc-border);
   border-radius: 999px;
-  background: #f8fafc;
-  color: #334155;
+  background: var(--arc-bg-mix);
+  color: var(--arc-text-secondary);
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 700;

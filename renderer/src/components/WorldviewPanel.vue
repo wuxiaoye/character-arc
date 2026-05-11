@@ -395,8 +395,8 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
   display: inline-flex;
   align-items: center;
   border-radius: 10px;
-  background: #f8fafc;
-  color: #86868b;
+  background: var(--arc-bg-mix);
+  color: var(--arc-text-secondary);
   font-size: 12px;
   font-weight: 650;
   padding: 7px 10px;
@@ -427,7 +427,7 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
 
 .world-card h3 {
   margin: 0 0 12px;
-  color: #1d1d1f;
+  color: var(--arc-text-primary);
   font-size: clamp(20px, 2.2vw, 24px);
   font-weight: 650;
   letter-spacing: -0.03em;
@@ -435,7 +435,7 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
 
 .world-card p {
   margin: 0;
-  color: #86868b;
+  color: var(--arc-text-secondary);
   font-size: 14px;
   line-height: 1.8;
 }

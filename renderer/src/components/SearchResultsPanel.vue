@@ -418,7 +418,7 @@ function openGroupResult(group: ResultGroup, item: ResultGroup['items'][number])
 
 .group-title p {
   margin: 0;
-  color: #86868b;
+  color: var(--arc-text-secondary);
   font-size: 13px;
 }
 
@@ -473,7 +473,7 @@ function openGroupResult(group: ResultGroup, item: ResultGroup['items'][number])
   display: -webkit-box;
   margin: 0 0 14px;
   overflow: hidden;
-  color: #6b7280;
+  color: var(--arc-text-secondary);
   font-size: 13px;
   line-height: 1.75;
   -webkit-box-orient: vertical;
