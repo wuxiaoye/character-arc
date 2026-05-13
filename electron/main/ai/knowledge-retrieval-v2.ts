@@ -165,6 +165,70 @@ export async function indexChapterSegments(
   }
 }
 
+export async function indexReferenceNovel(
+  settings: AppSettings,
+  projectId: string,
+  refId: string,
+  novelText: string
+): Promise<void> {
+  if (!novelText || novelText.length < 100) return
+
+  const db = await ensureWorkspaceDb()
+
+  db.prepare(
+    `DELETE FROM story_embeddings WHERE project_id = ? AND source_type = 'reference_novel' AND source_id = ?`
+  ).run(projectId, refId)
+
+  const segments = splitForEmbedding(novelText, 800)
+  if (!segments.length) return
+
+  const { embedTexts } = await import('./embedding-service')
+
+  const BATCH = 16
+  const timestamp = new Date().toISOString()
+  const stmt = db.prepare(`
+    INSERT INTO story_embeddings (id, project_id, source_type, source_id, chapter_index, text_content, embedding, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+
+  for (let i = 0; i < segments.length; i += BATCH) {
+    const batch = segments.slice(i, i + BATCH)
+    const embeddings = await embedTexts(settings, batch)
+    for (let j = 0; j < batch.length; j++) {
+      const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+      const buffer = Buffer.from(embeddings[j].buffer)
+      stmt.run(id, projectId, 'reference_novel', refId, null, batch[j], buffer, timestamp)
+    }
+  }
+}
+
+export async function searchReferenceNovel(
+  settings: AppSettings,
+  projectId: string,
+  refId: string,
+  query: string,
+  topK = 20
+): Promise<Array<{ text: string; score: number }>> {
+  const db = await ensureWorkspaceDb()
+
+  const rows = db.prepare(`
+    SELECT text_content, embedding FROM story_embeddings
+    WHERE project_id = ? AND source_type = 'reference_novel' AND source_id = ?
+  `).all(projectId, refId) as Array<{ text_content: string; embedding: Buffer }>
+
+  if (!rows.length) return []
+
+  const queryEmbedding = await embedText(settings, query)
+
+  return rows
+    .map((row) => {
+      const storedVec = new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4)
+      return { text: row.text_content, score: cosineSimilarity(queryEmbedding, storedVec) }
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK)
+}
+
 function splitForEmbedding(text: string, maxChars = 500): string[] {
   const paragraphs = text.split(/\n{2,}/)
   const segments: string[] = []

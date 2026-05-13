@@ -6,6 +6,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import type { AiTaskPayload, ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './ai/shared-types'
 import { runAiTask } from './ai/runtime'
+import { indexReferenceNovel } from './ai/knowledge-retrieval-v2'
 import { refreshRegistry as refreshSkillRegistry, toScanEntries as skillScanEntries, toContextEntries as skillContextEntries } from './ai/skills'
 import { getProjectSkillsDirPath as getSkillsDirPath } from './ai/skills/discovery'
 import { extractReferenceNovelContext, type ReferenceNovelLocalContext } from './referenceAnalysis'
@@ -487,6 +488,11 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
       await mkdir(novelStorageDir, { recursive: true })
       const rawNovelText = await readFile(importedFilePath, 'utf-8')
       await writeFile(join(novelStorageDir, `${refId}.txt`), rawNovelText, 'utf-8')
+
+      // 异步为原文建立向量索引（不阻塞导入流程）
+      if (request.projectId) {
+        indexReferenceNovel(request.settings, request.projectId, refId, rawNovelText).catch(() => {})
+      }
 
       const referenceWork = {
         id: refId,
