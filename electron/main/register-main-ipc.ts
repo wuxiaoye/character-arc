@@ -9,6 +9,7 @@ import { runAiTask } from './ai/runtime'
 import { refreshRegistry as refreshSkillRegistry, toScanEntries as skillScanEntries, toContextEntries as skillContextEntries } from './ai/skills'
 import { getProjectSkillsDirPath as getSkillsDirPath } from './ai/skills/discovery'
 import { extractReferenceNovelContext, type ReferenceNovelLocalContext } from './referenceAnalysis'
+import { getWorkspaceDirPath } from './workspace-store'
 import type { AssistantPromptPayload, WindowManager } from './window-manager'
 
 type ReferenceNovelImportRequest = {
@@ -356,21 +357,15 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
     }
   })
 
-  ipcMain.handle('characterarc:pick-and-read-novel-text', async () => {
-    const window = deps.windowManager.getActiveWindow()
-    if (!window) {
-      return { success: false, canceled: true }
+  ipcMain.handle('characterarc:read-reference-novel-text', async (_event, refId: string) => {
+    if (!refId) return { success: false, error: '缺少参考作品 ID' }
+    const novelPath = join(getWorkspaceDirPath(), 'reference-novels', `${refId}.txt`)
+    try {
+      const content = await readFile(novelPath, 'utf-8')
+      return { success: true, content }
+    } catch {
+      return { success: false, error: '未找到该参考作品的原文存档，可能是旧版本导入的作品' }
     }
-    const result = await dialog.showOpenDialog(window, {
-      title: '选择参考小说原文（用于风格指纹提取）',
-      properties: ['openFile'],
-      filters: [{ name: '小说文本', extensions: ['txt', 'md'] }]
-    })
-    if (result.canceled || result.filePaths.length === 0) {
-      return { success: false, canceled: true }
-    }
-    const content = await readFile(result.filePaths[0], 'utf-8')
-    return { success: true, canceled: false, content, filePath: result.filePaths[0] }
   })
 
   ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, payload: ReferenceNovelImportRequest) => {
@@ -398,7 +393,8 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
         total: 1,
         percent: 8
       })
-      const localContext = await extractReferenceNovelContext(result.filePaths[0])
+      const importedFilePath = result.filePaths[0]
+      const localContext = await extractReferenceNovelContext(importedFilePath)
       const resolvedTitle = request.preferredTitle?.trim() || localContext.title
       const resolvedSource = request.preferredSource?.trim() || localContext.fileType.toUpperCase()
       deps.emitReferenceImportProgress(window, {
@@ -484,8 +480,16 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
         percent: 96,
         sourceTitle: resolvedTitle
       })
+      const refId = `ref-${Date.now()}`
+
+      // 保存原文到本地，供后续风格指纹提取等功能直接读取
+      const novelStorageDir = join(getWorkspaceDirPath(), 'reference-novels')
+      await mkdir(novelStorageDir, { recursive: true })
+      const rawNovelText = await readFile(importedFilePath, 'utf-8')
+      await writeFile(join(novelStorageDir, `${refId}.txt`), rawNovelText, 'utf-8')
+
       const referenceWork = {
-        id: `ref-${Date.now()}`,
+        id: refId,
         title: resolvedTitle,
         source: resolvedSource,
         notes: analysis.overview,

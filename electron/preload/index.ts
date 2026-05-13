@@ -38,8 +38,8 @@ contextBridge.exposeInMainWorld('characterArc', {
   importJson: () => ipcRenderer.invoke('characterarc:import-json'),
   /** 导入参考小说并执行拆书分析 */
   importReferenceNovelAnalysis: (payload: unknown) => ipcRenderer.invoke('characterarc:import-reference-novel-analysis', toIpcPayload(payload)),
-  /** 打开文件选择对话框并读取小说原文文本（用于风格指纹提取） */
-  pickAndReadNovelText: () => ipcRenderer.invoke('characterarc:pick-and-read-novel-text'),
+  /** 读取已保存的参考小说原文（用于风格指纹提取等） */
+  readReferenceNovelText: (refId: string) => ipcRenderer.invoke('characterarc:read-reference-novel-text', refId),
   /** 加载当前项目可用的 skills（软件内置 + 项目扩展） */
   scanProjectSkills: (projectId: string) => ipcRenderer.invoke('characterarc:project-skills-scan', projectId),
   /** 从本地目录导入一组项目扩展 skills 到应用数据目录 */

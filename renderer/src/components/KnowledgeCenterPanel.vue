@@ -591,15 +591,13 @@ async function handleStyleFingerprintExtract(asset: ReferenceAssetLibrary): Prom
     return
   }
 
-  const fileResult = await window.characterArc.pickAndReadNovelText() as { success: boolean; canceled?: boolean; content?: string }
-  if (!fileResult?.success || fileResult.canceled || !fileResult.content) return
-
-  if (fileResult.content.trim().length < 5000) {
-    message.error('原文内容过短（需至少5000字），无法有效提取风格指纹。')
+  const novelResult = await window.characterArc.readReferenceNovelText(asset.id)
+  if (!novelResult.success || !novelResult.content) {
+    message.error(novelResult.error ?? '未找到该参考作品的原文存档，请重新导入参考小说。')
     return
   }
 
-  const sourceText = fileResult.content.length > 80000 ? fileResult.content.slice(0, 80000) : fileResult.content
+  const sourceText = novelResult.content.length > 80000 ? novelResult.content.slice(0, 80000) : novelResult.content
 
   fingerprintExtractingAssetId.value = asset.id
   const loading = message.loading(`AI 正在从原文提取《${asset.title}》的风格指纹（${Math.round(sourceText.length / 10000)}万字样本），可能需要 2-4 分钟…`, { duration: 0 })

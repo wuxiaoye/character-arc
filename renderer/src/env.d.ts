@@ -294,11 +294,10 @@ declare global {
         result?: CharacterArcReferenceImportResult
         error?: string
       }>
-      pickAndReadNovelText: () => Promise<{
+      readReferenceNovelText: (refId: string) => Promise<{
         success: boolean
-        canceled?: boolean
         content?: string
-        filePath?: string
+        error?: string
       }>
       scanProjectSkills: (projectId: string) => Promise<{
         success: boolean

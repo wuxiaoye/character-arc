@@ -18,7 +18,7 @@ import { initStoryStateSchema } from './story-state-store'
 const WORKSPACE_DB = 'workspace.db'
 const WORKSPACE_FILE = 'workspace.json'
 
-function getWorkspaceDirPath(): string {
+export function getWorkspaceDirPath(): string {
   return join(app.getPath('userData'), 'data')
 }
 
