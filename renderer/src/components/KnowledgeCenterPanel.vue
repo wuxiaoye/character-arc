@@ -502,6 +502,7 @@ function removeKnowledgeDocument(documentView: KnowledgeDocumentView): void {
 }
 
 const deepAnalyzingAssetId = ref<string | null>(null)
+const fingerprintExtractingAssetId = ref<string | null>(null)
 
 const SOURCE_TEXT_CHAR_CAP = 30_000
 
@@ -576,6 +577,52 @@ async function handleAiDeepAnalyze(asset: ReferenceAssetLibrary): Promise<void> 
   } finally {
     loading.destroy()
     deepAnalyzingAssetId.value = null
+  }
+}
+
+async function handleStyleFingerprintExtract(asset: ReferenceAssetLibrary): Promise<void> {
+  const project = appStore.currentProject
+  if (!project) {
+    message.warning('请先选择一个项目再提取风格指纹。')
+    return
+  }
+  if (fingerprintExtractingAssetId.value) {
+    message.info('上一次风格指纹提取还在进行中，请稍候。')
+    return
+  }
+
+  const sourceText = buildDeepAnalyzeSourceText(asset)
+  if (!sourceText.trim()) {
+    message.error('找不到该参考作品的原文片段，无法提取风格指纹。')
+    return
+  }
+
+  fingerprintExtractingAssetId.value = asset.id
+  const loading = message.loading(`AI 正在提取《${asset.title}》的风格指纹，可能需要 2-4 分钟…`, { duration: 0 })
+  try {
+    const response = await window.characterArc.generateAi(JSON.parse(JSON.stringify({
+      task: 'style-fingerprint-extract',
+      settings: appStore.appSettings,
+      context: {
+        projectId: project.id,
+        projectTitle: project.title,
+        projectGenre: project.genre,
+        referenceTitle: asset.title,
+        referenceFileName: asset.fileName,
+        referenceGenre: asset.topKeywords.slice(0, 3).join('、'),
+        sourceText
+      }
+    })))
+
+    if (!response.success) {
+      throw new Error(response.error ?? 'AI 风格指纹提取失败')
+    }
+    message.success(`已完成《${asset.title}》风格指纹提取，新增的知识文档稍后会出现在列表中。`)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'AI 风格指纹提取失败')
+  } finally {
+    loading.destroy()
+    fingerprintExtractingAssetId.value = null
   }
 }
 
@@ -751,6 +798,16 @@ const progressCurrentStep = computed(() => {
           >
             <template #icon><Sparkles :size="14" /></template>
             AI 深度拆书
+          </n-button>
+          <n-button
+            type="warning"
+            size="small"
+            :loading="fingerprintExtractingAssetId === asset.id"
+            :disabled="Boolean(fingerprintExtractingAssetId) && fingerprintExtractingAssetId !== asset.id"
+            @click="handleStyleFingerprintExtract(asset)"
+          >
+            <template #icon><Sparkles :size="14" /></template>
+            风格指纹提取
           </n-button>
           <n-button tertiary type="error" size="small" @click="removeReferenceAsset(asset)">删除</n-button>
         </div>

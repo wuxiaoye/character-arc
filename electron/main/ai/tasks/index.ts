@@ -20,6 +20,7 @@ import workflowDocuments from './workflow-documents'
 import referenceStyleChunk from './reference-style-chunk'
 import referenceStyleAnalysis from './reference-style-analysis'
 import referenceDeepAnalyze from './reference-deep-analyze'
+import styleFingerprintExtract from './style-fingerprint-extract'
 
 const TASK_REGISTRY = new Map<AiTaskName, TaskHandler>()
 
@@ -46,6 +47,7 @@ register(workflowDocuments)
 register(referenceStyleChunk)
 register(referenceStyleAnalysis)
 register(referenceDeepAnalyze)
+register(styleFingerprintExtract)
 
 export function getTaskHandler(name: AiTaskName): TaskHandler {
   const handler = TASK_REGISTRY.get(name)

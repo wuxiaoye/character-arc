@@ -35,6 +35,7 @@ export type AiTaskName =
   | 'reference-style-chunk'
   | 'reference-style-analysis'
   | 'reference-deep-analyze'
+  | 'style-fingerprint-extract'
   | 'workflow-documents'
   | 'assistant-intent'
   | 'assistant-action-proposal'

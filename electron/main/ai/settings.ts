@@ -111,5 +111,6 @@ export function resolveMaxTokens(task?: AiTaskPayload): number | undefined {
  */
 export const AGENT_TASK_WHITELIST: ReadonlySet<AiTaskName> = new Set([
   'outline-batch',
-  'reference-deep-analyze'
+  'reference-deep-analyze',
+  'style-fingerprint-extract'
 ])
