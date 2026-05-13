@@ -21,6 +21,7 @@ import { ensureWorkspaceDb } from '../../workspace-store'
 import { buildStoryStateContext, formatStoryStateForPrompt, applyStateDelta } from '../../story-state-store'
 import { extractStateDeltaFromOutput } from '../state-delta-extractor'
 import { indexChapterSegments } from '../knowledge-retrieval-v2'
+import { runLightCheck } from '../audit/light-check'
 
 export async function runAiTask(
   task: AiTaskPayload,
@@ -119,6 +120,16 @@ export async function runAiTask(
         if (extraction.delta) {
           const chapterIndex = Number(task.context.chapterIndex ?? task.context.chapterSortOrder ?? 0)
           const db = await ensureWorkspaceDb()
+
+          // Phase 3: 写后即时轻检（在 applyDelta 之前，用生成前的状态做对比）
+          const involvedCharIds = extractInvolvedCharacterIds(task.context)
+          const preState = buildStoryStateContext(db, projectId, involvedCharIds)
+          const checkResult = runLightCheck(content, preState, extraction.delta)
+          if (!checkResult.passed) {
+            const warnings = checkResult.violations.map((v) => `[${v.severity}] ${v.message}`)
+            ;(result as Record<string, unknown>)._stateWarnings = warnings
+          }
+
           applyStateDelta(db, projectId, chapterIndex, extraction.delta)
         }
         if (extraction.chapterContent && extraction.chapterContent !== content) {
