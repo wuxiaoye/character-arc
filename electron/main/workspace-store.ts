@@ -1283,6 +1283,35 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       normalizedAppSettings.darkModeStyle
     )
 
+    // 孤儿 embedding 清理：所有不再对应活跃 chapter / reference_work 的向量段都删除，
+    // 防止章节/参考作品被删除后 story_embeddings 表里留下无引用的垃圾数据。
+    const activeChapterIds = new Set<string>()
+    const activeReferenceWorkIds = new Set<string>()
+    for (const project of payload.projects) {
+      const workspace = payload.workspaces[project.id]
+      if (workspace) {
+        for (const chapter of workspace.chapters) activeChapterIds.add(chapter.id)
+      }
+      for (const work of project.referenceWorks ?? []) {
+        if (work?.id) activeReferenceWorkIds.add(String(work.id))
+      }
+    }
+
+    const embeddingRows = db.prepare(`SELECT id, source_type, source_id FROM story_embeddings`).all() as Array<{
+      id: string
+      source_type: string
+      source_id: string
+    }>
+    const deleteEmbedding = db.prepare(`DELETE FROM story_embeddings WHERE id = ?`)
+    for (const row of embeddingRows) {
+      const isChapterSegment = row.source_type === 'chapter_segment'
+      const isReferenceSegment = row.source_type === 'reference_novel'
+      const orphaned =
+        (isChapterSegment && !activeChapterIds.has(row.source_id)) ||
+        (isReferenceSegment && !activeReferenceWorkIds.has(row.source_id))
+      if (orphaned) deleteEmbedding.run(row.id)
+    }
+
     db.exec('COMMIT')
   } catch (error) {
     db.exec('ROLLBACK')

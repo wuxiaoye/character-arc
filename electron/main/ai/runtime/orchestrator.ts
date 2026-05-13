@@ -4,7 +4,8 @@ import type {
   AiTaskResponse,
   AiTaskResult,
   AppSettings,
-  AiStreamHandlers
+  AiStreamHandlers,
+  ChapterStateWarningsPayload
 } from '../shared-types'
 import { normalizeSettings, validateSettings, resolveMaxTokens, AGENT_TASK_WHITELIST } from '../settings'
 import { getTaskHandler } from '../tasks'
@@ -20,7 +21,7 @@ import { runAgentTask } from '../agent'
 import { ensureWorkspaceDb } from '../../workspace-store'
 import { buildStoryStateContext, formatStoryStateForPrompt, applyStateDelta } from '../../story-state-store'
 import type { StateDelta } from '../../story-state-store'
-import { indexChapterSegments } from '../knowledge-retrieval-v2'
+import { indexChapterSegments, retrieveHybridContext, formatSemanticSegmentsForPrompt } from '../knowledge-retrieval'
 import { runLightCheck } from '../audit/light-check'
 
 export async function runAiTask(
@@ -46,17 +47,28 @@ export async function runAiTask(
   const usedSkillIds = skills.map((s) => s.id)
   logSelection(task.task, skills, knowledgeContext?.usedKnowledge ?? [])
 
-  // Phase 1: 为 chapter-first-draft 注入结构化世界状态
-  if (task.task === 'chapter-first-draft' && projectId) {
-    try {
-      const db = await ensureWorkspaceDb()
-      const involvedCharIds = extractInvolvedCharacterIds(task.context)
-      const storyState = buildStoryStateContext(db, projectId, involvedCharIds)
-      const storyStateBlock = formatStoryStateForPrompt(storyState)
-      if (storyStateBlock) {
-        task.context.storyStateBlock = storyStateBlock
-      }
-    } catch { /* 状态库查询失败不阻塞生成 */ }
+  // Phase 1: 为 chapter-first-draft / chapter-assistant / chapter-analysis / chapter-scene-plan
+  // 走混合检索（状态块 + 向量语义段）；story-deep-audit 只需要状态块。
+  if (projectId) {
+    if (task.task === 'chapter-first-draft' || task.task === 'chapter-assistant' ||
+        task.task === 'chapter-analysis' || task.task === 'chapter-scene-plan') {
+      try {
+        const hybrid = await retrieveHybridContext(task, settings)
+        if (hybrid) {
+          if (hybrid.storyStateBlock) task.context.storyStateBlock = hybrid.storyStateBlock
+          const semanticBlock = formatSemanticSegmentsForPrompt(hybrid.semanticSegments)
+          if (semanticBlock) task.context.semanticSegmentsBlock = semanticBlock
+        }
+      } catch { /* 混合检索失败不阻塞生成 */ }
+    } else if (task.task === 'story-deep-audit') {
+      try {
+        const db = await ensureWorkspaceDb()
+        const involvedCharIds = extractInvolvedCharacterIds(task.context)
+        const storyState = buildStoryStateContext(db, projectId, involvedCharIds)
+        const storyStateBlock = formatStoryStateForPrompt(storyState)
+        if (storyStateBlock) task.context.storyStateBlock = storyStateBlock
+      } catch { /* 状态库查询失败不阻塞生成 */ }
+    }
   }
 
   const input = buildPromptInput(task, skills, knowledgeContext)
@@ -187,17 +199,16 @@ export async function streamAiTask(
   const usedSkillIds = skills.map((s) => s.id)
   logSelection(task.task, skills, knowledgeContext?.usedKnowledge ?? [])
 
-  // 流式路径也注入结构化世界状态
-  if (task.task === 'chapter-first-draft' && projectId) {
+  // 流式路径也走混合检索（chapter-first-draft / chapter-assistant）
+  if ((task.task === 'chapter-first-draft' || task.task === 'chapter-assistant') && projectId) {
     try {
-      const db = await ensureWorkspaceDb()
-      const involvedCharIds = extractInvolvedCharacterIds(task.context)
-      const storyState = buildStoryStateContext(db, projectId, involvedCharIds)
-      const storyStateBlock = formatStoryStateForPrompt(storyState)
-      if (storyStateBlock) {
-        task.context.storyStateBlock = storyStateBlock
+      const hybrid = await retrieveHybridContext(task, settings)
+      if (hybrid) {
+        if (hybrid.storyStateBlock) task.context.storyStateBlock = hybrid.storyStateBlock
+        const semanticBlock = formatSemanticSegmentsForPrompt(hybrid.semanticSegments)
+        if (semanticBlock) task.context.semanticSegmentsBlock = semanticBlock
       }
-    } catch { /* 状态库查询失败不阻塞生成 */ }
+    } catch { /* 混合检索失败不阻塞生成 */ }
   }
 
   const input = buildPromptInput(task, skills, knowledgeContext)
@@ -328,6 +339,16 @@ function extractInvolvedCharacterIds(context: Record<string, unknown>): string[]
   return ids
 }
 
+let chapterWarningsEmitter: ((payload: ChapterStateWarningsPayload) => void) | null = null
+
+/**
+ * IPC 层注入一个广播回调：章节轻检发现违规时，把告警推到前端。
+ * 不注入时默默丢弃（只保留日志），避免测试/无 BrowserWindow 环境报错。
+ */
+export function setChapterWarningsEmitter(emit: (payload: ChapterStateWarningsPayload) => void): void {
+  chapterWarningsEmitter = emit
+}
+
 async function runPostGenerationPipeline(
   settings: AppSettings,
   projectId: string,
@@ -346,6 +367,15 @@ async function runPostGenerationPipeline(
     if (!checkResult.passed) {
       logResponse('LIGHT_CHECK', settings, 'chapter-first-draft',
         checkResult.violations.map((v) => `[${v.severity}] ${v.message}`).join('\n'), 0, {})
+      if (chapterWarningsEmitter && chapterId) {
+        chapterWarningsEmitter({
+          projectId,
+          chapterId,
+          chapterIndex,
+          generatedAt: new Date().toISOString(),
+          violations: checkResult.violations
+        })
+      }
     }
     applyStateDelta(db, projectId, chapterIndex, delta)
   }
@@ -355,7 +385,7 @@ async function runPostGenerationPipeline(
   }
 }
 
-async function extractStateDeltaViaLLM(
+export async function extractStateDeltaViaLLM(
   settings: AppSettings,
   chapterContent: string,
   preState: ReturnType<typeof buildStoryStateContext>

@@ -306,3 +306,20 @@ export const AI_REQUEST_TIMEOUT_MS = 180_000
 
 /** Agent loop 单次任务最多允许的工具循环轮数。超过即抛错，避免死循环吃 token。 */
 export const AGENT_MAX_TOOL_ITERATIONS = 8
+
+/**
+ * 章节轻检告警事件 payload。章节生成后的异步后处理流水线产出，
+ * 通过 `characterarc:chapter-state-warnings` 广播给 renderer，
+ * 由章节编辑器展示为 n-alert 供用户修正。
+ */
+export type ChapterStateWarningsPayload = {
+  projectId: string
+  chapterId: string
+  chapterIndex: number
+  generatedAt: string
+  violations: Array<{
+    type: 'location_mismatch' | 'item_not_owned' | 'timeline_break' | 'rule_violation' | 'state_conflict'
+    severity: 'error' | 'warning'
+    message: string
+  }>
+}

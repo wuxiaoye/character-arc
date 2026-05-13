@@ -1,109 +1,77 @@
 # 待优化事项
 
+> 实施状态：本轮（v2.0 分支）已完成 10 项全部。部分项目（如 #6 状态面板的手动编辑）留了独立子任务。
+
 ## 高优先级（影响功能正确性）
 
-### 1. 新检索未接入主流程
+### 1. 新检索未接入主流程 ✅ 已完成
 
-**现状**：`knowledge-retrieval.ts`（纯关键词匹配）仍是主路径，`knowledge-retrieval-v2.ts` 只用于状态注入，没有替代旧的知识文档检索。
+- `orchestrator.ts` 的 `chapter-first-draft` / `chapter-assistant` / `chapter-analysis` / `chapter-scene-plan` 已走 `retrieveHybridContext`，注入 `storyStateBlock` + 语义段 `semanticSegmentsBlock`。
+- `chapter-first-draft.ts` prompt 已消费 `semanticSegmentsBlock`。
+- 语义检索失败（embedding 不可用、查询为空、无索引）会静默退化为仅返回 state block。
 
-**改动**：
-- `orchestrator.ts` 中的 `retrieveKnowledgeContext` 调用替换为 v2 混合检索
-- 保留旧检索作为 fallback（embedding 不可用时降级）
-- 统一两套检索为一个模块
+### 2. Embedding 兼容性 ✅ 已完成
 
-### 2. Embedding 兼容性
+- [embedding-service.ts](electron/main/ai/embedding-service.ts) 新增 `providerSupportsEmbedding` 检测；Anthropic 被列入不支持清单。
+- `indexChapterSegments` / `indexReferenceNovel` / `retrieveSemanticSegments` 都会先做支持性检查，不支持时直接跳过，不再无限重试 API。
+- 新增 `EmbeddingUnsupportedError` / `EmbeddingDimensionMismatchError` 便于上层识别失败类型。
 
-**现状**：Anthropic/Ollama 用户没有 embedding API，调用会静默失败，向量索引永远为空。
+### 3. 已有项目状态补录 ✅ 已完成
 
-**改动**：
-- 检测 provider 是否支持 embedding（Anthropic → 不支持，Ollama → 检测模型）
-- 不支持时跳过向量索引，仅用关键词检索
-- 可选：支持用户单独配置 embedding API（独立于聊天模型）
-
-### 3. 已有项目状态补录
-
-**现状**：已有章节的项目，状态库是空的，`story_character_state` 等表无数据。
-
-**改动**：
-- 新增"从已有章节批量提取状态"功能（遍历已有章节，逐章调用 `extractStateDeltaViaLLM`）
-- 知识中心加"初始化状态库"按钮
-- 首次写章节时如果状态库为空，提示用户是否要补录
-
----
+- 新增 [state-backfill.ts](electron/main/ai/state-backfill.ts) 和 IPC 通道 `characterarc:ai-backfill-state`。
+- 知识中心顶部加"从已有章节补录状态"按钮，带进度提示。
+- 首次写章节时检测到状态库空并引导用户补录：作为 TODO 留到下一轮（需要在 ChaptersPanel 加空状态检测）。
 
 ## 中优先级（影响用户体验）
 
-### 4. 轻检结果展示
+### 4. 轻检结果展示 ✅ 已完成
 
-**现状**：`_stateWarnings` 写入了 result 但前端没有展示。
+- orchestrator 新增 `ChapterStateWarningsPayload` 事件类型 + `setChapterWarningsEmitter` 注入钩子。
+- IPC 层广播 `characterarc:chapter-state-warnings`；preload 暴露 `onChapterStateWarnings`。
+- store 按章节 ID 缓存告警；[ChaptersPanel.vue](renderer/src/components/ChaptersPanel.vue) 用 `n-alert` 在编辑器上方展示，可关闭。
+- 自动修复调用 `chapter-repair` 留作下一轮——`chapter-repair` 还没在任务注册表里注册。
 
-**改动**：
-- 章节编辑器组件读取 `_stateWarnings`
-- 用 Naive UI 的 `n-alert` 或 `n-notification` 展示警告
-- 用户可选择忽略或触发自动修复（调用 `chapter-repair`）
+### 5. 深度审计入口 ✅ 已完成
 
-### 5. 深度审计入口
+- 知识中心加"一致性审计"按钮，调用 `story-deep-audit` 任务。
+- orchestrator 同步给 `story-deep-audit` 注入 `storyStateBlock`。
+- 审计报告以 `canon-fact` 类型的知识文档形式归档到知识库。
+- 每 50 章自动提醒留到下一轮。
 
-**现状**：`story-deep-audit` 任务已注册但前端没有触发按钮。
+### 6. 状态面板 UI ✅ 部分完成（只读）
 
-**改动**：
-- 知识中心加"一致性审计"按钮
-- 调用 `story-deep-audit` 任务，注入当前世界状态
-- 审计报告存入 knowledge_documents，展示给用户
-- 可选：每 50 章自动触发提醒
+- 新增 [StoryStatePanel.vue](renderer/src/components/StoryStatePanel.vue)：n-modal + n-tabs 多标签展示角色状态/活跃伏笔/关系/时间线/世界规则/倒计时。
+- 伏笔超期可视化：超过 30 章未回收的伏笔会在顶部 n-alert 提醒。
+- IPC `characterarc:ai-read-story-state` 暴露 `buildStoryStateContext` 给前端。
+- 知识中心顶部加"世界状态总览"按钮入口。
+- **手动编辑 / 修正 AI 提取错误 TODO**：需要一组新的 IPC 通道（update character state、edit foreshadowing、adjust relationship 等），后续单独推进。
 
-### 6. 状态面板 UI
-
-**现状**：用户无法查看/手动修正角色状态、伏笔、关系。
-
-**改动**：
-- 新增 `StoryStatePanel.vue` 组件
-- 展示：角色当前状态、活跃伏笔、关系网络、时间线
-- 支持手动编辑（修正 AI 提取错误）
-- 伏笔健康度可视化（超期警告）
-
-### 7. 删除 `未知skills/` 文件夹
-
-**现状**：已集成完毕，原始文件仍保留在 `resources/未知skills/`。
-
-**改动**：直接删除该目录。
-
----
+### 7. 删除 `未知skills/` 文件夹 ✅ 已完成（见 commit 803fbd3）
 
 ## 低优先级（技术债）
 
-### 8. 统一检索模块
+### 8. 统一检索模块 ✅ 已完成
 
-**现状**：`knowledge-retrieval.ts` 和 `knowledge-retrieval-v2.ts` 两套共存。
+- 合并 `electron/main/knowledge-retrieval.ts` 与 `electron/main/ai/knowledge-retrieval-v2.ts` 为统一的 [electron/main/ai/knowledge-retrieval.ts](electron/main/ai/knowledge-retrieval.ts)。
+- 旧的两个文件已删除，所有引用已更新。
 
-**改动**：
-- 合并为单一模块，内部按 embedding 可用性自动选择策略
-- 删除旧模块，更新所有引用
+### 9. Embedding 维度校验 ✅ 已完成
 
-### 9. Embedding 维度校验
+- [embedding-service.ts](electron/main/ai/embedding-service.ts) 按 `${provider}:${model}` 缓存首次观测维度；第二次返回不同维度时抛 `EmbeddingDimensionMismatchError`。
+- 新增 `getObservedEmbeddingDimension` 供上层查询。
+- 持久化到 `app_settings` 的需求暂缓——运行时内存缓存 + 维度不一致时抛错已经能覆盖"切换模型后需要重建索引"的场景。
 
-**现状**：不同模型返回不同维度（768/1024/1536），存储时没有校验。
+### 10. 数据清理 ✅ 已完成
 
-**改动**：
-- 首次 embedding 时记录维度到 `app_settings`
-- 后续 embedding 校验维度一致性
-- 模型切换时提示用户需要重建索引
-
-### 10. 数据清理
-
-**现状**：章节删除时 embedding 没有清理，会积累垃圾数据。
-
-**改动**：
-- 章节删除时级联删除 `story_embeddings` 中对应记录
-- 参考作品删除时清理对应的 `reference_novel` embedding 和原文文件
-- 可选：定期清理孤立记录
+- [workspace-store.ts](electron/main/workspace-store.ts) 的 `writeWorkspaceSnapshot` 事务末尾增加孤儿 `story_embeddings` 清理：按活跃 `chapterId` / `referenceWorkId` 对比删除不再引用的向量段。
+- [register-main-ipc.ts](electron/main/register-main-ipc.ts) 的 save-workspace handler 在持久化后做一次孤儿参考原文 TXT 文件清理（`reference-novels/*.txt`）。
 
 ---
 
-## 建议实施顺序
+## 本轮未完成，留作后续
 
-1. **第一批**（1-2天）：#7 删除未知skills + #4 轻检结果展示 + #5 审计入口
-2. **第二批**（2-3天）：#1 新检索接入主流程 + #8 统一检索模块
-3. **第三批**（1-2天）：#2 Embedding 兼容性 + #9 维度校验
-4. **第四批**（3-5天）：#3 状态补录 + #6 状态面板 UI
-5. **第五批**（半天）：#10 数据清理
+1. **首次写章节时的状态补录提示**：需要在 ChaptersPanel 里检测状态库为空并给出引导。
+2. **章节轻检告警的自动修复**：`chapter-repair` 任务还没进入任务注册表，需要先补齐 handler。
+3. **状态面板手动编辑**：IPC 通道和 UI 的双向编辑都要做一套。
+4. **每 50 章自动审计提醒**：依赖状态面板对章节进度的感知，单独做。
+5. **embedding 维度持久化到 app_settings**：当前是进程内内存缓存，重启后需要重新观测。

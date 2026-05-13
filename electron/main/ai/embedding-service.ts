@@ -1,11 +1,45 @@
 import type { AppSettings } from './shared-types'
 import { normalizeSettings } from './settings'
 
-const EMBEDDING_DIMENSION = 1024
 const MAX_BATCH_SIZE = 16
 const EMBEDDING_MODEL_FALLBACKS = ['text-embedding-3-small', 'text-embedding-ada-002', 'embedding-2']
 
-export { EMBEDDING_DIMENSION }
+/**
+ * Providers that don't expose OpenAI-compatible /embeddings 接口。
+ * 这些 provider 直接跳过向量索引，只依赖关键词检索。
+ */
+const PROVIDERS_WITHOUT_EMBEDDINGS: ReadonlySet<string> = new Set(['anthropic'])
+
+/**
+ * 运行时观测到的 embedding 维度，按 `${provider}:${model}` 缓存。
+ * 同一 (provider, model) 第二次调用返回不同维度时抛错，调用方捕获后静默降级。
+ */
+const observedDimensions = new Map<string, number>()
+
+export class EmbeddingUnsupportedError extends Error {
+  constructor(provider: string) {
+    super(`当前 provider「${provider}」不支持 embedding 接口，向量检索已禁用。`)
+    this.name = 'EmbeddingUnsupportedError'
+  }
+}
+
+export class EmbeddingDimensionMismatchError extends Error {
+  constructor(key: string, expected: number, actual: number) {
+    super(`Embedding 维度不一致（${key}）：首次观测 ${expected}，本次返回 ${actual}。可能是切换了模型，请重建向量索引。`)
+    this.name = 'EmbeddingDimensionMismatchError'
+  }
+}
+
+export function providerSupportsEmbedding(settings: AppSettings): boolean {
+  const provider = (settings.provider ?? '').trim().toLowerCase()
+  if (!provider) return true
+  return !PROVIDERS_WITHOUT_EMBEDDINGS.has(provider)
+}
+
+export function getObservedEmbeddingDimension(settings: AppSettings): number | null {
+  const normalized = normalizeSettings(settings)
+  return observedDimensions.get(`${normalized.provider}:${normalized.model}`) ?? null
+}
 
 export async function embedTexts(
   settings: AppSettings,
@@ -14,13 +48,27 @@ export async function embedTexts(
   if (!texts.length) return []
 
   const normalized = normalizeSettings(settings)
+  if (!providerSupportsEmbedding(normalized)) {
+    throw new EmbeddingUnsupportedError(normalized.provider)
+  }
+
   const baseUrl = (normalized.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '')
   const apiKey = normalized.apiKey
+  const dimKey = `${normalized.provider}:${normalized.model}`
 
   const results: Float32Array[] = []
   for (let i = 0; i < texts.length; i += MAX_BATCH_SIZE) {
     const batch = texts.slice(i, i + MAX_BATCH_SIZE)
     const batchResults = await requestEmbeddings(baseUrl, apiKey, batch, normalized.model)
+    if (batchResults.length) {
+      const dim = batchResults[0].length
+      const existing = observedDimensions.get(dimKey)
+      if (existing == null) {
+        observedDimensions.set(dimKey, dim)
+      } else if (existing !== dim) {
+        throw new EmbeddingDimensionMismatchError(dimKey, existing, dim)
+      }
+    }
     results.push(...batchResults)
   }
   return results

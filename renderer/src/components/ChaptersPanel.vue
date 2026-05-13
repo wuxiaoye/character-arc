@@ -19,7 +19,7 @@ import {
   Sparkles,
   Trash2
 } from 'lucide-vue-next'
-import { NButton, NCheckbox, NDropdown, NForm, NFormItem, NInput, NModal, NSelect, NTag, NTooltip, useDialog, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCheckbox, NDropdown, NForm, NFormItem, NInput, NModal, NSelect, NTag, NTooltip, useDialog, useMessage } from 'naive-ui'
 import RichChapterEditor from '@/components/RichChapterEditor.vue'
 import { ensureEditorHtmlContent, getChapterCharacterCount, getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { DEFAULT_CHAPTER_WORD_TARGET, formatChapterWordTargetLabel, normalizeChapterWordTarget, parseChapterWordTarget } from '@/features/chapters/wordTarget'
@@ -119,6 +119,26 @@ const volumeOptions = computed<SelectOption[]>(() =>
       value: volume.id
     }))
 )
+const currentChapterWarnings = computed(() => {
+  const chapterId = appStore.selectedChapter?.id ?? ''
+  return chapterId ? appStore.getChapterStateWarnings(chapterId) : null
+})
+const warningViolations = computed(() => currentChapterWarnings.value?.violations ?? [])
+const hasErrorViolation = computed(() => warningViolations.value.some((v) => v.severity === 'error'))
+const warningAlertType = computed<'error' | 'warning'>(() => (hasErrorViolation.value ? 'error' : 'warning'))
+const warningAlertTitle = computed(() => {
+  const total = warningViolations.value.length
+  if (!total) return ''
+  return hasErrorViolation.value
+    ? `一致性检查发现 ${total} 处问题，请修正后继续`
+    : `一致性检查有 ${total} 处提醒`
+})
+
+function dismissCurrentChapterWarnings(): void {
+  const chapterId = appStore.selectedChapter?.id
+  if (chapterId) appStore.dismissChapterStateWarnings(chapterId)
+}
+
 const outlineBindingOptions = computed<SelectOption[]>(() => {
   const currentChapterId = appStore.selectedChapter?.id
   const targetVolumeId = chapterForm.volumeId || appStore.selectedChapter?.volumeId || ''
@@ -1819,6 +1839,28 @@ onBeforeUnmount(() => {
 
                     <div class="manuscript-divider"></div>
 
+                    <n-alert
+                        v-if="warningViolations.length"
+                        class="chapter-state-warnings"
+                        :type="warningAlertType"
+                        :title="warningAlertTitle"
+                        closable
+                        @close="dismissCurrentChapterWarnings"
+                    >
+                      <ul class="chapter-state-warning-list">
+                        <li v-for="(violation, idx) in warningViolations" :key="idx">
+                          <n-tag
+                              size="tiny"
+                              :type="violation.severity === 'error' ? 'error' : 'warning'"
+                              :bordered="false"
+                          >
+                            {{ violation.severity === 'error' ? '错误' : '提醒' }}
+                          </n-tag>
+                          <span>{{ violation.message }}</span>
+                        </li>
+                      </ul>
+                    </n-alert>
+
                     <RichChapterEditor
                         class="chapter-editor-instance"
                         :chapter-id="appStore.selectedChapter?.id ?? ''"
@@ -2792,6 +2834,27 @@ onBeforeUnmount(() => {
   min-height: 0; /* ★ 必须加：防止内部内容把组件撑破 */
   display: flex;
   flex-direction: column;
+}
+
+.chapter-state-warnings {
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.chapter-state-warning-list {
+  margin: 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chapter-state-warning-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.55;
 }
 
 /* =========== 右侧侧栏独立滚动 =========== */

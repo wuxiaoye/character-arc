@@ -72,6 +72,14 @@ contextBridge.exposeInMainWorld('characterArc', {
       ipcRenderer.removeListener('characterarc:ai-run-event', listener)
     }
   },
+  /** 监听章节轻检告警事件（章节生成后的异步后处理流水线产出） */
+  onChapterStateWarnings: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
+    ipcRenderer.on('characterarc:chapter-state-warnings', listener)
+    return () => {
+      ipcRenderer.removeListener('characterarc:chapter-state-warnings', listener)
+    }
+  },
   /** 测试 AI 连接是否通畅，发送探测请求验证鉴权和网络 */
   testAiConnection: (settings: unknown) => ipcRenderer.invoke('characterarc:ai-test-connection', toIpcPayload(settings)),
   /** 获取 AI 供应商的可用模型列表 */
@@ -80,6 +88,18 @@ contextBridge.exposeInMainWorld('characterArc', {
   fetchImageModels: (settings: unknown) => ipcRenderer.invoke('characterarc:ai-fetch-image-models', toIpcPayload(settings)),
   /** 生成封面图片 */
   generateImage: (payload: unknown) => ipcRenderer.invoke('characterarc:ai-generate-image', toIpcPayload(payload)),
+  /** 读取当前项目的结构化世界状态（角色状态、伏笔、关系、时间线、世界规则、倒计时） */
+  readStoryState: (projectId: string) => ipcRenderer.invoke('characterarc:ai-read-story-state', projectId),
+  /** 触发"从已有章节补录项目状态库"任务，返回汇总结果 */
+  backfillProjectState: (payload: unknown) => ipcRenderer.invoke('characterarc:ai-backfill-state', toIpcPayload(payload)),
+  /** 监听状态补录进度事件 */
+  onBackfillStateProgress: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
+    ipcRenderer.on('characterarc:ai-backfill-state-progress', listener)
+    return () => {
+      ipcRenderer.removeListener('characterarc:ai-backfill-state-progress', listener)
+    }
+  },
   /** 保存封面图片到本地文件 */
   saveCoverImage: (payload: unknown) => ipcRenderer.invoke('characterarc:save-cover-image', toIpcPayload(payload)),
 

@@ -197,6 +197,8 @@ export const useAppStore = defineStore('app', () => {
   const agentIntentState = ref<AgentIntentKind>('chat')
   /** 用户在编辑器中当前选中的文本状态 */
   const currentChapterSelection = ref<ChapterSelectionState | null>(null)
+  /** 章节轻检告警：key 为 chapterId，value 为告警 payload。由章节生成后的异步后处理流水线推送。 */
+  const chapterStateWarnings = ref<Map<string, CharacterArcChapterStateWarningsPayload>>(new Map())
   /** 当前选中的章节 ID */
   const selectedChapterId = ref(stored.workspaces[stored.selectedProjectId]?.chapters[0]?.id ?? '')
   /** 流程面板当前激活的分卷 ID，空字符串时回退到第一个分卷 */
@@ -495,6 +497,27 @@ export const useAppStore = defineStore('app', () => {
         mergeKnowledgeDocuments(payload.projectId, documents)
       }
     }
+  }
+
+  function handleChapterStateWarnings(payload: CharacterArcChapterStateWarningsPayload): void {
+    if (characterArcWindowKind !== 'main' || !payload?.chapterId || !Array.isArray(payload.violations) || !payload.violations.length) {
+      return
+    }
+    const next = new Map(chapterStateWarnings.value)
+    next.set(payload.chapterId, payload)
+    chapterStateWarnings.value = next
+  }
+
+  function getChapterStateWarnings(chapterId: string): CharacterArcChapterStateWarningsPayload | null {
+    if (!chapterId) return null
+    return chapterStateWarnings.value.get(chapterId) ?? null
+  }
+
+  function dismissChapterStateWarnings(chapterId: string): void {
+    if (!chapterId || !chapterStateWarnings.value.has(chapterId)) return
+    const next = new Map(chapterStateWarnings.value)
+    next.delete(chapterId)
+    chapterStateWarnings.value = next
   }
 
   function handleAssistantMessage(payload: CharacterArcAssistantMessagePayload): void {
@@ -2796,6 +2819,7 @@ export const useAppStore = defineStore('app', () => {
     })
   } else {
     window.characterArc.onAiRunEvent(handleAiRunEvent)
+    window.characterArc.onChapterStateWarnings(handleChapterStateWarnings)
     window.characterArc.onAssistantMessage((payload) => {
       handleAssistantMessage(payload)
     })
@@ -2997,6 +3021,8 @@ export const useAppStore = defineStore('app', () => {
     runTrackedAiTask,
     getClientTaskId,
     dismissAiTask,
-    cancelAiTask
+    cancelAiTask,
+    getChapterStateWarnings,
+    dismissChapterStateWarnings
   }
 })

@@ -1,12 +1,12 @@
 import { BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import { existsSync } from 'node:fs'
-import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 
 import type { AiTaskPayload, ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './ai/shared-types'
 import { runAiTask } from './ai/runtime'
-import { indexReferenceNovel } from './ai/knowledge-retrieval-v2'
+import { indexReferenceNovel } from './ai/knowledge-retrieval'
 import { refreshRegistry as refreshSkillRegistry, toScanEntries as skillScanEntries, toContextEntries as skillContextEntries } from './ai/skills'
 import { getProjectSkillsDirPath as getSkillsDirPath } from './ai/skills/discovery'
 import { extractReferenceNovelContext, type ReferenceNovelLocalContext } from './referenceAnalysis'
@@ -75,6 +75,29 @@ type ExportRequest = {
   data: unknown
   title?: string
   defaultPath?: string
+}
+
+async function cleanupOrphanReferenceNovelFiles(payload: unknown): Promise<void> {
+  const activeIds = new Set<string>()
+  const projects = (payload as { projects?: Array<{ referenceWorks?: Array<{ id?: unknown }> }> })?.projects ?? []
+  for (const project of projects) {
+    for (const work of project.referenceWorks ?? []) {
+      const id = String(work?.id ?? '').trim()
+      if (id) activeIds.add(id)
+    }
+  }
+
+  const novelStorageDir = join(getWorkspaceDirPath(), 'reference-novels')
+  if (!existsSync(novelStorageDir)) return
+
+  const files = await readdir(novelStorageDir)
+  for (const file of files) {
+    if (!file.endsWith('.txt')) continue
+    const id = file.slice(0, -4)
+    if (!activeIds.has(id)) {
+      await unlink(join(novelStorageDir, file)).catch(() => {})
+    }
+  }
 }
 
 export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void {
@@ -716,6 +739,10 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
       deps.writeWorkspaceSnapshot(db, normalized)
       deps.setLatestWorkspaceSnapshot(normalized)
       nativeTheme.themeSource = (normalized as { appSettings?: { darkMode?: boolean } }).appSettings?.darkMode ? 'dark' : 'light'
+
+      cleanupOrphanReferenceNovelFiles(normalized).catch((error) => {
+        console.warn('[workspace] reference-novels cleanup failed:', error)
+      })
 
       return { success: true }
     } catch (error) {

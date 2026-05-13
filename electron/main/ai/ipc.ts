@@ -1,12 +1,17 @@
 import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { AiTaskPayload, AppSettings } from './shared-types'
+import type { AiTaskPayload, AppSettings, ChapterStateWarningsPayload } from './shared-types'
 import { runAiTask, streamAiTask, testAiConnection, fetchModels, fetchImageModels, generateImage } from './runtime'
-import { retrieveKnowledgeContext } from '../knowledge-retrieval'
+import { setChapterWarningsEmitter } from './runtime/orchestrator'
+import { retrieveKnowledgeContext } from './knowledge-retrieval'
+import { backfillProjectStateFromChapters } from './state-backfill'
+import { buildStoryStateContext } from '../story-state-store'
+import { ensureWorkspaceDb } from '../workspace-store'
 
 type AiIpcDeps = {
   getLatestWorkspaceSnapshot: () => { workspaces?: Record<string, { knowledgeDocuments?: unknown[]; aiRuns?: unknown[] }> } | null
   emitAiRunEvent: (payload: { projectId: string; meta: Record<string, unknown> }) => void
+  emitChapterStateWarnings: (payload: ChapterStateWarningsPayload) => void
 }
 
 let deps: AiIpcDeps | null = null
@@ -23,6 +28,7 @@ const activeAiTasks = new Map<string, AbortController>()
 
 export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
   deps = injectedDeps
+  setChapterWarningsEmitter((payload) => deps?.emitChapterStateWarnings(payload))
 
   // ── 非流式 AI 生成（支持 abort） ──
   ipcMain.handle('characterarc:ai-generate', async (_event, payload: AiTaskPayload) => {
@@ -172,6 +178,38 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
       return { success: true, result }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '图片生成失败' }
+    }
+  })
+
+  // ── 读取当前项目的结构化世界状态（供前端状态面板展示） ──
+  ipcMain.handle('characterarc:ai-read-story-state', async (_event, projectId: unknown) => {
+    try {
+      const id = String(projectId ?? '').trim()
+      if (!id) throw new Error('缺少 projectId。')
+      const db = await ensureWorkspaceDb()
+      const context = buildStoryStateContext(db, id, [])
+      return { success: true, result: context }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '读取世界状态失败' }
+    }
+  })
+
+  // ── 已有章节状态补录 ──
+  ipcMain.handle('characterarc:ai-backfill-state', async (event, payload: unknown) => {
+    try {
+      const request = payload as { settings?: AppSettings; projectId?: string }
+      const projectId = String(request?.projectId ?? '').trim()
+      if (!projectId) throw new Error('缺少 projectId。')
+      if (!request?.settings) throw new Error('缺少 AI 设置。')
+
+      const result = await backfillProjectStateFromChapters(request.settings, projectId, (progress) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('characterarc:ai-backfill-state-progress', progress)
+        }
+      })
+      return { success: true, result }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '状态补录失败' }
     }
   })
 }

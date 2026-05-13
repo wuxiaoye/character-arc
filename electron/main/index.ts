@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 
-import type { ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './ai/shared-types'
+import type { ChapterStateWarningsPayload, ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './ai/shared-types'
 import { registerAiIpcHandlers } from './ai/ipc'
 import { type ReferenceNovelLocalContext } from './referenceAnalysis'
 import { registerMainIpcHandlers } from './register-main-ipc'
@@ -69,6 +69,10 @@ function appendAiRunToLatestSnapshot(payload: WorkspaceAiRunEventPayload): void 
 function emitAiRunEvent(payload: WorkspaceAiRunEventPayload): void {
   appendAiRunToLatestSnapshot(payload)
   windowManager.broadcastWindowEvent('characterarc:ai-run-event', payload)
+}
+
+function emitChapterStateWarnings(payload: ChapterStateWarningsPayload): void {
+  windowManager.broadcastWindowEvent('characterarc:chapter-state-warnings', payload)
 }
 
 function buildImportedReferenceKnowledgeDocuments(
@@ -561,7 +565,8 @@ registerMainIpcHandlers({
 // ── AI IPC registration ──
 registerAiIpcHandlers({
   getLatestWorkspaceSnapshot: () => latestWorkspaceSnapshot,
-  emitAiRunEvent: emitAiRunEvent as (payload: { projectId: string; meta: Record<string, unknown> }) => void
+  emitAiRunEvent: emitAiRunEvent as (payload: { projectId: string; meta: Record<string, unknown> }) => void,
+  emitChapterStateWarnings
 })
 
 // ── 应用生命周期 ──

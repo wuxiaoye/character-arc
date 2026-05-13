@@ -4,6 +4,7 @@ import {
   BookMarked,
   BookOpenText,
   ChevronLeft,
+  FileCheck2,
   FileText,
   Globe2,
   LayoutDashboard,
@@ -21,6 +22,7 @@ import { resolveNovelLengthLabel } from '@/features/wizard/projectGenres'
 import { useAppStore } from '@/stores/app'
 import NovelWorkflowPanel from '@/components/NovelWorkflowPanel.vue'
 import OverviewPanel from '@/components/OverviewPanel.vue'
+import ProjectKnowledgePanel from '@/components/ProjectKnowledgePanel.vue'
 import WorldviewPanel from '@/components/WorldviewPanel.vue'
 import CharactersPanel from '@/components/CharactersPanel.vue'
 import RelationsPanel from '@/components/RelationsPanel.vue'
@@ -43,6 +45,7 @@ const panelSearch = reactive<Record<string, string>>({
   workflow: '',
   overview: '',
   deconstruction: '',
+  'project-knowledge': '',
   world: '',
   characters: '',
   relations: '',
@@ -66,6 +69,7 @@ const sidebarItems = [
   { id: 'inspiration', label: '灵感模块', description: '收集标题、桥段、转折与人物动机', icon: Lightbulb, color: '#f59e0b' },
   { id: 'outline', label: '剧情大纲', description: '组织卷宗结构与关键情节点', icon: GitMerge, color: '#10b981' },
   { id: 'threads', label: '剧情线索', description: '追踪未收尾伏笔与活跃剧情线', icon: BookMarked, color: '#6366f1' },
+  { id: 'project-knowledge', label: '项目知识库', description: '一致性审计与从已有章节补录状态', icon: FileCheck2, color: '#14b8a6' },
   { id: 'chapters', label: '章节创作', description: '进入正文草稿与章节推进流程', icon: FileText, color: '#3b82f6' }
 ] as const
 
@@ -308,6 +312,7 @@ watch(searchKeyword, (value) => {
           <!-- 非搜索模式下根据当前激活的面板渲染对应组件 -->
           <NovelWorkflowPanel v-else-if="appStore.activePanel === 'workflow'" key="workflow" />
           <OverviewPanel v-else-if="appStore.activePanel === 'overview'" key="overview" :search-query="normalizedSearch" />
+          <ProjectKnowledgePanel v-else-if="appStore.activePanel === 'project-knowledge'" key="project-knowledge" />
           <WorldviewPanel v-else-if="appStore.activePanel === 'world'" key="world" :search-query="normalizedSearch" />
           <CharactersPanel v-else-if="appStore.activePanel === 'characters'" key="characters" :search-query="normalizedSearch" />
           <RelationsPanel v-else-if="appStore.activePanel === 'relations'" key="relations" :search-query="normalizedSearch" />
