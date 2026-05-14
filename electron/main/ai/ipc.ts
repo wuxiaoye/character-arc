@@ -40,13 +40,11 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
 
     const knowledgeContext = retrieveKnowledgeContext(payload, deps!.getLatestWorkspaceSnapshot() as Parameters<typeof retrieveKnowledgeContext>[1])
     try {
-      // TODO: 当 transport 层支持 signal 后，把 controller.signal 传进去
-      // 目前先在 IPC 层做"请求发出前检查 abort"的快速失败
       if (controller.signal.aborted) {
         throw new Error('任务已被取消。')
       }
 
-      const response = await runAiTask(payload, knowledgeContext)
+      const response = await runAiTask(payload, knowledgeContext, controller.signal)
 
       if (response.meta.projectId) {
         deps!.emitAiRunEvent({ projectId: response.meta.projectId, meta: { id: randomUUID(), ...response.meta } })

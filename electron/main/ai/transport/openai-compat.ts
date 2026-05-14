@@ -17,7 +17,8 @@ export async function requestOpenAiCompatible(
   settings: AppSettings,
   prompt: PromptPair,
   maxTokens?: number,
-  structured?: StructuredOutputOptions
+  structured?: StructuredOutputOptions,
+  signal?: AbortSignal
 ): Promise<string> {
   const body: Record<string, unknown> = {
     model: settings.model,
@@ -41,7 +42,8 @@ export async function requestOpenAiCompatible(
       },
       body: JSON.stringify(body)
     },
-    'OpenAI 兼容接口'
+    'OpenAI 兼容接口',
+    signal
   )
   const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
   const content = data.choices?.[0]?.message?.content

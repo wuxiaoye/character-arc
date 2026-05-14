@@ -26,7 +26,8 @@ import { runLightCheck } from '../audit/light-check'
 
 export async function runAiTask(
   task: AiTaskPayload,
-  knowledgeContext?: AiTaskKnowledgeContext
+  knowledgeContext?: AiTaskKnowledgeContext,
+  signal?: AbortSignal
 ): Promise<AiTaskResponse> {
   // 灰度分流：白名单内 + provider 支持 tool_use → 走 agent loop（progressive skill disclosure）。
   // 任意一个不满足 → 走原单次调用路径。renderer 完全无感。
@@ -81,7 +82,7 @@ export async function runAiTask(
 
   try {
     const requestStartedAt = Date.now()
-    let rawText = await requestAiText(settings, prompt, maxTokens, structured)
+    let rawText = await requestAiText(settings, prompt, maxTokens, structured, signal)
     logResponse('REQUEST', settings, task.task, rawText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
     let result: AiTaskResult
     let normalizeFailed = false
@@ -103,7 +104,7 @@ export async function runAiTask(
         const repairPromptPair = buildRepairPrompt(prompt.system, prompt.user, rawText, validationErrors)
         logPrompt(`REPAIR_${attempt}`, settings, repairPromptPair, task.task, usedSkillIds)
         const repairStartedAt = Date.now()
-        rawText = await requestAiText(settings, repairPromptPair, maxTokens)
+        rawText = await requestAiText(settings, repairPromptPair, maxTokens, undefined, signal)
         logResponse(`REPAIR_${attempt}`, settings, task.task, rawText, Date.now() - repairStartedAt, { usedSkills: usedSkillIds })
         normalizeFailed = false
         try {

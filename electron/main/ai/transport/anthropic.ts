@@ -14,7 +14,8 @@ import { consumeSseResponse, extractAnthropicDelta } from './sse'
 export async function requestAnthropic(
   settings: AppSettings,
   prompt: PromptPair,
-  maxTokens?: number
+  maxTokens?: number,
+  signal?: AbortSignal
 ): Promise<string> {
   const response = await performAiRequest(
     `${settings.baseUrl.replace(/\/$/, '')}/v1/messages`,
@@ -32,7 +33,8 @@ export async function requestAnthropic(
         messages: [{ role: 'user', content: prompt.user }]
       })
     },
-    'Anthropic'
+    'Anthropic',
+    signal
   )
   const data = (await response.json()) as { content?: Array<{ type?: string; text?: string }> }
   const content = data.content?.find((item) => item.type === 'text')?.text

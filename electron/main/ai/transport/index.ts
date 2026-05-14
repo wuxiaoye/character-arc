@@ -15,11 +15,12 @@ export async function requestAiText(
   settings: AppSettings,
   prompt: PromptPair,
   maxTokens?: number,
-  structured?: StructuredOutputOptions
+  structured?: StructuredOutputOptions,
+  signal?: AbortSignal
 ): Promise<string> {
   return settings.provider === 'anthropic'
-    ? requestAnthropic(settings, prompt, maxTokens)
-    : requestOpenAiCompatible(settings, prompt, maxTokens, structured)
+    ? requestAnthropic(settings, prompt, maxTokens, signal)
+    : requestOpenAiCompatible(settings, prompt, maxTokens, structured, signal)
 }
 
 export async function requestAiTextStream(
