@@ -416,6 +416,8 @@ export function applyStateDelta(
   chapterIndex: number,
   delta: StateDelta
 ): void {
+  db.exec('BEGIN')
+  try {
   const timestamp = now()
 
   // Character state updates
@@ -566,6 +568,12 @@ export function applyStateDelta(
       JSON.stringify(delta.timeline.world_state_changes ?? []),
       timestamp
     )
+  }
+
+  db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
   }
 }
 
