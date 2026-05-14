@@ -94,11 +94,12 @@ function checkWorldRuleViolations(
     const ruleKeywords = extractRuleKeywords(rule.ruleContent)
     if (!ruleKeywords.length) continue
 
-    const negationPatterns = ruleKeywords
-      .filter((kw) => rule.ruleContent.includes('不') || rule.ruleContent.includes('禁') || rule.ruleContent.includes('无法'))
-      .filter((kw) => contentLower.includes(kw.toLowerCase()))
+    const isNegationRule = rule.ruleContent.includes('不') || rule.ruleContent.includes('禁') || rule.ruleContent.includes('无法')
+    if (!isNegationRule) continue
 
-    if (negationPatterns.length >= 2) {
+    const matchedKeywords = ruleKeywords.filter((kw) => contentLower.includes(kw.toLowerCase()))
+
+    if (matchedKeywords.length >= 2) {
       violations.push({
         type: 'rule_violation',
         severity: 'warning',
