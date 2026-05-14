@@ -94,12 +94,11 @@ function checkWorldRuleViolations(
     const ruleKeywords = extractRuleKeywords(rule.ruleContent)
     if (!ruleKeywords.length) continue
 
-    const isNegationRule = rule.ruleContent.includes('不') || rule.ruleContent.includes('禁') || rule.ruleContent.includes('无法')
-    if (!isNegationRule) continue
-
+    const isConstraintRule = /[不禁]|无法|只能|必须/.test(rule.ruleContent)
     const matchedKeywords = ruleKeywords.filter((kw) => contentLower.includes(kw.toLowerCase()))
+    const threshold = isConstraintRule ? 2 : 3
 
-    if (matchedKeywords.length >= 2) {
+    if (matchedKeywords.length >= threshold) {
       violations.push({
         type: 'rule_violation',
         severity: 'warning',

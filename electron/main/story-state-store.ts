@@ -505,7 +505,7 @@ export function applyStateDelta(
       }
     } else if (relUpdate.participants) {
       db.prepare(`
-        INSERT INTO story_relationships
+        INSERT OR IGNORE INTO story_relationships
           (id, project_id, relationship_id, participant_a, participant_b, current_status,
            tension_points_json, trajectory, last_interaction_chapter, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

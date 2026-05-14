@@ -19,7 +19,9 @@ function hydrateDimensions(): Promise<void> {
       for (const row of rows) {
         observedDimensions.set(row.key, row.dimension)
       }
-    } catch { /* table may not exist yet on first run */ }
+    } catch {
+      hydratePromise = null
+    }
   })()
   return hydratePromise
 }

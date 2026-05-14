@@ -42,6 +42,7 @@ export async function ensureWorkspaceDb(): Promise<DatabaseSync> {
   if (dbInitPromise) return dbInitPromise
 
   dbInitPromise = (async () => {
+    try {
     await ensureWorkspaceDir()
     const db = new DatabaseSync(getWorkspaceDbPath())
     db.exec(`
@@ -325,6 +326,10 @@ export async function ensureWorkspaceDb(): Promise<DatabaseSync> {
   await migrateLegacyWorkspaceFile(db)
   workspaceDb = db
   return db
+    } catch (err) {
+      dbInitPromise = null
+      throw err
+    }
   })()
 
   return dbInitPromise
