@@ -187,9 +187,19 @@ const hasReferenceInput = computed(() =>
   selectedReferenceWorkIds.value.length > 0 || referenceWorks.value.length > 0
 )
 
+const hasAnyProjectContext = computed(() =>
+  hasReferenceInput.value
+  || appStore.worldviewEntries.length > 0
+  || appStore.characters.length > 0
+  || appStore.characterRelationships.length > 0
+  || appStore.organizations.length > 0
+  || appStore.outlineItems.length > 0
+  || appStore.chapters.length > 0
+)
+
 const canGenerate = computed(() =>
   Boolean(currentProject.value?.id) && !isGenerating.value
-    && (hasReferenceInput.value || userPrompt.value.trim())
+    && (hasAnyProjectContext.value || userPrompt.value.trim())
 )
 
 const dataSources = computed(() => {
@@ -218,8 +228,8 @@ const dataSources = computed(() => {
 async function generateAllDocuments(): Promise<void> {
   if (!currentProject.value || isGenerating.value) return
 
-  if (!hasReferenceInput.value && !userPrompt.value.trim()) {
-    message.warning('没有参考书时，请先填写补充说明，告诉 AI 你想写什么样的小说')
+  if (!hasAnyProjectContext.value && !userPrompt.value.trim()) {
+    message.warning('当前项目没有任何资料，请先填写补充说明，告诉 AI 你想写什么样的小说')
     return
   }
 
@@ -335,8 +345,8 @@ watch(
 
       <div class="workflow-prompt-section">
         <strong>补充说明</strong>
-        <span v-if="hasReferenceInput" class="workflow-hint">可选，帮助 AI 更准确地生成流程文件</span>
-        <span v-else class="workflow-hint workflow-hint-required">没有参考书时必填，请描述你想写的小说类型、题材、风格等</span>
+        <span v-if="hasAnyProjectContext" class="workflow-hint">可选，帮助 AI 更准确地生成流程文件</span>
+        <span v-else class="workflow-hint workflow-hint-required">项目暂无可用资料时必填，请描述你想写的小说类型、题材、风格等</span>
         <n-input
           v-model:value="userPrompt"
           type="textarea"
