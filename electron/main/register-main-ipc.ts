@@ -773,11 +773,7 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
 
   ipcMain.handle('characterarc:project-skills-scan', async (_event, projectId: unknown) => {
     try {
-      const resolvedProjectId = String(projectId ?? '').trim()
-      if (!resolvedProjectId) {
-        return { success: true, skills: [] }
-      }
-
+      const resolvedProjectId = String(projectId ?? '').trim() || undefined
       await refreshSkillRegistry(resolvedProjectId)
       return { success: true, skills: skillScanEntries(resolvedProjectId) }
     } catch {
@@ -787,10 +783,7 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
 
   ipcMain.handle('characterarc:project-skills-import', async (_event, projectId: unknown) => {
     try {
-      const resolvedProjectId = String(projectId ?? '').trim()
-      if (!resolvedProjectId) {
-        return { success: false, canceled: false, error: '缺少项目 ID，无法导入项目技能。' }
-      }
+      const resolvedProjectId = String(projectId ?? '').trim() || undefined
 
       const dialogOptions: Electron.OpenDialogOptions = {
         title: '选择要导入的 Skill 包目录',

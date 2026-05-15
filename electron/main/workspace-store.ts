@@ -33,6 +33,10 @@ function getWorkspaceDbPath(): string {
 let workspaceDb: DatabaseSync | null = null
 let dbInitPromise: Promise<DatabaseSync> | null = null
 
+export function getWorkspaceDbIfInitialized(): DatabaseSync | null {
+  return workspaceDb
+}
+
 async function ensureWorkspaceDir(): Promise<void> {
   await mkdir(getWorkspaceDirPath(), { recursive: true })
 }
@@ -580,7 +584,122 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
   )
 
   if (projects.length === 0) {
-    return null
+    const settings = db.prepare(`
+      SELECT theme, selected_project_id AS selectedProjectId, provider, api_key AS apiKey, base_url AS baseUrl, auto_save_interval AS autoSaveInterval
+      , model, image_provider AS imageProvider, image_model AS imageModel, image_api_key AS imageApiKey, image_base_url AS imageBaseUrl, ui_scale AS uiScale, dark_mode AS darkMode, dark_mode_style AS darkModeStyle
+      FROM app_settings
+      WHERE id = 1
+    `).get() as
+      | {
+          theme: string
+          selectedProjectId: string
+          provider: string
+          model: string
+          apiKey: string
+          baseUrl: string
+          imageProvider: string
+          imageModel: string
+          imageApiKey: string
+          imageBaseUrl: string
+          autoSaveInterval: string
+          uiScale: number
+          darkMode: number
+          darkModeStyle: string
+        }
+      | undefined
+
+    const coverWorkbenchHistoryRows = db.prepare(`
+      SELECT id, created_at AS createdAt, cover, prompt_title AS promptTitle, prompt, summary,
+        keywords_json AS keywordsJson, genre, target_platform AS targetPlatform,
+        author_name AS authorName, extra_notes AS extraNotes
+      FROM cover_workbench_history
+      ORDER BY sort_order ASC, created_at DESC
+    `).all() as Array<{
+      id: string
+      createdAt: string
+      cover: string
+      promptTitle: string
+      prompt: string
+      summary: string
+      keywordsJson: string
+      genre: string
+      targetPlatform: string
+      authorName: string
+      extraNotes: string
+    }>
+
+    const knowledgeDocuments = db.prepare(`
+      SELECT id, title, source_type AS sourceType, source_label AS sourceLabel, content, summary,
+        keywords_json AS keywordsJson, metadata_json AS metadataJson, created_at AS createdAt, updated_at AS updatedAt
+      FROM knowledge_documents
+      ORDER BY created_at DESC, rowid DESC
+    `).all().map((row) => ({
+      id: row.id as string,
+      title: row.title as string,
+      sourceType: row.sourceType as KnowledgeDocumentSourceType,
+      sourceLabel: row.sourceLabel as string,
+      content: row.content as string,
+      summary: row.summary as string,
+      keywords: parseJson(row.keywordsJson as string, [] as string[]),
+      metadata: parseJson(row.metadataJson as string, {} as Record<string, unknown>),
+      createdAt: row.createdAt as string,
+      updatedAt: row.updatedAt as string
+    })) as WorkspacePayload['knowledgeDocuments']
+
+    const referenceWorks = db.prepare(`
+      SELECT id, title, source, notes, file_name AS fileName, analysis_json AS analysisJson, created_at AS createdAt, updated_at AS updatedAt
+      FROM reference_works
+      ORDER BY created_at DESC, rowid DESC
+    `).all().map((row) => {
+      const analysis = parseJson<WorkspacePayload['referenceWorks'][number]['analysis'] | null>(row.analysisJson as string, null)
+      return {
+        id: row.id as string,
+        title: row.title as string,
+        source: row.source as string,
+        notes: row.notes as string,
+        fileName: row.fileName as string,
+        ...(analysis ? { analysis } : {})
+      }
+    }) as WorkspacePayload['referenceWorks']
+
+    return {
+      theme: settings?.theme ?? 'ocean',
+      selectedProjectId: '',
+      knowledgeDocuments,
+      referenceWorks,
+      projects: [],
+      workspaces: {},
+      appSettings: settings
+        ? {
+            ...normalizeAppSettings({
+              provider: settings.provider,
+              model: settings.model,
+              apiKey: settings.apiKey,
+              baseUrl: settings.baseUrl,
+              imageProvider: settings.imageProvider,
+              imageModel: settings.imageModel,
+              imageApiKey: settings.imageApiKey,
+              imageBaseUrl: settings.imageBaseUrl,
+              autoSaveInterval: settings.autoSaveInterval,
+              uiScale: settings.uiScale,
+              darkMode: Boolean(settings.darkMode)
+            })
+          }
+        : normalizeAppSettings({}),
+      coverWorkbenchHistory: coverWorkbenchHistoryRows.map((row) => ({
+        id: row.id,
+        createdAt: row.createdAt,
+        cover: row.cover,
+        promptTitle: row.promptTitle,
+        prompt: row.prompt,
+        summary: row.summary,
+        keywords: parseJson(row.keywordsJson, [] as string[]),
+        genre: row.genre,
+        targetPlatform: row.targetPlatform,
+        authorName: row.authorName,
+        extraNotes: row.extraNotes
+      }))
+    }
   }
 
   const worldviewEntries = db.prepare(`

@@ -74,11 +74,11 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
     const finishedNoTools = toolUses.length === 0
 
     if (response.stopReason === 'end_turn' || finishedNoTools) {
-      return {
-        finalText: extractText(response.contentBlocks),
-        toolCalls,
-        iterations: iteration
+      const finalText = extractText(response.contentBlocks)
+      if (!finalText && toolCalls.length === 0 && iteration === 1) {
+        throw new Error('AI 返回内容为空，模型未生成任何文本或工具调用。请检查模型是否支持 tool_use，或尝试更换模型。')
       }
+      return { finalText, toolCalls, iterations: iteration }
     }
 
     if (response.stopReason === 'max_tokens') {

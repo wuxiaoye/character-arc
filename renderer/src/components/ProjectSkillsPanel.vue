@@ -86,12 +86,7 @@ async function scanProjectSkills(): Promise<void> {
 
   isScanningProjectSkills.value = true
   try {
-    if (!currentProject.value?.id) {
-      projectSkillItems.value = []
-      return
-    }
-
-    const result = await window.characterArc.scanProjectSkills(currentProject.value.id)
+    const result = await window.characterArc.scanProjectSkills(currentProject.value?.id ?? '')
     if (!result.success) {
       throw new Error(result.error ?? '项目技能扫描失败')
     }
@@ -124,11 +119,7 @@ async function importProjectSkillsPackage(): Promise<void> {
 
   isImportingProjectSkills.value = true
   try {
-    if (!currentProject.value?.id) {
-      return
-    }
-
-    const result = await window.characterArc.importProjectSkillsPackage(currentProject.value.id)
+    const result = await window.characterArc.importProjectSkillsPackage(currentProject.value?.id ?? '')
     if (result.canceled) {
       return
     }

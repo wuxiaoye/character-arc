@@ -182,7 +182,7 @@ async function handleTestAiConnection(): Promise<void> {
   }
 }
 
-function saveSettings(): void {
+async function saveSettings(): Promise<void> {
   appStore.updateAppSetting('provider', draftSettings.provider)
   appStore.updateAppSetting('model', draftSettings.model)
   appStore.updateAppSetting('apiKey', draftSettings.apiKey)
@@ -198,6 +198,12 @@ function saveSettings(): void {
 
   if (draftTheme.value !== appStore.theme) {
     appStore.setTheme(draftTheme.value)
+  }
+
+  await appStore.persistWorkspace()
+  if (appStore.persistenceError) {
+    message.error(appStore.persistenceError)
+    return
   }
 
   message.success('设置已保存')

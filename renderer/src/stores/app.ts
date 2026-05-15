@@ -208,6 +208,7 @@ export const useAppStore = defineStore('app', () => {
     scheduledPersistAt,
     persistenceError,
     scheduleWorkspaceSync,
+    flushWorkspaceSync,
     persistWorkspace,
     schedulePersist,
     scheduleSettingsPersist,
@@ -1295,13 +1296,12 @@ export const useAppStore = defineStore('app', () => {
     const resolvedProjectId = String(projectId ?? selectedProjectId.value ?? '').trim()
     const targetProject = projects.value.find((item) => item.id === resolvedProjectId) ?? projects.value[0]
 
-    if (!targetProject) {
-      return
+    if (targetProject) {
+      ensureProjectWorkspace(targetProject.id)
+      selectedProjectId.value = targetProject.id
+      syncSelectedChapter(targetProject.id)
     }
 
-    ensureProjectWorkspace(targetProject.id)
-    selectedProjectId.value = targetProject.id
-    syncSelectedChapter(targetProject.id)
     currentView.value = 'cover-workbench'
     schedulePersist('fast')
   }
@@ -3023,6 +3023,7 @@ export const useAppStore = defineStore('app', () => {
     approveActiveAgentProposal,
     workflowDocuments,
     clearActiveAgentProposal,
+    flushWorkspaceSync,
     persistWorkspace,
     updateChapter,
     updateChapterContent,

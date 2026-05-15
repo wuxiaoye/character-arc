@@ -9,7 +9,7 @@
     "dev": "set ELECTRON_RUN_AS_NODE=&& electron-vite dev",
     "build": "set ELECTRON_RUN_AS_NODE=&& vue-tsc --noEmit && electron-vite build",
     "preview": "set ELECTRON_RUN_AS_NODE=&& electron-vite preview",
-    "dist": "npm run build && electron-builder"
+    "dist": "set ELECTRON_RUN_AS_NODE=&& vue-tsc --noEmit && electron-vite build && electron-builder"
   },
   "dependencies": {
     "@node-rs/jieba": "^2.0.1",

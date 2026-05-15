@@ -33,8 +33,13 @@ export async function runAiTask(
   // 灰度分流：白名单内 + provider 支持 tool_use → 走 agent loop（progressive skill disclosure）。
   // 任意一个不满足 → 走原单次调用路径。renderer 完全无感。
   const settingsForRouting = normalizeSettings(task.settings)
-  if (AGENT_TASK_WHITELIST.has(task.task) && providerSupportsTools(settingsForRouting)) {
-    return runAgentTask(task, knowledgeContext)
+  if (AGENT_TASK_WHITELIST.has(task.task)) {
+    if (providerSupportsTools(settingsForRouting)) {
+      return runAgentTask(task, knowledgeContext)
+    }
+    if (task.task === 'reference-deep-analyze') {
+      throw new Error('深度拆书需要模型支持 tool_use（工具调用）。当前供应商不支持此功能，请切换到 DeepSeek、通义千问、OpenAI 或 Anthropic 等支持工具调用的供应商后重试。')
+    }
   }
 
   const settings = settingsForRouting

@@ -1,5 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
+import { cpSync, existsSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 import type { ChapterStateWarningsPayload, ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './ai/shared-types'
 import { registerAiIpcHandlers } from './ai/ipc'
@@ -14,7 +16,24 @@ import {
   type WorkspacePayload,
   normalizeWorkspacePayload
 } from './workspace-types'
-import { ensureWorkspaceDb, readWorkspaceSnapshot, writeAppSettingsRow, writeWorkspaceSnapshot } from './workspace-store'
+import { ensureWorkspaceDb, getWorkspaceDbIfInitialized, readWorkspaceSnapshot, writeAppSettingsRow, writeWorkspaceSnapshot } from './workspace-store'
+
+const APP_DATA_DIR_NAME = 'CharacterArc'
+
+function configureCanonicalUserDataPath(): void {
+  const appDataPath = app.getPath('appData')
+  const canonicalUserDataPath = join(appDataPath, APP_DATA_DIR_NAME)
+  const legacyUserDataPath = join(appDataPath, 'characterarc')
+
+  if (!existsSync(canonicalUserDataPath) && existsSync(legacyUserDataPath)) {
+    mkdirSync(canonicalUserDataPath, { recursive: true })
+    cpSync(legacyUserDataPath, canonicalUserDataPath, { recursive: true, force: false, errorOnExist: false })
+  }
+
+  app.setPath('userData', canonicalUserDataPath)
+}
+
+configureCanonicalUserDataPath()
 
 /** 主窗口向助手窗口推送的上下文载荷 */
 type AssistantContextPayload = {
@@ -577,6 +596,19 @@ app.whenReady().then(async () => {
       windowManager.createMainWindow()
     }
   })
+})
+
+app.on('before-quit', () => {
+  const db = getWorkspaceDbIfInitialized()
+  if (!db || !latestWorkspaceSnapshot) {
+    return
+  }
+
+  try {
+    writeWorkspaceSnapshot(db, latestWorkspaceSnapshot)
+  } catch (error) {
+    console.error('[workspace] before-quit flush failed:', error)
+  }
 })
 
 app.on('window-all-closed', () => {

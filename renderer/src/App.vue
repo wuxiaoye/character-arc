@@ -98,8 +98,18 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', handleGlobalKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalKeydown))
+function handleBeforeUnload() {
+  appStore.flushWorkspaceSync()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
 </script>
 
 <template>

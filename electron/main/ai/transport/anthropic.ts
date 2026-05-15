@@ -36,9 +36,21 @@ export async function requestAnthropic(
     'Anthropic',
     signal
   )
-  const data = (await response.json()) as { content?: Array<{ type?: string; text?: string }> }
+  const data = (await response.json()) as {
+    content?: Array<{ type?: string; text?: string }>
+    stop_reason?: string
+    error?: { message?: string }
+  }
+  if (data.error?.message) {
+    throw new Error(`Anthropic 接口错误：${data.error.message}`)
+  }
   const content = data.content?.find((item) => item.type === 'text')?.text
-  if (!content) throw new Error('Anthropic 返回内容为空')
+  if (!content) {
+    if (data.stop_reason === 'max_tokens') {
+      throw new Error('Anthropic 返回内容为空：输出被截断（max_tokens 不足或上下文超限），请尝试缩短输入或更换支持更长上下文的模型。')
+    }
+    throw new Error('Anthropic 返回内容为空，请检查模型是否正常、输入是否过长，或稍后重试。')
+  }
   return content
 }
 
