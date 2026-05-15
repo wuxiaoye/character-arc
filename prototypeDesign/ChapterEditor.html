@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>章节创作界面原型 - VS Code 风格</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-body: #F5F5F7;
+            --bg-surface: #FFFFFF;
+            --bg-surface-hover: #F2F2F7;
+            --bg-sidebar: #FAFAFA;
+            --text-primary: #1D1D1F;
+            --text-secondary: #86868B;
+            --text-tertiary: #A1A1A6;
+            --primary-color: #0066CC;
+            --primary-hover: #0071E3;
+            --primary-soft: #EBF3FA;
+            --border-color: rgba(0,0,0,0.06);
+            --border-strong: rgba(0,0,0,0.1);
+            --shadow-sm: 0 2px 10px rgba(0,0,0,0.03);
+            --shadow-md: 0 10px 30px rgba(0,0,0,0.08);
+            --shadow-lg: 0 20px 50px rgba(0,0,0,0.12);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-family); }
+        body { background-color: var(--bg-body); color: var(--text-primary); height: 100vh; overflow: hidden; user-select: none; }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: #D1D1D6; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #B0B0B5; }
+        ::-webkit-scrollbar-track { background: transparent; }
+
+        /* 整体三栏布局 */
+        .workbench {
+            display: grid;
+            grid-template-columns: 280px 1fr auto;
+            height: 100vh;
+            background: var(--bg-body);
+        }
+
+        .workbench.ai-open { grid-template-columns: 280px 1fr 380px; }
+
+        /* ========== 左侧：卷-章节树 ========== */
+        .left-panel {
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .left-header {
+            padding: 16px 16px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .project-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .project-name .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #34C759;
+        }
+
+        .icon-btn {
+            width: 26px; height: 26px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.15s;
+        }
+        .icon-btn:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+
+        .toolbar-row {
+            padding: 8px 12px;
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .toolbar-row .icon-btn { flex: 1; }
+
+        .search-box {
+            padding: 10px 12px;
+        }
+        .search-input-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+        }
+        .search-input-wrap input {
+            border: none; outline: none; background: transparent;
+            flex: 1; font-size: 12px; user-select: text;
+        }
+        .search-input-wrap svg { color: var(--text-tertiary); flex-shrink: 0; }
+
+        .tree-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0 16px;
+        }
+
+        /* 卷节点 */
+        .volume {
+            margin-bottom: 2px;
+        }
+        .volume-header {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 16px 6px 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            user-select: none;
+        }
+        .volume-header:hover { background: var(--bg-surface-hover); }
+        .volume-header .chevron {
+            transition: transform 0.15s;
+            flex-shrink: 0;
+        }
+        .volume.collapsed .chevron { transform: rotate(-90deg); }
+        .volume.collapsed .chapter-list { display: none; }
+        .volume-header .vol-meta {
+            margin-left: auto;
+            font-size: 11px;
+            color: var(--text-tertiary);
+            font-weight: 500;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        /* 章节节点 */
+        .chapter-list { display: flex; flex-direction: column; }
+
+        .chapter-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px 6px 28px;
+            font-size: 13px;
+            color: var(--text-primary);
+            cursor: pointer;
+            position: relative;
+            border-left: 2px solid transparent;
+        }
+        .chapter-item:hover { background: var(--bg-surface-hover); }
+        .chapter-item.active {
+            background: var(--primary-soft);
+            border-left-color: var(--primary-color);
+            font-weight: 500;
+        }
+        .chapter-item .chapter-icon {
+            color: var(--text-tertiary);
+            flex-shrink: 0;
+        }
+        .chapter-item.active .chapter-icon { color: var(--primary-color); }
+        .chapter-item .chapter-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .chapter-item .chapter-status {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+        .status-draft { background: #FFF4E5; color: #B25E09; }
+        .status-done { background: #E5F4EA; color: #1F7A3A; }
+        .status-todo { background: #F0F0F2; color: var(--text-secondary); }
+
+        .add-chapter {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px 6px 28px;
+            color: var(--text-tertiary);
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .add-chapter:hover { color: var(--primary-color); background: var(--bg-surface-hover); }
+
+        .left-footer {
+            padding: 8px 12px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-tertiary);
+        }
+
+        /* ========== 中间：编辑器 ========== */
+        .editor-panel {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-body);
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .editor-header {
+            height: 44px;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-color);
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            min-width: 0;
+        }
+        .breadcrumb svg { flex-shrink: 0; color: var(--text-tertiary); }
+        .breadcrumb .crumb-current { color: var(--text-primary); font-weight: 500; }
+
+        .editor-actions { display: flex; gap: 4px; align-items: center; }
+
+        .toolbtn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            border: none;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            color: var(--text-secondary);
+            background: transparent;
+            transition: 0.15s;
+        }
+        .toolbtn:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+        .toolbtn.primary {
+            background: var(--primary-soft);
+            color: var(--primary-color);
+        }
+        .toolbtn.primary:hover { background: #DCEAF7; }
+        .toolbtn.solid {
+            background: var(--primary-color);
+            color: white;
+        }
+        .toolbtn.solid:hover { background: var(--primary-hover); }
+
+        .saved-indicator {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-right: 4px;
+        }
+
+        .editor-toolbar-divider {
+            width: 1px;
+            height: 18px;
+            background: var(--border-color);
+            margin: 0 4px;
+        }
+
+        .font-stepper {
+            display: inline-flex;
+            align-items: center;
+            background: var(--bg-surface-hover);
+            border-radius: var(--radius-sm);
+            padding: 2px;
+            gap: 2px;
+        }
+        .font-stepper button {
+            width: 22px; height: 22px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .font-stepper button:hover { background: var(--bg-surface); color: var(--text-primary); }
+        .font-stepper .level {
+            font-size: 11px;
+            color: var(--text-secondary);
+            padding: 0 4px;
+            min-width: 28px;
+            text-align: center;
+        }
+
+        /* 单一滚动容器 */
+        .editor-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 56px 0 120px;
+            min-height: 0;
+        }
+
+        .editor-canvas {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 0 48px;
+        }
+        .workbench.focus .editor-canvas { max-width: 800px; padding: 0 32px; }
+
+        .editor-title {
+            font-size: 34px;
+            font-weight: 700;
+            border: none;
+            outline: none;
+            width: 100%;
+            color: var(--text-primary);
+            background: transparent;
+            user-select: text;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+        .editor-title::placeholder { color: var(--text-tertiary); }
+
+        .editor-meta-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 28px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .editor-meta-row .meta-tag {
+            padding: 3px 8px;
+            background: var(--bg-surface-hover);
+            border-radius: 12px;
+        }
+
+        /* contenteditable 正文，自适应高度，无内部滚动 */
+        .editor-text {
+            font-size: 17px;
+            line-height: 2;
+            color: #2C2C2E;
+            border: none;
+            outline: none;
+            width: 100%;
+            background: transparent;
+            user-select: text;
+            font-family: var(--font-family);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .editor-text:empty::before {
+            content: attr(data-placeholder);
+            color: var(--text-tertiary);
+            pointer-events: none;
+        }
+        .editor-text p {
+            margin: 0 0 1em;
+            text-indent: 2em;
+        }
+        .editor-text p:last-child { margin-bottom: 0; }
+
+        /* 选区浮动工具栏 */
+        .selection-toolbar {
+            position: absolute;
+            display: none;
+            align-items: center;
+            gap: 2px;
+            padding: 4px;
+            background: #1D1D1F;
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-md);
+            z-index: 50;
+        }
+        .selection-toolbar.show { display: flex; }
+        .selection-toolbar .sel-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 10px;
+            border: none;
+            background: transparent;
+            color: white;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .selection-toolbar .sel-btn:hover { background: rgba(255,255,255,0.15); }
+        .selection-toolbar .sel-divider {
+            width: 1px;
+            height: 16px;
+            background: rgba(255,255,255,0.2);
+            margin: 0 2px;
+        }
+
+        /* 编辑器底部状态栏 */
+        .editor-statusbar {
+            height: 32px;
+            padding: 0 16px;
+            background: var(--bg-surface);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 11px;
+            color: var(--text-tertiary);
+            flex-shrink: 0;
+        }
+        .editor-statusbar .stats-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .editor-statusbar .stats-group span {
+            white-space: nowrap;
+        }
+        .progress-block {
+            flex: 1;
+            min-width: 120px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .progress-block .label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .progress-bar {
+            flex: 1;
+            height: 4px;
+            background: var(--bg-surface-hover);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, #34C759, #0066CC);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+        .progress-block .pct {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        /* 专注模式 */
+        .workbench.focus .left-panel,
+        .workbench.focus .editor-header,
+        .workbench.focus .editor-statusbar { display: none; }
+        .workbench.focus { grid-template-columns: 1fr; }
+        .workbench.focus.ai-open { grid-template-columns: 1fr 380px; }
+        .workbench.focus .editor-scroll { padding-top: 80px; }
+
+        .focus-exit {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 100;
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+        }
+        .workbench.focus .focus-exit { display: inline-flex; }
+        .focus-exit:hover { color: var(--text-primary); }
+
+        /* ========== 右侧：AI 抽屉 ========== */
+        .ai-panel {
+            background: var(--bg-surface);
+            border-left: 1px solid var(--border-color);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            animation: slideIn 0.2s ease-out;
+        }
+        .workbench.ai-open .ai-panel { display: flex; }
+        @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .ai-header {
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .ai-header .ai-title {
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ai-header .ai-title svg { color: var(--primary-color); }
+
+        .ai-context-strip {
+            padding: 8px 12px;
+            background: var(--bg-sidebar);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .ctx-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .ctx-chip.active {
+            background: var(--primary-soft);
+            border-color: rgba(0, 102, 204, 0.2);
+            color: var(--primary-color);
+        }
+        .ctx-chip .close-x {
+            color: var(--text-tertiary);
+            cursor: pointer;
+        }
+        .ctx-chip .close-x:hover { color: var(--text-primary); }
+
+        .chat-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .chat-msg {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            user-select: text;
+        }
+        .chat-msg.user { align-items: flex-end; }
+        .msg-bubble {
+            max-width: 95%;
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .chat-msg.user .msg-bubble {
+            background: var(--primary-color);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .chat-msg.ai .msg-bubble {
+            background: var(--bg-surface-hover);
+            color: var(--text-primary);
+            border-bottom-left-radius: 4px;
+        }
+        .msg-meta {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            padding: 0 4px;
+        }
+
+        .ai-action-bar {
+            display: flex;
+            gap: 6px;
+            padding: 6px 0 0;
+        }
+        .mini-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-surface);
+            font-size: 11px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .mini-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .mini-btn.primary {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        .mini-btn.primary:hover { background: var(--primary-hover); }
+
+        .quick-prompts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 0 4px;
+        }
+        .quick-prompts .qp {
+            font-size: 11px;
+            padding: 4px 10px;
+            background: var(--bg-surface-hover);
+            border-radius: 12px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+            transition: 0.15s;
+        }
+        .quick-prompts .qp:hover {
+            background: var(--primary-soft);
+            color: var(--primary-color);
+        }
+
+        .ai-input-area {
+            padding: 12px;
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-surface);
+        }
+        .ai-input-wrap {
+            position: relative;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-sidebar);
+            transition: 0.15s;
+        }
+        .ai-input-wrap:focus-within {
+            border-color: var(--primary-color);
+            background: var(--bg-surface);
+            box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+        }
+        .ai-input-wrap textarea {
+            width: 100%;
+            border: none;
+            outline: none;
+            background: transparent;
+            padding: 10px 12px 36px;
+            font-size: 13px;
+            line-height: 1.5;
+            resize: none;
+            font-family: var(--font-family);
+            user-select: text;
+            min-height: 72px;
+            max-height: 160px;
+        }
+        .ai-input-toolbar {
+            position: absolute;
+            bottom: 6px; left: 6px; right: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .ai-input-toolbar .left-tools {
+            display: flex;
+            gap: 2px;
+        }
+        .ai-input-toolbar .send-btn {
+            width: 28px; height: 28px;
+            border-radius: 6px;
+            border: none;
+            background: var(--primary-color);
+            color: white;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ai-input-toolbar .send-btn:hover { background: var(--primary-hover); }
+        .ai-input-toolbar .send-btn:disabled { background: #C7C7CC; cursor: not-allowed; }
+
+        .mode-toggle {
+            display: inline-flex;
+            background: var(--bg-surface-hover);
+            border-radius: 6px;
+            padding: 2px;
+            gap: 2px;
+        }
+        .mode-toggle .mode-opt {
+            padding: 3px 10px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 4px;
+            border: none;
+            background: transparent;
+        }
+        .mode-toggle .mode-opt.active {
+            background: var(--bg-surface);
+            color: var(--text-primary);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+<div class="workbench ai-open" id="workbench">
+
+    <button class="focus-exit" onclick="toggleFocus()">
+        <i data-lucide="minimize" style="width:13px;height:13px;"></i> 退出专注 (Esc)
+    </button>
+
+    <!-- 左侧：卷-章节树 -->
+    <aside class="left-panel">
+        <div class="left-header">
+            <div class="project-name">
+                <span class="dot"></span>
+                赛博飞升指南
+            </div>
+            <button class="icon-btn" title="返回项目中心">
+                <i data-lucide="arrow-left" style="width:14px;height:14px;"></i>
+            </button>
+        </div>
+
+        <div class="toolbar-row">
+            <button class="icon-btn" title="新建卷"><i data-lucide="folder-plus" style="width:14px;height:14px;"></i></button>
+            <button class="icon-btn" title="新建章节"><i data-lucide="file-plus" style="width:14px;height:14px;"></i></button>
+            <button class="icon-btn" title="刷新"><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i></button>
+            <button class="icon-btn" title="折叠全部"><i data-lucide="chevrons-down-up" style="width:14px;height:14px;"></i></button>
+        </div>
+
+        <div class="search-box">
+            <div class="search-input-wrap">
+                <i data-lucide="search" style="width:12px;height:12px;"></i>
+                <input type="text" placeholder="搜索章节..." />
+            </div>
+        </div>
+
+        <div class="tree-scroll">
+
+            <div class="volume" id="vol-1">
+                <div class="volume-header" onclick="toggleVolume('vol-1')">
+                    <i data-lucide="chevron-down" class="chevron" style="width:14px;height:14px;"></i>
+                    <span>第一卷 · 霓虹下的老鼠</span>
+                    <span class="vol-meta">3/12</span>
+                </div>
+                <div class="chapter-list">
+                    <div class="chapter-item active" onclick="selectChapter(this)">
+                        <i data-lucide="file-text" class="chapter-icon" style="width:14px;height:14px;"></i>
+                        <span class="chapter-title">第1章：义体回收站的雨夜</span>
+                        <span class="chapter-status status-done">已完成</span>
+                    </div>
+                    <div class="chapter-item" onclick="selectChapter(this)">
+                        <i data-lucide="file-text" class="chapter-icon" style="width:14px;height:14px;"></i>
+                        <span class="chapter-title">第2章：走私芯片</span>
+                        <span class="chapter-status status-done">已完成</span>
+                    </div>
+                    <div class="chapter-item" onclick="selectChapter(this)">
+                        <i data-lucide="file-text" class="chapter-icon" style="width:14px;height:14px;"></i>
+                        <span class="chapter-title">第3章：公司狗的觉醒</span>
+                        <span class="chapter-status status-draft">草稿</span>
+                    </div>
+                    <div class="chapter-item" onclick="selectChapter(this)">
+                        <i data-lucide="file-text" class="chapter-icon" style="width:14px;height:14px;"></i>
+                        <span class="chapter-title">第4章：旧城地下铁的逃亡</span>
+                        <span class="chapter-status status-todo">待写</span>
+                    </div>
+                    <div class="add-chapter">
+                        <i data-lucide="plus" style="width:12px;height:12px;"></i> 新增章节
+                    </div>
+                </div>
+            </div>
+
+            <div class="volume" id="vol-2">
+                <div class="volume-header" onclick="toggleVolume('vol-2')">
+                    <i data-lucide="chevron-down" class="chevron" style="width:14px;height:14px;"></i>
+                    <span>第二卷 · 阻断剂战争</span>
+                    <span class="vol-meta">0/8</span>
+                </div>
+                <div class="chapter-list">
+                    <div class="chapter-item" onclick="selectChapter(this)">
+                        <i data-lucide="file-text" class="chapter-icon" style="width:14px;height:14px;"></i>
+                        <span class="chapter-title">第13章：黑市义体商人</span>
+                        <span class="chapter-status status-todo">待写</span>
+                    </div>
+                    <div class="chapter-item" onclick="selectChapter(this)">
+                        <i data-lucide="file-text" class="chapter-icon" style="width:14px;height:14px;"></i>
+                        <span class="chapter-title">第14章：荒坂的猎犬</span>
+                        <span class="chapter-status status-todo">待写</span>
+                    </div>
+                    <div class="add-chapter">
+                        <i data-lucide="plus" style="width:12px;height:12px;"></i> 新增章节
+                    </div>
+                </div>
+            </div>
+
+            <div class="volume collapsed" id="vol-3">
+                <div class="volume-header" onclick="toggleVolume('vol-3')">
+                    <i data-lucide="chevron-down" class="chevron" style="width:14px;height:14px;"></i>
+                    <span>第三卷 · 飞升前夜</span>
+                    <span class="vol-meta">0/?</span>
+                </div>
+                <div class="chapter-list">
+                    <div class="chapter-item" onclick="selectChapter(this)">
+                        <i data-lucide="file-text" class="chapter-icon" style="width:14px;height:14px;"></i>
+                        <span class="chapter-title">大纲未排</span>
+                        <span class="chapter-status status-todo">待写</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="left-footer">
+            <span>共 21 章 · 12.5 万字</span>
+            <button class="icon-btn" title="项目设置"><i data-lucide="settings" style="width:13px;height:13px;"></i></button>
+        </div>
+    </aside>
+
+    <!-- 中间：编辑器 -->
+    <main class="editor-panel">
+        <div class="editor-header">
+            <div class="breadcrumb">
+                <i data-lucide="folder" style="width:13px;height:13px;"></i>
+                <span>第一卷 · 霓虹下的老鼠</span>
+                <i data-lucide="chevron-right" style="width:12px;height:12px;"></i>
+                <span class="crumb-current">第1章：义体回收站的雨夜</span>
+            </div>
+
+            <div class="editor-actions">
+                <span class="saved-indicator" id="saved-indicator">
+                    <i data-lucide="check-circle-2" style="width:12px;height:12px;color:#34C759;"></i>
+                    已自动保存
+                </span>
+
+                <span class="editor-toolbar-divider"></span>
+
+                <div class="font-stepper" title="字号">
+                    <button onclick="stepFont(-1)"><i data-lucide="minus" style="width:12px;height:12px;"></i></button>
+                    <span class="level" id="font-level">17px</span>
+                    <button onclick="stepFont(1)"><i data-lucide="plus" style="width:12px;height:12px;"></i></button>
+                </div>
+
+                <button class="toolbtn" onclick="toggleFocus()" title="专注模式 (F11)"><i data-lucide="focus" style="width:13px;height:13px;"></i></button>
+                <button class="toolbtn" title="历史版本"><i data-lucide="history" style="width:13px;height:13px;"></i></button>
+                <button class="toolbtn primary" onclick="toggleAI()">
+                    <i data-lucide="sparkles" style="width:13px;height:13px;"></i> AI 助理
+                </button>
+            </div>
+        </div>
+
+        <div class="editor-scroll" id="editor-scroll">
+            <div class="editor-canvas">
+                <input type="text" class="editor-title" value="第1章：义体回收站的雨夜" />
+
+                <div class="editor-meta-row">
+                    <span class="meta-tag" id="meta-status">已完成</span>
+                    <span>·</span>
+                    <span>大纲：李雷救下艾达，发现军用接口</span>
+                </div>
+
+                <div class="editor-text" id="editor-text" contenteditable="true" data-placeholder="开始写作..."><p>酸雨敲打在波纹铁皮屋顶上，发出令人烦躁的白噪音。</p><p>李雷靠在生锈的工作台旁，机械右臂发出轻微的伺服电机嗡嗡声。今天晚上的收获糟透了，只有几个劣质的神经插槽，还有一条已经被格式化得干干净净的二手脊柱。</p><p>他从工具篮里抽出那条脊柱，用一块磨得发亮的抹布慢慢擦拭。指甲缝里还残留着上一个客人留下的机油味——一种混合了铁锈、塑料和廉价合成酒精的复杂气息。</p><p>就在他准备拉下卷帘门的时候，巷子尽头传来了一阵急促的脚步声。</p><p>"救命……" 一个穿着高档公司制服的女人倒在了水洼里，她的后脑勺上，一个军用级的数据接口正在往外冒着蓝色的电火花。</p><p>李雷愣了三秒。</p><p>他这辈子见过的最贵的东西，就是这种接口的拆机件——黑市上每一个都能卖到他半年的房租。而它现在正插在一个活人身上，活生生地往外渗着血和数据。</p><p>"快……他们快追来了……" 女人的声音断断续续，她的瞳孔正在用一种不正常的频率收缩，那是高频神经过载的征兆。</p><p>远处，巷口的霓虹灯下，三个穿着黑色长风衣的影子正在缓缓走来。其中一个人手里的东西，李雷认得——那是公司特工标配的电磁脉冲枪。</p></div>
+            </div>
+        </div>
+
+        <!-- 选区浮动工具栏 -->
+        <div class="selection-toolbar" id="sel-toolbar">
+            <button class="sel-btn" onclick="aiSelection('润色')"><i data-lucide="wand-2" style="width:12px;height:12px;"></i> 润色</button>
+            <button class="sel-btn" onclick="aiSelection('改写')"><i data-lucide="refresh-cw" style="width:12px;height:12px;"></i> 改写</button>
+            <button class="sel-btn" onclick="aiSelection('扩写')"><i data-lucide="maximize-2" style="width:12px;height:12px;"></i> 扩写</button>
+            <button class="sel-btn" onclick="aiSelection('缩写')"><i data-lucide="minimize-2" style="width:12px;height:12px;"></i> 缩写</button>
+            <span class="sel-divider"></span>
+            <button class="sel-btn" onclick="aiSelection('询问 AI')"><i data-lucide="message-square-quote" style="width:12px;height:12px;"></i> 问 AI</button>
+        </div>
+
+        <div class="editor-statusbar">
+            <div class="stats-group">
+                <span id="status-words">字数 3,128</span>
+                <span id="status-paras">段落 9</span>
+                <span>预估阅读 8 分钟</span>
+            </div>
+            <div class="progress-block">
+                <span class="label">本章目标 3000</span>
+                <div class="progress-bar"><div class="fill" id="progress-fill" style="width: 100%;"></div></div>
+                <span class="pct" id="progress-pct">104%</span>
+            </div>
+            <div class="stats-group">
+                <span>第 1 章 / 共 21 章</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- 右侧：AI 抽屉面板 -->
+    <aside class="ai-panel" id="ai-panel">
+        <div class="ai-header">
+            <div class="ai-title">
+                <i data-lucide="sparkles" style="width:14px;height:14px;"></i>
+                创作助理
+            </div>
+            <div style="margin-left:auto; display:flex; gap:4px;">
+                <button class="icon-btn" title="新对话"><i data-lucide="plus" style="width:13px;height:13px;"></i></button>
+                <button class="icon-btn" title="历史"><i data-lucide="clock" style="width:13px;height:13px;"></i></button>
+                <button class="icon-btn" onclick="toggleAI()" title="关闭"><i data-lucide="x" style="width:13px;height:13px;"></i></button>
+            </div>
+        </div>
+
+        <div class="ai-context-strip">
+            <span class="ctx-chip active">
+                <i data-lucide="file-text" style="width:11px;height:11px;"></i>
+                当前章节
+                <i data-lucide="x" class="close-x" style="width:10px;height:10px;"></i>
+            </span>
+            <span class="ctx-chip active">
+                <i data-lucide="git-merge" style="width:11px;height:11px;"></i>
+                第1章大纲
+                <i data-lucide="x" class="close-x" style="width:10px;height:10px;"></i>
+            </span>
+            <span class="ctx-chip">
+                <i data-lucide="users" style="width:11px;height:11px;"></i>
+                +角色卡
+            </span>
+            <span class="ctx-chip">
+                <i data-lucide="globe" style="width:11px;height:11px;"></i>
+                +世界观
+            </span>
+        </div>
+
+        <div class="chat-scroll" id="chat-scroll">
+            <div class="chat-msg ai">
+                <div class="msg-bubble">
+                    我已读取当前章节正文与第1章大纲。需要润色已写段落、给后续走向建议，还是基于大纲帮你续写？
+                </div>
+                <div class="msg-meta">12:30 · 引用：当前章节, 第1章大纲</div>
+            </div>
+
+            <div class="quick-prompts">
+                <span class="qp" onclick="sendQuick('给开头的环境描写一个更紧张的版本')">紧张化开头</span>
+                <span class="qp" onclick="sendQuick('帮我续写艾达晕倒后李雷的反应')">续写下一段</span>
+                <span class="qp" onclick="sendQuick('检查是否符合本章大纲')">校对大纲</span>
+                <span class="qp" onclick="sendQuick('描写一段三个特工逼近的镜头')">写一段</span>
+            </div>
+
+            <div class="chat-msg user">
+                <div class="msg-bubble">帮我把"远处，巷口的霓虹灯下..."那一段改写得更有压迫感，强调三个特工的非人感。</div>
+                <div class="msg-meta">12:33</div>
+            </div>
+
+            <div class="chat-msg ai">
+                <div class="msg-bubble">
+                    巷口尽头，霓虹的红与蓝在酸雨里晕开，像一摊摊不会愈合的伤口。三个长风衣的轮廓从那里走出来——脚步声不重，节奏却整齐得不像人，像是同一段代码在三具躯壳里循环执行。<br><br>
+                    最前面那个人抬起手，电磁脉冲枪的镜头在雨幕里反射出一点冷蓝色，像猎犬终于在黑暗里嗅到了猎物的味道。
+                </div>
+                <div class="ai-action-bar">
+                    <button class="mini-btn primary" onclick="applyToEditor()">
+                        <i data-lucide="replace" style="width:11px;height:11px;"></i> 替换原段
+                    </button>
+                    <button class="mini-btn">
+                        <i data-lucide="arrow-down" style="width:11px;height:11px;"></i> 插到光标
+                    </button>
+                    <button class="mini-btn">
+                        <i data-lucide="copy" style="width:11px;height:11px;"></i>
+                    </button>
+                    <button class="mini-btn">
+                        <i data-lucide="rotate-cw" style="width:11px;height:11px;"></i> 重生成
+                    </button>
+                </div>
+                <div class="msg-meta">12:34 · DeepSeek-Chat · 280 tokens</div>
+            </div>
+        </div>
+
+        <div class="ai-input-area">
+            <div class="ai-input-wrap">
+                <textarea id="ai-input" placeholder="向 AI 提问，或描述你想要的修改..."></textarea>
+                <div class="ai-input-toolbar">
+                    <div class="left-tools">
+                        <button class="icon-btn" title="附加上下文"><i data-lucide="paperclip" style="width:13px;height:13px;"></i></button>
+                        <div class="mode-toggle">
+                            <button class="mode-opt active">问答</button>
+                            <button class="mode-opt">改写</button>
+                            <button class="mode-opt">续写</button>
+                        </div>
+                    </div>
+                    <button class="send-btn" onclick="sendAI()">
+                        <i data-lucide="arrow-up" style="width:14px;height:14px;"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+</div>
+
+<script>
+    lucide.createIcons();
+
+    function toggleVolume(id) {
+        const v = document.getElementById(id);
+        v.classList.toggle('collapsed');
+    }
+
+    function selectChapter(el) {
+        document.querySelectorAll('.chapter-item').forEach(i => i.classList.remove('active'));
+        el.classList.add('active');
+    }
+
+    function toggleAI() {
+        document.getElementById('workbench').classList.toggle('ai-open');
+    }
+
+    function sendAI() {
+        const input = document.getElementById('ai-input');
+        const text = input.value.trim();
+        if (!text) return;
+        appendUserMsg(text);
+        input.value = '';
+        setTimeout(() => appendAIMsg('（演示原型）这里会接入流式返回的内容，并附带"应用到正文"按钮。'), 400);
+    }
+
+    function sendQuick(text) {
+        document.getElementById('ai-input').value = text;
+        sendAI();
+    }
+
+    function appendUserMsg(text) {
+        const scroll = document.getElementById('chat-scroll');
+        const el = document.createElement('div');
+        el.className = 'chat-msg user';
+        el.innerHTML = `<div class="msg-bubble">${escapeHtml(text)}</div><div class="msg-meta">刚刚</div>`;
+        scroll.appendChild(el);
+        scroll.scrollTop = scroll.scrollHeight;
+    }
+    function appendAIMsg(text) {
+        const scroll = document.getElementById('chat-scroll');
+        const el = document.createElement('div');
+        el.className = 'chat-msg ai';
+        el.innerHTML = `
+            <div class="msg-bubble">${escapeHtml(text)}</div>
+            <div class="ai-action-bar">
+                <button class="mini-btn primary"><i data-lucide="arrow-down" style="width:11px;height:11px;"></i> 插到光标</button>
+                <button class="mini-btn"><i data-lucide="copy" style="width:11px;height:11px;"></i></button>
+            </div>
+            <div class="msg-meta">刚刚 · DeepSeek-Chat</div>`;
+        scroll.appendChild(el);
+        lucide.createIcons();
+        scroll.scrollTop = scroll.scrollHeight;
+    }
+    function escapeHtml(s) {
+        return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function applyToEditor() {
+        const editor = document.getElementById('editor-text');
+        const paragraphs = editor.querySelectorAll('p');
+        const replacement = '巷口尽头，霓虹的红与蓝在酸雨里晕开，像一摊摊不会愈合的伤口。三个长风衣的轮廓从那里走出来——脚步声不重，节奏却整齐得不像人，像是同一段代码在三具躯壳里循环执行。';
+        const followUp = '最前面那个人抬起手，电磁脉冲枪的镜头在雨幕里反射出一点冷蓝色，像猎犬终于在黑暗里嗅到了猎物的味道。';
+        paragraphs.forEach(p => {
+            if (p.textContent.startsWith('远处，巷口的霓虹灯下')) {
+                p.textContent = replacement;
+                const extra = document.createElement('p');
+                extra.textContent = followUp;
+                p.after(extra);
+            }
+        });
+        editor.classList.add('flash');
+        setTimeout(() => editor.classList.remove('flash'), 600);
+        updateStats();
+    }
+
+    function aiSelection(action) {
+        document.getElementById('workbench').classList.add('ai-open');
+        const sel = window.getSelection().toString().trim();
+        const prompt = sel ? `[${action}] ${sel.slice(0,60)}${sel.length>60?'...':''}` : `[${action}] 当前选中段落`;
+        document.getElementById('ai-input').value = prompt;
+        document.getElementById('ai-input').focus();
+        hideSelToolbar();
+    }
+
+    // 字号步进
+    const FONT_LEVELS = [14, 15, 16, 17, 18, 20, 22];
+    let fontIdx = 3;
+    function stepFont(delta) {
+        fontIdx = Math.max(0, Math.min(FONT_LEVELS.length - 1, fontIdx + delta));
+        const px = FONT_LEVELS[fontIdx];
+        document.getElementById('editor-text').style.fontSize = px + 'px';
+        document.getElementById('font-level').textContent = px + 'px';
+    }
+
+    // 专注模式
+    function toggleFocus() {
+        document.getElementById('workbench').classList.toggle('focus');
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'F11') { e.preventDefault(); toggleFocus(); }
+        if (e.key === 'Escape' && document.getElementById('workbench').classList.contains('focus')) {
+            toggleFocus();
+        }
+    });
+
+    // 字数 / 段落 / 进度条
+    const TARGET_WORDS = 3000;
+    const editor = document.getElementById('editor-text');
+    function updateStats() {
+        const text = editor.innerText.replace(/\s/g, '');
+        const words = text.length;
+        const paras = editor.querySelectorAll('p').length;
+        document.getElementById('status-words').textContent = `字数 ${words.toLocaleString()}`;
+        document.getElementById('status-paras').textContent = `段落 ${paras}`;
+        const pct = Math.round(words / TARGET_WORDS * 100);
+        document.getElementById('progress-fill').style.width = Math.min(100, pct) + '%';
+        document.getElementById('progress-pct').textContent = pct + '%';
+    }
+    editor.addEventListener('input', updateStats);
+    updateStats();
+
+    // 选区浮动工具栏（contenteditable / 任意选区）
+    const selToolbar = document.getElementById('sel-toolbar');
+    document.addEventListener('selectionchange', () => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || !sel.rangeCount) { hideSelToolbar(); return; }
+        const range = sel.getRangeAt(0);
+        if (!editor.contains(range.commonAncestorContainer)) { hideSelToolbar(); return; }
+        const rect = range.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) { hideSelToolbar(); return; }
+        selToolbar.style.top = Math.max(72, rect.top - 44) + 'px';
+        selToolbar.style.left = Math.max(12, rect.left + rect.width / 2 - 160) + 'px';
+        selToolbar.classList.add('show');
+    });
+    document.addEventListener('mousedown', (e) => {
+        if (selToolbar.contains(e.target)) return;
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed) hideSelToolbar();
+    });
+    function hideSelToolbar() { selToolbar.classList.remove('show'); }
+
+    // 回车发送
+    document.getElementById('ai-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendAI();
+        }
+    });
+</script>
+
+<style>
+    .editor-text.flash { animation: flash 0.6s ease; }
+    @keyframes flash {
+        0% { background: rgba(0, 102, 204, 0); }
+        30% { background: rgba(0, 102, 204, 0.08); }
+        100% { background: rgba(0, 102, 204, 0); }
+    }
+</style>
+
+</body>
+</html>
