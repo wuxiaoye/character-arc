@@ -24,7 +24,7 @@ const scrollRef = ref<HTMLDivElement | null>(null)
 const lastMsg = computed(() => props.messages[props.messages.length - 1])
 
 watch(
-  () => [props.messages.length, lastMsg.value?.content] as const,
+  () => [props.messages.length, lastMsg.value?.content, lastMsg.value?.toolCalls?.length, lastMsg.value?.editEvents?.length] as const,
   () => nextTick(() => {
     if (scrollRef.value) scrollRef.value.scrollTop = scrollRef.value.scrollHeight
   })
@@ -288,10 +288,10 @@ async function copyMessage(content: string): Promise<void> {
   gap: 8px;
   padding: 8px 12px;
   border-radius: 8px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: color-mix(in srgb, var(--arc-success) 10%, var(--arc-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--arc-success) 30%, var(--arc-border));
   font-size: 12px;
-  color: #166534;
+  color: var(--arc-success);
 }
 
 .edit-card .mini {

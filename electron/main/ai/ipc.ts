@@ -265,6 +265,24 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
     }
   })
 
+  // ── 读取章节版本（供 agent 编辑撤销） ──
+  ipcMain.handle('characterarc:ai-read-chapter-version', async (_event, payload: unknown) => {
+    try {
+      const req = payload as { projectId?: string; versionId?: string }
+      const projectId = String(req?.projectId ?? '').trim()
+      const versionId = String(req?.versionId ?? '').trim()
+      if (!projectId || !versionId) throw new Error('缺少 projectId 或 versionId。')
+      const db = await ensureWorkspaceDb()
+      const row = db.prepare(
+        'SELECT id, chapter_id, title, summary, status, word_target, content, created_at FROM chapter_versions WHERE id = ? AND project_id = ?'
+      ).get(versionId, projectId) as Record<string, unknown> | undefined
+      if (!row) throw new Error('版本不存在')
+      return { success: true, result: { id: row.id, chapterId: row.chapter_id, title: row.title, summary: row.summary, status: row.status, wordTarget: row.word_target, content: row.content, createdAt: row.created_at } }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '读取版本失败' }
+    }
+  })
+
   // ── 读取单个章节内容（供 agent 编辑后前端刷新） ──
   ipcMain.handle('characterarc:ai-read-chapter', async (_event, payload: unknown) => {
     try {

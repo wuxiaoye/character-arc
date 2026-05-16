@@ -52,7 +52,7 @@ export async function runStreamingAgentLoop(params: StreamingAgentLoopParams): P
     if (response.stopReason === 'end_turn' || hasNoTools) {
       const finalText = extractText(response.contentBlocks)
       if (finalText) {
-        params.handlers.onTextDelta(finalText)
+        await emitTextProgressively(finalText, params.handlers.onTextDelta, params.ctx.signal)
       }
       return { finalText, toolCalls, iterations: iteration }
     }
@@ -103,4 +103,21 @@ export async function runStreamingAgentLoop(params: StreamingAgentLoopParams): P
 
 function extractText(blocks: AssistantContentBlock[]): string {
   return blocks.filter(isTextBlock).map((b) => b.text).join('').trim()
+}
+
+const CHUNK_SIZE = 12
+const CHUNK_DELAY_MS = 15
+
+async function emitTextProgressively(
+  text: string,
+  onTextDelta: (delta: string) => void,
+  signal: AbortSignal
+): Promise<void> {
+  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+    if (signal.aborted) return
+    onTextDelta(text.slice(i, i + CHUNK_SIZE))
+    if (i + CHUNK_SIZE < text.length) {
+      await new Promise((r) => setTimeout(r, CHUNK_DELAY_MS))
+    }
+  }
 }

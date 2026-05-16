@@ -60,6 +60,8 @@ contextBridge.exposeInMainWorld('characterArc', {
   startAiAgentStream: (payload: unknown) => ipcRenderer.invoke('characterarc:ai-agent-stream-start', toIpcPayload(payload)),
   /** 从 DB 重新读取单个章节内容（agent 编辑后刷新用） */
   readChapterFromDb: (projectId: string, chapterId: string) => ipcRenderer.invoke('characterarc:ai-read-chapter', { projectId, chapterId }),
+  /** 从 DB 读取章节版本（agent 编辑撤销用） */
+  readChapterVersionFromDb: (projectId: string, versionId: string) => ipcRenderer.invoke('characterarc:ai-read-chapter-version', { projectId, versionId }),
   /** 监听流式 AI 的增量文本事件，返回取消监听的清理函数 */
   onAiStreamEvent: (callback: (payload: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)

@@ -22,7 +22,7 @@ defineEmits<{
 
 const message = useMessage()
 const appStore = useAppStore()
-const { messages, isResponding, hasSelection, send, stop, resetMessages, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream } = useChapterAi()
+const { messages, isResponding, agentStatus, hasSelection, send, stop, resetMessages, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream } = useChapterAi()
 const draft = useChapterFirstDraft()
 const detect = useChapterThreadDetect()
 const summary = useChapterSummary()
@@ -187,6 +187,11 @@ onBeforeUnmount(() => {
       @undo="handleUndoEdit"
     />
 
+    <div v-if="agentStatus" class="agent-status">
+      <span class="agent-pulse" />
+      <span>{{ agentStatus }}</span>
+    </div>
+
     <ChapterAiInput :disabled="isResponding" @send="send" @stop="stop" />
 
     <ChapterFirstDraftDialog
@@ -303,5 +308,29 @@ onBeforeUnmount(() => {
   color: var(--arc-primary);
   font-size: 11px;
   border-bottom: 1px solid var(--arc-border);
+}
+
+.agent-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--arc-primary);
+  background: var(--arc-primary-soft);
+  border-top: 1px solid var(--arc-border);
+}
+
+.agent-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--arc-primary);
+  animation: agent-pulse-ring 1.4s ease-in-out infinite;
+}
+
+@keyframes agent-pulse-ring {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.4); }
 }
 </style>

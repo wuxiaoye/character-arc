@@ -124,7 +124,7 @@ watch(
     if (!root) return
     const normalized = ensureEditorHtmlContent(next || '')
     if (normalized === root.innerHTML) return
-    if (document.activeElement === root) return
+    if (pendingHtml !== null) return
     root.innerHTML = normalized
   }
 )

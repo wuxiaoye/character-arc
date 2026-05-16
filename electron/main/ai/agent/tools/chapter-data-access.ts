@@ -245,29 +245,40 @@ function textToHtmlParagraphs(text: string): string {
   return text.split(/\n{2,}|\n/).filter(Boolean).map((p) => `<p>${p.trim()}</p>`).join('')
 }
 
+function mapPlainIndexToHtml(html: string, plainIdx: number): number {
+  let charCount = 0
+  let i = 0
+  while (i < html.length) {
+    if (html[i] === '<') {
+      while (i < html.length && html[i] !== '>') i++
+      i++
+      continue
+    }
+    if (html[i] === '&') {
+      const semiIdx = html.indexOf(';', i)
+      if (semiIdx !== -1 && semiIdx - i < 10) {
+        if (charCount === plainIdx) return i
+        charCount++
+        i = semiIdx + 1
+        continue
+      }
+    }
+    if (charCount === plainIdx) return i
+    charCount++
+    i++
+  }
+  return i
+}
+
 function replaceInHtml(html: string, searchPlain: string, replacePlain: string): string {
   const plain = stripHtmlTags(html)
   const idx = plain.indexOf(searchPlain)
   if (idx === -1) return html
 
-  let charCount = 0
-  let startTag = -1
-  let endTag = -1
-  let inTag = false
-
-  for (let i = 0; i < html.length; i++) {
-    if (html[i] === '<') { inTag = true; continue }
-    if (html[i] === '>') { inTag = false; continue }
-    if (inTag) continue
-
-    if (charCount === idx && startTag === -1) startTag = i
-    charCount++
-    if (charCount === idx + searchPlain.length) { endTag = i + 1; break }
-  }
-
-  if (startTag === -1 || endTag === -1) return html
+  const startPos = mapPlainIndexToHtml(html, idx)
+  const endPos = mapPlainIndexToHtml(html, idx + searchPlain.length)
   const replaceHtml = textToHtmlParagraphs(replacePlain)
-  return html.slice(0, startTag) + replaceHtml + html.slice(endTag)
+  return html.slice(0, startPos) + replaceHtml + html.slice(endPos)
 }
 
 function insertInHtml(html: string, searchPlain: string, insertHtml: string, position: 'before' | 'after'): string {
@@ -276,19 +287,6 @@ function insertInHtml(html: string, searchPlain: string, insertHtml: string, pos
   if (idx === -1) return html + insertHtml
 
   const targetCharIdx = position === 'before' ? idx : idx + searchPlain.length
-  let charCount = 0
-  let inTag = false
-
-  for (let i = 0; i < html.length; i++) {
-    if (html[i] === '<') { inTag = true; continue }
-    if (html[i] === '>') { inTag = false; continue }
-    if (inTag) continue
-
-    if (charCount === targetCharIdx) {
-      return html.slice(0, i) + insertHtml + html.slice(i)
-    }
-    charCount++
-  }
-
-  return html + insertHtml
+  const pos = mapPlainIndexToHtml(html, targetCharIdx)
+  return html.slice(0, pos) + insertHtml + html.slice(pos)
 }

@@ -286,6 +286,11 @@ declare global {
         result?: { id: string; title: string; summary: string; status: string; wordTarget: string; content: string }
         error?: string
       }>
+      readChapterVersionFromDb: (projectId: string, versionId: string) => Promise<{
+        success: boolean
+        result?: { id: string; chapterId: string; title: string; summary: string; status: string; wordTarget: string; content: string; createdAt: string }
+        error?: string
+      }>
       onAiStreamEvent: (callback: (payload: CharacterArcAiStreamEvent) => void) => () => void
       onAiRunEvent: (callback: (payload: CharacterArcAiRunEventPayload) => void) => () => void
       onChapterStateWarnings: (callback: (payload: CharacterArcChapterStateWarningsPayload) => void) => () => void

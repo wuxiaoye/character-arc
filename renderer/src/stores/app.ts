@@ -2498,7 +2498,27 @@ export const useAppStore = defineStore('app', () => {
 
   /** 恢复到指定的历史版本，覆盖当前章节内容 */
   async function restoreChapterVersion(versionId: string): Promise<{ success: boolean; error?: string }> {
-    const version = chapterVersions.value.find((item) => item.id === versionId)
+    let version = chapterVersions.value.find((item) => item.id === versionId)
+
+    if (!version) {
+      const projectId = currentProject.value?.id
+      if (projectId) {
+        const res = await window.characterArc.readChapterVersionFromDb(projectId, versionId)
+        if (res.success && res.result) {
+          version = {
+            id: res.result.id,
+            chapterId: res.result.chapterId,
+            title: res.result.title,
+            summary: res.result.summary,
+            status: res.result.status as ChapterDraft['status'],
+            wordTarget: res.result.wordTarget,
+            content: res.result.content,
+            createdAt: res.result.createdAt
+          }
+        }
+      }
+    }
+
     if (!version) {
       return {
         success: false,

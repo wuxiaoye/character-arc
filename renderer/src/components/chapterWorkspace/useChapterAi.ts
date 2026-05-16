@@ -81,6 +81,18 @@ export function useChapterAi(): {
   let removeListener: (() => void) | null = null
   let streamingMsgId: string | null = null
 
+  function finalizeStreamingMsg(): void {
+    const msg = messages.value.find((m) => m.id === streamingMsgId)
+    if (!msg?.toolCalls) return
+    for (const tc of msg.toolCalls) {
+      if (tc.status === 'running') {
+        tc.status = 'error'
+        tc.result = '（连接中断）'
+        tc.isError = true
+      }
+    }
+  }
+
   function handleStreamEvent(payload: CharacterArcAiStreamEvent): void {
     if (payload.streamId !== streamId) return
 
@@ -132,6 +144,7 @@ export function useChapterAi(): {
       return
     }
     if (payload.type === 'done') {
+      finalizeStreamingMsg()
       const msg = messages.value.find((m) => m.id === streamingMsgId)
       if (msg && payload.content && !msg.content) msg.content = payload.content
       const resolve = resolveStream
@@ -144,6 +157,7 @@ export function useChapterAi(): {
       return
     }
     if (payload.type === 'canceled') {
+      finalizeStreamingMsg()
       const reject = rejectStream
       resolveStream = null
       rejectStream = null
@@ -154,6 +168,7 @@ export function useChapterAi(): {
       return
     }
     if (payload.type === 'error') {
+      finalizeStreamingMsg()
       const reject = rejectStream
       resolveStream = null
       rejectStream = null
