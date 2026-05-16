@@ -35,23 +35,23 @@ const appStyleVars = computed(() => {
   const dark = appStore.appSettings.darkMode
   const darkPreset = getDarkModePreset(appStore.appSettings.darkModeStyle)
   return {
-    '--arc-bg-body': dark ? darkPreset.bgBody : '#f4f4f5',
-    '--arc-bg-weak': dark ? darkPreset.bgWeak : '#fafafa',
+    '--arc-bg-body': dark ? darkPreset.bgBody : '#f8f7f4',
+    '--arc-bg-weak': dark ? darkPreset.bgWeak : '#faf9f7',
     '--arc-bg-surface': dark ? darkPreset.bgSurface : '#ffffff',
-    '--arc-bg-surface-hover': dark ? darkPreset.bgSurfaceHover : '#f9f9fb',
-    '--arc-bg-sidebar': dark ? darkPreset.bgSidebar : '#fafafa',
-    '--arc-sidebar-border': dark ? darkPreset.sidebarBorder : '#e5e7eb',
-    '--arc-text-primary': dark ? darkPreset.textPrimary : '#18181b',
-    '--arc-text-secondary': dark ? darkPreset.textSecondary : '#52525b',
-    '--arc-text-hint': dark ? darkPreset.textHint : '#a1a1aa',
+    '--arc-bg-surface-hover': dark ? darkPreset.bgSurfaceHover : '#f5f4f1',
+    '--arc-bg-sidebar': dark ? darkPreset.bgSidebar : '#f5f3f0',
+    '--arc-sidebar-border': dark ? darkPreset.sidebarBorder : '#e8e5e0',
+    '--arc-text-primary': dark ? darkPreset.textPrimary : '#1c1917',
+    '--arc-text-secondary': dark ? darkPreset.textSecondary : '#57534e',
+    '--arc-text-hint': dark ? darkPreset.textHint : '#a8a29e',
     '--arc-primary': appStore.currentTheme.primary,
     '--arc-primary-hover': appStore.currentTheme.primaryHover,
     '--arc-primary-pressed': appStore.currentTheme.primaryPressed,
     '--arc-primary-soft': dark
       ? `color-mix(in srgb, ${appStore.currentTheme.primary} 18%, ${darkPreset.primarySoftBase})`
       : appStore.currentTheme.softBackground,
-    '--arc-border': dark ? darkPreset.border : '#e5e7eb',
-    '--arc-border-strong': dark ? darkPreset.borderStrong : '#d1d5db',
+    '--arc-border': dark ? darkPreset.border : '#e7e5e0',
+    '--arc-border-strong': dark ? darkPreset.borderStrong : '#d6d3cd',
     '--arc-shadow-sm': dark ? darkPreset.shadowSm : '0 1px 3px rgba(0, 0, 0, 0.06)',
     '--arc-shadow-md': dark ? darkPreset.shadowMd : '0 2px 8px rgba(0, 0, 0, 0.07)',
     '--arc-shadow-lg': dark ? darkPreset.shadowLg : '0 4px 16px rgba(0, 0, 0, 0.09)',
