@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { AiTaskPayload, AppSettings, ChapterStateWarningsPayload } from './shared-types'
 import { runAiTask, streamAiTask, testAiConnection, fetchModels, fetchImageModels, generateImage } from './runtime'
 import { runStreamingAgentTask } from './agent/streaming-orchestrator'
-import { providerSupportsTools } from './transport'
+import { providerSupportsTools } from './provider'
 import { setChapterWarningsEmitter } from './runtime/orchestrator'
 import { retrieveKnowledgeContext } from './knowledge-retrieval'
 import { backfillProjectStateFromChapters } from './state-backfill'
@@ -90,7 +90,7 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
     return { success: true }
   })
 
-  // ── 流式 AI 生成 ──
+  // ── 流式 AI 生成（支持自动升级到 Agent 路径） ──
   ipcMain.handle('characterarc:ai-stream-start', async (event, payload: AiTaskPayload) => {
     try {
       const streamId = `stream-${randomUUID()}`
@@ -98,34 +98,80 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
       const knowledgeContext = retrieveKnowledgeContext(payload, deps!.getLatestWorkspaceSnapshot() as Parameters<typeof retrieveKnowledgeContext>[1])
       activeAiStreams.set(streamId, controller)
 
+      const settings = payload.settings as AppSettings
+      const useAgentPath = payload.task === 'chapter-first-draft' && providerSupportsTools(settings)
+
       let streamedContent = ''
       void (async () => {
         try {
-          const result = await streamAiTask(
-            payload,
-            {
-              onTextDelta: (delta: string) => {
-                streamedContent += delta
-                if (!event.sender.isDestroyed()) {
-                  event.sender.send('characterarc:ai-stream-event', { streamId, type: 'chunk', delta, charCount: streamedContent.length })
+          if (useAgentPath) {
+            const result = await runStreamingAgentTask(
+              payload,
+              {
+                onTextDelta: (delta) => {
+                  streamedContent += delta
+                  if (!event.sender.isDestroyed()) {
+                    event.sender.send('characterarc:ai-stream-event', { streamId, type: 'chunk', delta, charCount: streamedContent.length })
+                  }
+                },
+                onToolUseStart: (toolUseId, toolName, args) => {
+                  if (!event.sender.isDestroyed()) {
+                    event.sender.send('characterarc:ai-stream-event', { streamId, type: 'tool_use_start', toolUseId, toolName, args })
+                  }
+                },
+                onToolResult: (toolUseId, toolName, content, isError, durationMs) => {
+                  if (!event.sender.isDestroyed()) {
+                    event.sender.send('characterarc:ai-stream-event', { streamId, type: 'tool_result', toolUseId, toolName, content, isError, durationMs })
+                  }
+                },
+                onAgentStatus: (message, iteration, maxIterations) => {
+                  if (!event.sender.isDestroyed()) {
+                    event.sender.send('characterarc:ai-stream-event', { streamId, type: 'agent_status', message, iteration, maxIterations })
+                  }
+                },
+                onEditApplied: (chapterId, editType, preview, versionId) => {
+                  if (!event.sender.isDestroyed()) {
+                    event.sender.send('characterarc:ai-stream-event', { streamId, type: 'edit_applied', chapterId, editType, preview, versionId })
+                  }
                 }
-              }
-            },
-            controller.signal,
-            knowledgeContext
-          )
-          if (result.meta.projectId) {
-            deps!.emitAiRunEvent({ projectId: result.meta.projectId, meta: { id: randomUUID(), ...result.meta } })
-          }
-          if (!event.sender.isDestroyed()) {
-            event.sender.send('characterarc:ai-stream-event', { streamId, type: 'done', content: (result.result as { content?: string }).content ?? '' })
+              },
+              controller.signal,
+              knowledgeContext
+            )
+            if (result.meta.projectId) {
+              deps!.emitAiRunEvent({ projectId: result.meta.projectId, meta: { id: randomUUID(), ...result.meta } })
+            }
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('characterarc:ai-stream-event', { streamId, type: 'done', content: (result.result as { content?: string }).content ?? '' })
+            }
+          } else {
+            const result = await streamAiTask(
+              payload,
+              {
+                onTextDelta: (delta: string) => {
+                  streamedContent += delta
+                  if (!event.sender.isDestroyed()) {
+                    event.sender.send('characterarc:ai-stream-event', { streamId, type: 'chunk', delta, charCount: streamedContent.length })
+                  }
+                }
+              },
+              controller.signal,
+              knowledgeContext
+            )
+            if (result.meta.projectId) {
+              deps!.emitAiRunEvent({ projectId: result.meta.projectId, meta: { id: randomUUID(), ...result.meta } })
+            }
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('characterarc:ai-stream-event', { streamId, type: 'done', content: (result.result as { content?: string }).content ?? '' })
+            }
           }
         } catch (error) {
           const aiRunMeta = error && typeof error === 'object' && 'aiRunMeta' in error
             ? (error as { aiRunMeta?: Record<string, unknown> }).aiRunMeta : undefined
           if (aiRunMeta && (aiRunMeta as { projectId?: string }).projectId) {
             deps!.emitAiRunEvent({ projectId: String((aiRunMeta as { projectId?: string }).projectId), meta: { id: randomUUID(), ...aiRunMeta } })
-          }          if (!event.sender.isDestroyed()) {
+          }
+          if (!event.sender.isDestroyed()) {
             event.sender.send('characterarc:ai-stream-event', controller.signal.aborted
               ? { streamId, type: 'canceled', content: streamedContent }
               : { streamId, type: 'error', error: error instanceof Error ? error.message : 'AI 流式调用失败' }

@@ -199,11 +199,13 @@ onBeforeUnmount(() => {
       :is-generating="draft.isGenerating.value"
       :is-stopping="draft.isStopping.value"
       :is-auditing="draft.isAuditing.value"
+      :is-streaming="draft.isStreaming.value"
       :execution-label="draft.executionLabel.value"
       :streaming-content="draft.streamingContent.value"
       :progress-percent="draft.progressPercent.value"
       :progress-text="draft.progressText.value"
       :audit-result="draft.auditResult.value"
+      :elapsed-seconds="draft.elapsedSeconds.value"
       @stop="handleStopDraft"
       @close="draft.closeModal()"
     />

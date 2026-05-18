@@ -5,12 +5,13 @@ import { pickSkillsFor, refreshRegistry, getSkillById } from '../skills'
 import { buildPromptInput } from '../runtime/context-builder'
 import { buildRunMeta, buildResponsePreview } from '../runtime/run-meta'
 import { logPrompt, logResponse, logError } from '../runtime/logging'
-import { runStreamingAgentLoop } from './streaming-loop'
+import { runAgent } from './run-agent'
 import { createSkillTools } from './tools/skill-tools'
 import { createKnowledgeTools } from './tools/knowledge-tools'
 import { createChapterTools } from './tools/chapter-tools'
-import { createToolRegistry } from './tools/registry'
+import { createProjectDataTools } from './tools/project-data-tools'
 import { buildAgentBehaviorRules, buildSkillIndex } from './system-prompt'
+import { getRecentSkillUsage, formatSkillUsageHint, recordSkillUsage } from './skill-usage-memory'
 import type { AiKnowledgeDocumentDraft, AiTaskKnowledgeContext } from '../shared-types'
 
 /** 去掉 SKILL.md 开头的 YAML frontmatter 块（--- ... ---）。 */
@@ -49,6 +50,9 @@ export async function runStreamingAgentTask(
   const usedSkillIds = candidateSkills.map((s) => s.id)
 
   const input = buildPromptInput(task, candidateSkills, knowledgeContext)
+  if (task.task === 'chapter-first-draft') {
+    input.skillsBlock = '（skills 已通过工具按需加载，参见 system prompt 中的索引）'
+  }
   const prompt = handler.buildPrompt(input)
   const baseMaxTokens = handler.resolveMaxTokens?.(input) ?? resolveMaxTokens(task) ?? 4096
   const maxTokens = Math.max(baseMaxTokens, 4096)
@@ -67,11 +71,16 @@ export async function runStreamingAgentTask(
       }).join('\n\n')}`
     : ''
 
+  const skillUsageHints = task.task === 'chapter-first-draft'
+    ? await getRecentSkillUsage(projectId).then(formatSkillUsageHint).catch(() => '')
+    : ''
+
   const chapterToolsBlock = [
     '',
-    '## 章节编辑工具',
+    '## 可用工具',
     '',
-    '你可以使用以下工具直接操作章节内容：',
+    '你可以使用以下工具访问项目数据和操作章节：',
+    '- `read_project_data`: 读取项目完整设定（世界观、角色、组织、关系、大纲、剧情线索、灵感、知识文档）',
     '- `read_chapter`: 读取章节内容和元数据',
     '- `edit_chapter`: 直接编辑章节正文（替换/插入/追加）',
     '- `search_project`: 搜索项目中的世界观、角色、大纲等资料',
@@ -81,7 +90,20 @@ export async function runStreamingAgentTask(
     '修改前可以先用 read_chapter 读取当前内容，确认要修改的位置。'
   ].join('\n')
 
-  const systemPrompt = `${prompt.system}${requiredSkillBlock}${chapterToolsBlock}\n${buildSkillIndex(optionalSkillDefs)}\n${buildAgentBehaviorRules()}`
+  const chapterDraftRules = task.task === 'chapter-first-draft'
+    ? [
+        '',
+        '## 章节初稿 Agent 行为约束',
+        '',
+        '- 你的主要任务是生成完整章节正文，工具调用只是辅助准备。',
+        '- 最多加载 2-3 个最相关的 skill，不要贪多。',
+        '- 加载 skill 后立即开始写正文，不要再做额外的工具调用。',
+        '- 如果 skill index 中没有明显相关的 skill，直接开始写作，不要调用任何工具。',
+        '- 最终输出必须是纯正文，不要包含任何工具调用的痕迹或解释。'
+      ].join('\n')
+    : ''
+
+  const systemPrompt = `${prompt.system}${requiredSkillBlock}${chapterToolsBlock}\n${buildSkillIndex(optionalSkillDefs)}\n${buildAgentBehaviorRules()}${chapterDraftRules}${skillUsageHints}`
 
   const skillTools = createSkillTools({
     resolveSkill: (id) => getSkillById(id, projectId || undefined),
@@ -99,20 +121,23 @@ export async function runStreamingAgentTask(
     onEditApplied: handlers.onEditApplied
   })
 
-  const registry = createToolRegistry([...skillTools, ...knowledgeTools, ...chapterTools])
+  const projectDataTools = createProjectDataTools()
+
+  const registry = [...skillTools, ...knowledgeTools, ...chapterTools, ...projectDataTools]
 
   logPrompt('AGENT_STREAM', settings, { system: systemPrompt, user: prompt.user }, task.task, usedSkillIds)
   const requestStartedAt = Date.now()
 
   try {
-    const loopResult = await runStreamingAgentLoop({
+    const loopResult = await runAgent({
       settings,
       systemPrompt,
       userPrompt: prompt.user,
-      registry,
+      tools: registry,
       ctx: { signal, projectId },
       handlers,
-      maxTokens
+      maxTokens,
+      maxSteps: task.task === 'chapter-first-draft' ? 4 : undefined
     })
 
     logResponse('AGENT_STREAM', settings, task.task, loopResult.finalText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
@@ -130,6 +155,8 @@ export async function runStreamingAgentTask(
     if (producedKnowledgeDocuments.length > 0) {
       meta.producedKnowledgeDocuments = producedKnowledgeDocuments
     }
+
+    void recordSkillUsage(projectId, task.task, loopResult.toolCalls).catch(() => {})
 
     return { result, meta }
   } catch (error) {

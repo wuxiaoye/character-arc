@@ -12,6 +12,8 @@
     "dist": "set ELECTRON_RUN_AS_NODE=&& vue-tsc --noEmit && electron-vite build && electron-builder"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.78",
+    "@ai-sdk/openai": "^3.0.64",
     "@node-rs/jieba": "^2.0.1",
     "@node-rs/jieba-win32-x64-msvc": "^2.0.1",
     "@tiptap/core": "^3.22.5",
@@ -21,6 +23,7 @@
     "@tiptap/pm": "^3.22.5",
     "@tiptap/starter-kit": "^3.22.5",
     "@tiptap/vue-3": "^3.22.5",
+    "ai": "^6.0.184",
     "cytoscape": "^3.33.3",
     "docx": "^9.6.1",
     "lucide-vue-next": "^0.525.0",
@@ -28,7 +31,8 @@
     "marked": "^18.0.3",
     "naive-ui": "^2.43.1",
     "pinia": "^3.0.3",
-    "vue": "^3.5.18"
+    "vue": "^3.5.18",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

@@ -35,6 +35,8 @@ export function useChapterFirstDraft(): {
   progressText: Ref<string>
   auditResult: Ref<ChapterAuditPayload | null>
   isAuditing: Ref<boolean>
+  elapsedSeconds: Ref<number>
+  isStreaming: Ref<boolean>
   start: () => Promise<void>
   stop: () => Promise<void>
   closeModal: () => void
@@ -61,6 +63,19 @@ export function useChapterFirstDraft(): {
   const auditResult = ref<ChapterAuditPayload | null>(null)
   const isAuditing = ref(false)
 
+  const elapsedSeconds = ref(0)
+  const isStreaming = ref(false)
+  let elapsedTimer: ReturnType<typeof setInterval> | null = null
+
+  function startElapsedTimer(): void {
+    elapsedSeconds.value = 0
+    elapsedTimer = setInterval(() => { elapsedSeconds.value++ }, 1000)
+  }
+
+  function stopElapsedTimer(): void {
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null }
+  }
+
   function recompute(): void {
     const target = Math.max(parseChapterWordTarget(appStore.selectedChapter?.wordTarget), 1)
     const words = streamingCharCount.value || streamingContent.value.trim().length
@@ -86,13 +101,34 @@ export function useChapterFirstDraft(): {
     isStopping.value = false
     isGenerating.value = false
     isAuditing.value = false
+    isStreaming.value = false
+    stopElapsedTimer()
     recompute()
   }
 
   function handleStreamEvent(payload: CharacterArcAiStreamEvent): void {
     if (payload.streamId !== streamId.value) return
 
+    if (payload.type === 'agent_status') {
+      executionLabel.value = (payload as { message?: string }).message ?? '正在分析写作技巧...'
+      return
+    }
+    if (payload.type === 'tool_use_start') {
+      const args = (payload as { toolName?: string; args?: Record<string, unknown> })
+      if (args.toolName === 'skill_load') {
+        executionLabel.value = `加载写作技巧：${String(args.args?.skill_id ?? '')}...`
+      } else if (args.toolName === 'skill_read_reference') {
+        executionLabel.value = `读取参考资料：${String(args.args?.file ?? '')}...`
+      }
+      return
+    }
+    if (payload.type === 'tool_result') {
+      executionLabel.value = '技巧就绪，准备写作...'
+      return
+    }
+
     if (payload.type === 'chunk') {
+      isStreaming.value = true
       streamingContent.value += payload.delta
       if (payload.charCount != null) streamingCharCount.value = payload.charCount
       recompute()
@@ -163,9 +199,12 @@ export function useChapterFirstDraft(): {
     registerStreamListener()
     isGenerating.value = true
     isStopping.value = false
+    isStreaming.value = false
     streamingContent.value = ''
-    executionLabel.value = '正在整理本章上下文'
+    auditResult.value = null
+    executionLabel.value = '加载角色与关系数据'
     modalVisible.value = true
+    startElapsedTimer()
     recompute()
 
     try {
@@ -240,8 +279,10 @@ export function useChapterFirstDraft(): {
               .map((item) => ({ title: item.title, summary: item.summary }))
           }
 
-          executionLabel.value = '正在编排章节备忘…'
+          executionLabel.value = '检索相关章节与情节线索'
           recompute()
+          await new Promise((r) => setTimeout(r, 0))
+          executionLabel.value = '向 AI 发送写作备忘请求…'
           let chapterMemo: ChapterFirstDraftContextInput['chapterMemo'] | undefined
           try {
             const memoResult = await window.characterArc.generateAi(toIpcPayload({
@@ -280,7 +321,12 @@ export function useChapterFirstDraft(): {
             recentEndingsTrail
           })
 
+          executionLabel.value = '构建写作提示词…'
+          recompute()
+          await new Promise((r) => setTimeout(r, 0))
+
           executionLabel.value = `正在生成本章初稿（目标约 ${targetWordCount} 字）…`
+          isStreaming.value = true
           recompute()
           const fullText = await streamDraft(context)
           if (fullText) {
@@ -351,6 +397,8 @@ export function useChapterFirstDraft(): {
     progressText,
     auditResult,
     isAuditing,
+    elapsedSeconds,
+    isStreaming,
     start,
     stop,
     closeModal,

@@ -10,10 +10,9 @@ import type {
 import { normalizeSettings, validateSettings, resolveMaxTokens, AGENT_TASK_WHITELIST } from '../settings'
 import { getTaskHandler } from '../tasks'
 import { getAllSkills, pickSkillsFor, refreshRegistry } from '../skills'
-import { requestAiText, requestAiTextStream, providerSupportsTools } from '../transport'
-import type { StructuredOutputOptions } from '../transport'
+import { aiGenerateText, aiStreamText } from '../generate'
+import { providerSupportsTools } from '../provider'
 import { buildPromptInput } from './context-builder'
-import { probeStructuredOutputMode } from './capability-probe'
 import { buildRunMeta, buildResponsePreview } from './run-meta'
 import { logPrompt, logResponse, logSelection, logError } from './logging'
 import { buildRepairPrompt } from '../prompts/repair'
@@ -92,11 +91,10 @@ export async function runAiTask(
 
   logPrompt('REQUEST', settings, prompt, task.task, usedSkillIds)
 
-  const structured = resolveStructuredOptions(settings, handler.outputType)
   const requestStartedAt = Date.now()
 
   try {
-    let rawText = await requestAiText(settings, prompt, maxTokens, structured, signal)
+    let rawText = await aiGenerateText(settings, prompt, maxTokens, signal)
     logResponse('REQUEST', settings, task.task, rawText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
     let result: AiTaskResult
     let normalizeFailed = false
@@ -118,7 +116,7 @@ export async function runAiTask(
         const repairPromptPair = buildRepairPrompt(prompt.system, prompt.user, rawText, validationErrors)
         logPrompt(`REPAIR_${attempt}`, settings, repairPromptPair, task.task, usedSkillIds)
         const repairStartedAt = Date.now()
-        rawText = await requestAiText(settings, repairPromptPair, maxTokens, undefined, signal)
+        rawText = await aiGenerateText(settings, repairPromptPair, maxTokens, signal)
         logResponse(`REPAIR_${attempt}`, settings, task.task, rawText, Date.now() - repairStartedAt, { usedSkills: usedSkillIds })
         normalizeFailed = false
         try {
@@ -244,7 +242,7 @@ export async function streamAiTask(
   const requestStartedAt = Date.now()
 
   try {
-    const rawText = await requestAiTextStream(settings, prompt, handlers, signal, maxTokens)
+    const rawText = await aiStreamText(settings, prompt, handlers, signal, maxTokens)
     logResponse('STREAM', settings, task.task, rawText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
     const result = taskHandler.normalize(rawText)
     const finishedAt = new Date().toISOString()
@@ -318,19 +316,11 @@ export async function testAiConnection(rawSettings: AppSettings): Promise<{ prov
     user: 'Return CONNECTED'
   }
   logPrompt('TEST', settings, probePrompt, 'test-connection')
-  const text = await requestAiText(settings, probePrompt)
+  const text = await aiGenerateText(settings, probePrompt)
   if (!text.trim()) {
     throw new Error('模型连接成功，但没有返回可读内容。')
   }
   return { provider: settings.provider, model: settings.model }
-}
-
-/** 根据输出类型和 provider 能力，决定是否启用结构化输出选项 */
-function resolveStructuredOptions(settings: AppSettings, outputType: 'json' | 'text'): StructuredOutputOptions | undefined {
-  if (outputType !== 'json') return undefined
-  const mode = probeStructuredOutputMode(settings)
-  if (mode === 'prompt_only') return undefined
-  return { mode }
 }
 
 /** 根据任务上下文中的 projectSkills 构建技能启用/禁用映射表 */
@@ -455,7 +445,7 @@ ${chapterContent}
   }
 
   try {
-    const raw = await requestAiText(settings, prompt, 1500)
+    const raw = await aiGenerateText(settings, prompt, 1500)
     const parsed = extractJsonObject(raw) as unknown as StateDelta
     if (!parsed.characters_updated) parsed.characters_updated = []
     if (!parsed.relationships_delta) parsed.relationships_delta = []

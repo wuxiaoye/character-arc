@@ -10,7 +10,7 @@ export type SkillToolFactoryOptions = {
   resolveSkill: (id: string) => SkillDefinition | undefined
   /** 是否允许 skill_run_script。builtin skill 默认开；project skill 应受 settings 控制。 */
   allowScriptExecution?: (skill: SkillDefinition) => boolean
-  /** 单文件读取上限，防止把一个超大 reference 整个塞进 context。默认 8000 字符。 */
+  /** 单文件读取上限。0 表示不截断。默认不截断。 */
   maxReferenceChars?: number
   /** glob 一次返回的最多文件数。默认 200。 */
   maxGlobEntries?: number
@@ -18,8 +18,8 @@ export type SkillToolFactoryOptions = {
   scriptTimeoutMs?: number
 }
 
-/** 参考文件单次读取默认字符上限 */
-const DEFAULT_REFERENCE_CHAR_CAP = 8000
+/** 参考文件单次读取默认字符上限（0 = 不截断） */
+const DEFAULT_REFERENCE_CHAR_CAP = 0
 /** glob 一次返回的默认最多文件数 */
 const DEFAULT_GLOB_ENTRY_CAP = 200
 /** 脚本执行默认超时（毫秒） */
@@ -110,7 +110,7 @@ export function createSkillTools(opts: SkillToolFactoryOptions): Tool[] {
         const result = resolveSkillOrError(skillId)
         if ('error' in result) return err(result.error)
         const content = await loadSkillReferenceFile(result, file)
-        if (content.length <= maxReferenceChars) return ok(content)
+        if (!maxReferenceChars || content.length <= maxReferenceChars) return ok(content)
         return ok(`${content.slice(0, maxReferenceChars)}\n\n[已截断 ${content.length - maxReferenceChars} 字。如需完整请调用更精确的范围，或分段读取。]`)
       } catch (error) {
         return err(error instanceof Error ? error.message : String(error))
