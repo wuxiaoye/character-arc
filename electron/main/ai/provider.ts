@@ -3,6 +3,25 @@ import { createOpenAI } from '@ai-sdk/openai'
 import type { LanguageModel } from 'ai'
 import type { AppSettings } from './shared-types'
 
+const ANTHROPIC_PROMPT_CACHE = {
+  type: 'ephemeral' as const,
+  ttl: '5m' as const
+}
+
+function isOllamaProvider(settings: AppSettings): boolean {
+  return settings.provider === 'ollama'
+}
+
+function createOpenAICompatibleProvider(settings: AppSettings) {
+  const apiKey = settings.apiKey.trim()
+
+  return createOpenAI({
+    apiKey: apiKey || undefined,
+    baseURL: settings.baseUrl || undefined,
+    name: isOllamaProvider(settings) ? 'ollama' : undefined
+  })
+}
+
 export function createModel(settings: AppSettings): LanguageModel {
   if (settings.provider === 'anthropic') {
     const anthropic = createAnthropic({
@@ -12,15 +31,28 @@ export function createModel(settings: AppSettings): LanguageModel {
     return anthropic(settings.model)
   }
 
-  const openai = createOpenAI({
-    apiKey: settings.apiKey,
-    baseURL: settings.baseUrl
-  })
+  const openai = createOpenAICompatibleProvider(settings)
   return openai(settings.model)
+}
+
+export function buildSystemPrompt(settings: AppSettings, systemPrompt: string) {
+  if (settings.provider !== 'anthropic') {
+    return systemPrompt
+  }
+
+  return {
+    role: 'system' as const,
+    content: systemPrompt,
+    providerOptions: {
+      anthropic: {
+        cacheControl: ANTHROPIC_PROMPT_CACHE
+      }
+    }
+  }
 }
 
 export function providerSupportsTools(settings: AppSettings): boolean {
   if (settings.provider === 'anthropic') return true
-  if (settings.provider === 'ollama') return false
+  if (isOllamaProvider(settings)) return false
   return true
 }

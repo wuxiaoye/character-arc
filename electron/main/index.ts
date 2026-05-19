@@ -3,7 +3,12 @@ import { randomUUID } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { ChapterStateWarningsPayload, ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './ai/shared-types'
+import type {
+  ChapterPostGenerationIssuesPayload,
+  ChapterStateWarningsPayload,
+  ReferenceStyleAnalysisResult,
+  ReferenceStyleChunkResult
+} from './ai/shared-types'
 import { registerAiIpcHandlers } from './ai/ipc'
 import { type ReferenceNovelLocalContext } from './referenceAnalysis'
 import { registerMainIpcHandlers } from './register-main-ipc'
@@ -92,6 +97,10 @@ function emitAiRunEvent(payload: WorkspaceAiRunEventPayload): void {
 
 function emitChapterStateWarnings(payload: ChapterStateWarningsPayload): void {
   windowManager.broadcastWindowEvent('characterarc:chapter-state-warnings', payload)
+}
+
+function emitChapterPostGenerationIssues(payload: ChapterPostGenerationIssuesPayload): void {
+  windowManager.broadcastWindowEvent('characterarc:chapter-post-generation-issues', payload)
 }
 
 function buildImportedReferenceKnowledgeDocuments(
@@ -582,7 +591,8 @@ registerMainIpcHandlers({
 registerAiIpcHandlers({
   getLatestWorkspaceSnapshot: () => latestWorkspaceSnapshot,
   emitAiRunEvent: emitAiRunEvent as (payload: { projectId: string; meta: Record<string, unknown> }) => void,
-  emitChapterStateWarnings
+  emitChapterStateWarnings,
+  emitChapterPostGenerationIssues
 })
 
 // ── 应用生命周期 ──

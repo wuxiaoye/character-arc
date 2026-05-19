@@ -70,6 +70,13 @@ export type WorkspaceAiRunRecord = {
   startedAt: string
   finishedAt?: string
   durationMs?: number
+  usage?: {
+    promptTokens?: number
+    completionTokens?: number
+    totalTokens?: number
+    reasoningTokens?: number
+    cachedInputTokens?: number
+  }
   usedKnowledge: WorkspaceAiRunKnowledgeItem[]
   repairTriggered: boolean
   error: string

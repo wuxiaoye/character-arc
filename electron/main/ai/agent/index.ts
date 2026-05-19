@@ -1,15 +1,17 @@
 import type {
   AiAgentStreamHandlers,
   AiKnowledgeDocumentDraft,
+  AiRunUsage,
   AiTaskKnowledgeContext,
   AiTaskPayload,
   AiTaskResponse
 } from '../shared-types'
 import { normalizeSettings, validateSettings, resolveMaxTokens } from '../settings'
 import { getTaskHandler } from '../tasks'
-import { getEnabledSkills, getSkillById, pickSkillsFor, refreshRegistry } from '../skills'
-import { aiGenerateText } from '../generate'
+import { getSkillById, resolveTaskSkills } from '../skills'
+import { addAiRunUsage, aiGenerateTextWithUsage } from '../generate'
 import { buildPromptInput } from '../runtime/context-builder'
+import { enrichTaskContextForGeneration } from '../runtime/task-context'
 import { buildRunMeta, buildResponsePreview } from '../runtime/run-meta'
 import { logPrompt, logResponse, logSelection, logError } from '../runtime/logging'
 import { buildRepairPrompt } from '../prompts/repair'
@@ -39,15 +41,12 @@ export async function runAgentTask(
   const settings = normalizeSettings(task.settings)
   validateSettings(settings)
   const startedAt = new Date().toISOString()
-  const projectId = String(task.context.projectId ?? '').trim()
   const chapterId = String(task.context.chapterId ?? '').trim() || undefined
 
   const handler = getTaskHandler(task.task)
-  await refreshRegistry(projectId || undefined).catch(() => {})
-
-  const candidateSkills = await pickSkillsFor(task, resolveEnabledSkillOverrides(task, projectId))
-  const usedSkillIds = candidateSkills.map((s) => s.id)
+  const { projectId, skills: candidateSkills, usedSkillIds } = await resolveTaskSkills(task)
   logSelection(task.task, candidateSkills, knowledgeContext?.usedKnowledge ?? [])
+  await enrichTaskContextForGeneration(task, settings)
 
   const input = buildPromptInput(task, candidateSkills, knowledgeContext)
   const prompt = handler.buildPrompt(input)
@@ -86,6 +85,7 @@ export async function runAgentTask(
 
   logPrompt('AGENT_REQUEST', settings, { system: systemPrompt, user: prompt.user }, task.task, usedSkillIds)
   const requestStartedAt = Date.now()
+  let totalUsage: AiRunUsage | undefined
 
   try {
     const loopResult = await runAgent({
@@ -97,6 +97,7 @@ export async function runAgentTask(
       handlers: NOOP_AGENT_HANDLERS,
       maxTokens
     })
+    totalUsage = addAiRunUsage(totalUsage, loopResult.usage)
     logResponse('AGENT_REQUEST', settings, task.task, loopResult.finalText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
 
     let rawText = loopResult.finalText
@@ -107,7 +108,9 @@ export async function runAgentTask(
       const repairPromptPair = buildRepairPrompt(prompt.system, prompt.user, rawText)
       logPrompt('AGENT_REPAIR', settings, repairPromptPair, task.task, usedSkillIds)
       const repairStartedAt = Date.now()
-      rawText = await aiGenerateText(settings, repairPromptPair, maxTokens)
+      const repairResult = await aiGenerateTextWithUsage(settings, repairPromptPair, maxTokens)
+      totalUsage = addAiRunUsage(totalUsage, repairResult.usage)
+      rawText = repairResult.text
       logResponse('AGENT_REPAIR', settings, task.task, rawText, Date.now() - repairStartedAt, { usedSkills: usedSkillIds })
       result = handler.normalize(rawText)
       repairTriggered = true
@@ -121,6 +124,7 @@ export async function runAgentTask(
     const meta = buildRunMeta(
       task.task, projectId, chapterId, settings, 'success',
       startedAt, finishedAt,
+      totalUsage,
       knowledgeContext?.usedKnowledge ?? [], usedSkillIds,
       repairTriggered, buildResponsePreview(result), ''
     )
@@ -138,30 +142,10 @@ export async function runAgentTask(
     const meta = buildRunMeta(
       task.task, projectId, chapterId, settings, 'error',
       startedAt, finishedAt,
+      totalUsage,
       knowledgeContext?.usedKnowledge ?? [], usedSkillIds,
       false, '', message
     )
     throw Object.assign(new Error(message), { aiRunMeta: meta })
   }
-}
-
-function resolveEnabledSkillOverrides(
-  task: AiTaskPayload,
-  projectId: string
-): Map<string, boolean> | undefined {
-  if (!Array.isArray(task.context.projectSkills)) return undefined
-
-  const enabledIds = new Set(
-    task.context.projectSkills
-      .map((skill) => {
-        if (!skill || typeof skill !== 'object') return ''
-        return String((skill as { id?: string }).id ?? '').trim()
-      })
-      .filter(Boolean)
-  )
-
-  const allSkills = getEnabledSkills(projectId || undefined)
-  if (!allSkills.length) return undefined
-
-  return new Map(allSkills.map((skill) => [skill.id, enabledIds.has(skill.id)]))
 }

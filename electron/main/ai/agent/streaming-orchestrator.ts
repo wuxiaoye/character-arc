@@ -1,10 +1,12 @@
-import type { AiAgentStreamHandlers, AiTaskPayload, AiTaskResponse } from '../shared-types'
+import type { AiAgentStreamHandlers, AiKnowledgeDocumentDraft, AiTaskKnowledgeContext, AiTaskPayload, AiTaskResponse } from '../shared-types'
+import { AGENT_STREAM_MAX_ITERATIONS } from '../shared-types'
 import { normalizeSettings, validateSettings, resolveMaxTokens } from '../settings'
 import { getTaskHandler } from '../tasks'
-import { pickSkillsFor, refreshRegistry, getSkillById } from '../skills'
+import { resolveTaskSkills, getSkillById } from '../skills'
 import { buildPromptInput } from '../runtime/context-builder'
+import { enrichTaskContextForGeneration } from '../runtime/task-context'
 import { buildRunMeta, buildResponsePreview } from '../runtime/run-meta'
-import { logPrompt, logResponse, logError } from '../runtime/logging'
+import { logPrompt, logResponse, logError, logSelection } from '../runtime/logging'
 import { runAgent } from './run-agent'
 import { createSkillTools } from './tools/skill-tools'
 import { createKnowledgeTools } from './tools/knowledge-tools'
@@ -12,13 +14,22 @@ import { createChapterTools } from './tools/chapter-tools'
 import { createProjectDataTools } from './tools/project-data-tools'
 import { buildAgentBehaviorRules, buildSkillIndex } from './system-prompt'
 import { getRecentSkillUsage, formatSkillUsageHint, recordSkillUsage } from './skill-usage-memory'
-import type { AiKnowledgeDocumentDraft, AiTaskKnowledgeContext } from '../shared-types'
 
 /** 去掉 SKILL.md 开头的 YAML frontmatter 块（--- ... ---）。 */
 function stripSkillFrontmatter(content: string): string {
   const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/)
   if (!match) return content
   return content.slice(match[0].length)
+}
+
+function resolveStreamingAgentMaxSteps(taskName: AiTaskPayload['task'], optionalSkillCount: number): number | undefined {
+  if (taskName !== 'chapter-first-draft') {
+    return undefined
+  }
+
+  const normalizedOptionalSkills = Math.max(0, Math.min(optionalSkillCount, 3))
+  // 预算预留给：1 次项目数据读取 + 2-3 次 skill_load + 1-2 轮正文收束/修正。
+  return Math.min(6 + normalizedOptionalSkills, AGENT_STREAM_MAX_ITERATIONS)
 }
 
 /**
@@ -40,14 +51,12 @@ export async function runStreamingAgentTask(
   const settings = normalizeSettings(task.settings)
   validateSettings(settings)
   const startedAt = new Date().toISOString()
-  const projectId = String(task.context.projectId ?? '').trim()
   const chapterId = String(task.context.chapterId ?? '').trim() || undefined
 
   const handler = getTaskHandler(task.task)
-  await refreshRegistry(projectId || undefined).catch(() => {})
-
-  const candidateSkills = await pickSkillsFor(task)
-  const usedSkillIds = candidateSkills.map((s) => s.id)
+  const { projectId, skills: candidateSkills, usedSkillIds } = await resolveTaskSkills(task)
+  logSelection(task.task, candidateSkills, knowledgeContext?.usedKnowledge ?? [])
+  await enrichTaskContextForGeneration(task, settings)
 
   const input = buildPromptInput(task, candidateSkills, knowledgeContext)
   if (task.task === 'chapter-first-draft') {
@@ -63,6 +72,7 @@ export async function runStreamingAgentTask(
 
   const requiredSkillDefs = candidateSkillDefs.filter((s) => s.manifest.required)
   const optionalSkillDefs = candidateSkillDefs.filter((s) => !s.manifest.required)
+  const maxSteps = resolveStreamingAgentMaxSteps(task.task, optionalSkillDefs.length)
 
   const requiredSkillBlock = requiredSkillDefs.length
     ? `\n\n## 强制生效的 SKILLS\n\n${requiredSkillDefs.map((s) => {
@@ -137,7 +147,7 @@ export async function runStreamingAgentTask(
       ctx: { signal, projectId },
       handlers,
       maxTokens,
-      maxSteps: task.task === 'chapter-first-draft' ? 4 : undefined
+      maxSteps
     })
 
     logResponse('AGENT_STREAM', settings, task.task, loopResult.finalText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
@@ -147,6 +157,7 @@ export async function runStreamingAgentTask(
     const meta = buildRunMeta(
       task.task, projectId, chapterId, settings, 'success',
       startedAt, finishedAt,
+      loopResult.usage,
       knowledgeContext?.usedKnowledge ?? [], usedSkillIds,
       false, buildResponsePreview(result), ''
     )
@@ -166,6 +177,7 @@ export async function runStreamingAgentTask(
     const meta = buildRunMeta(
       task.task, projectId, chapterId, settings, 'error',
       startedAt, finishedAt,
+      undefined,
       knowledgeContext?.usedKnowledge ?? [], usedSkillIds,
       false, '', message
     )

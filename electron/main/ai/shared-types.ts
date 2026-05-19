@@ -81,6 +81,14 @@ export type AiRunKnowledgeItem = {
   keywords: string[]
 }
 
+export type AiRunUsage = {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  reasoningTokens?: number
+  cachedInputTokens?: number
+}
+
 export type AiRunMeta = {
   task: AiTaskName
   projectId: string
@@ -97,6 +105,7 @@ export type AiRunMeta = {
   startedAt: string
   finishedAt?: string
   durationMs?: number
+  usage?: AiRunUsage
   usedKnowledge: AiRunKnowledgeItem[]
   usedSkills: string[]
   repairTriggered: boolean
@@ -419,5 +428,22 @@ export type ChapterStateWarningsPayload = {
     type: 'location_mismatch' | 'item_not_owned' | 'timeline_break' | 'rule_violation' | 'state_conflict'
     severity: 'error' | 'warning'
     message: string
+  }>
+}
+
+/**
+ * 章节正文生成成功后的异步后处理问题事件 payload。
+ * 即使 issues 为空也会广播一次，用于清理 renderer 里上一轮遗留的旧问题提示。
+ */
+export type ChapterPostGenerationIssuesPayload = {
+  projectId: string
+  chapterId: string
+  chapterIndex: number
+  generatedAt: string
+  issues: Array<{
+    stage: 'state-delta' | 'vector-index' | 'pipeline'
+    severity: 'warning' | 'error'
+    message: string
+    detail?: string
   }>
 }

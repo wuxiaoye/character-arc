@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ChevronRight, Folder, FocusIcon, History, Maximize2, Menu, MessageSquareQuote, Minus, Minimize2, Plus, RefreshCw, Sparkles, Wand2 } from 'lucide-vue-next'
-import { NTag, NTooltip } from 'naive-ui'
+import { NAlert, NTag, NTooltip } from 'naive-ui'
 import SimpleChapterEditor from './SimpleChapterEditor.vue'
 import ChapterVersionDialog from './ChapterVersionDialog.vue'
 import { getChapterCharacterCount } from '@/features/chapters/editorContent'
@@ -63,6 +63,23 @@ const chapterIndex = computed(() => {
   const i = appStore.chapters.findIndex((c) => c.id === currentChapter.value?.id)
   return i >= 0 ? i + 1 : 1
 })
+
+const postGenerationIssues = computed(() => {
+  const chapterId = currentChapter.value?.id ?? ''
+  return chapterId ? appStore.getChapterPostGenerationIssues(chapterId) : null
+})
+
+const postGenerationIssueType = computed(() =>
+  postGenerationIssues.value?.issues.some((issue) => issue.severity === 'error') ? 'error' : 'warning'
+)
+
+function dismissPostGenerationIssues(): void {
+  const chapterId = currentChapter.value?.id ?? ''
+  if (!chapterId) {
+    return
+  }
+  appStore.dismissChapterPostGenerationIssues(chapterId)
+}
 
 const selToolbarVisible = ref(false)
 const selToolbarTop = ref(0)
@@ -191,6 +208,30 @@ onBeforeUnmount(() => {
             <n-tag size="small" :bordered="false">目标 {{ formatChapterWordTargetLabel(currentChapter.wordTarget) }}</n-tag>
             <span v-if="currentChapter.summary" class="meta-summary">大纲：{{ currentChapter.summary }}</span>
           </div>
+
+          <n-alert
+            v-if="postGenerationIssues?.issues.length"
+            :type="postGenerationIssueType"
+            :show-icon="false"
+            closable
+            class="ep-postgen-alert"
+            @close="dismissPostGenerationIssues"
+          >
+            <template #header>
+              本章正文已生成，但后处理没有完全完成
+            </template>
+            <div class="ep-postgen-copy">
+              你可以继续写作；如果依赖世界状态连续性或语义检索，建议稍后重试状态回填或重新触发一次生成。
+            </div>
+            <ul class="ep-postgen-list">
+              <li
+                v-for="(issue, idx) in postGenerationIssues.issues"
+                :key="`${issue.stage}-${idx}-${issue.message}`"
+              >
+                {{ issue.message }}
+              </li>
+            </ul>
+          </n-alert>
 
           <SimpleChapterEditor
             class="ep-editor"
@@ -444,6 +485,22 @@ onBeforeUnmount(() => {
 
 .ep-editor {
   background: transparent;
+}
+
+.ep-postgen-alert {
+  margin-bottom: 20px;
+}
+
+.ep-postgen-copy {
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.ep-postgen-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.65;
 }
 
 .ep-empty {

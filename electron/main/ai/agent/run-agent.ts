@@ -1,7 +1,7 @@
 import { streamText, stepCountIs, tool, dynamicTool } from 'ai'
 import { z } from 'zod'
-import { createModel } from '../provider'
-import type { AppSettings, AiAgentStreamHandlers, ToolCallTrace } from '../shared-types'
+import { buildSystemPrompt, createModel } from '../provider'
+import type { AiRunUsage, AppSettings, AiAgentStreamHandlers, ToolCallTrace } from '../shared-types'
 import type { Tool, ToolContext } from './tools/types'
 
 const ANY_INPUT_SCHEMA = z.record(z.string(), z.unknown())
@@ -21,6 +21,7 @@ export type RunAgentResult = {
   finalText: string
   toolCalls: ToolCallTrace[]
   iterations: number
+  usage?: AiRunUsage
 }
 
 export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> {
@@ -48,7 +49,7 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
 
   const result = streamText({
     model: createModel(params.settings),
-    system: params.systemPrompt,
+    system: buildSystemPrompt(params.settings, params.systemPrompt),
     prompt: params.userPrompt,
     tools: sdkTools,
     stopWhen: stepCountIs(maxSteps),
@@ -90,5 +91,19 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
     params.handlers.onTextDelta(chunk)
   }
 
-  return { finalText: fullText, toolCalls, iterations: stepCount }
+  const totalUsage = await result.totalUsage
+  const usage: AiRunUsage = {
+    promptTokens: Number.isFinite(totalUsage.inputTokens) ? totalUsage.inputTokens : undefined,
+    completionTokens: Number.isFinite(totalUsage.outputTokens) ? totalUsage.outputTokens : undefined,
+    totalTokens: Number.isFinite(totalUsage.totalTokens) ? totalUsage.totalTokens : undefined,
+    reasoningTokens: Number.isFinite(totalUsage.reasoningTokens) ? totalUsage.reasoningTokens : undefined,
+    cachedInputTokens: Number.isFinite(totalUsage.cachedInputTokens) ? totalUsage.cachedInputTokens : undefined
+  }
+
+  return {
+    finalText: fullText,
+    toolCalls,
+    iterations: stepCount,
+    usage: Object.values(usage).some((value) => value !== undefined) ? usage : undefined
+  }
 }

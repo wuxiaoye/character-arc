@@ -10,7 +10,8 @@ const props = defineProps<{
   isAuditing: boolean
   isStreaming: boolean
   executionLabel: string
-  streamingContent: string
+  previewTitle: string
+  previewContent: string
   progressPercent: number
   progressText: string
   auditResult: ChapterAuditPayload | null
@@ -85,7 +86,8 @@ const auditSummary = computed(() => {
         {{ progressText || '已停止或完成本次 AI 初稿生成。' }}
       </p>
       <div class="preview arc-scrollbar">
-        <pre v-if="streamingContent">{{ streamingContent }}</pre>
+        <div v-if="previewTitle" class="preview-head">{{ previewTitle }}</div>
+        <pre v-if="previewContent">{{ previewContent }}</pre>
         <div v-else class="preview-placeholder">
           <span class="placeholder-text">{{ executionLabel || 'AI 正在准备本章初稿内容' }}</span>
           <span class="blink-cursor" />
@@ -236,6 +238,13 @@ const auditSummary = computed(() => {
   padding: 12px 14px;
   max-height: 320px;
   overflow-y: auto;
+}
+
+.preview-head {
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--arc-text-hint);
+  letter-spacing: 0.04em;
 }
 
 .preview pre {

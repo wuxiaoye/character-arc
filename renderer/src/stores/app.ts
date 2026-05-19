@@ -199,6 +199,8 @@ export const useAppStore = defineStore('app', () => {
   const currentChapterSelection = ref<ChapterSelectionState | null>(null)
   /** 章节轻检告警：key 为 chapterId，value 为告警 payload。由章节生成后的异步后处理流水线推送。 */
   const chapterStateWarnings = ref<Map<string, CharacterArcChapterStateWarningsPayload>>(new Map())
+  /** 章节生成后处理问题：key 为 chapterId，value 为问题 payload。issues 为空时会自动清理旧提示。 */
+  const chapterPostGenerationIssues = ref<Map<string, CharacterArcChapterPostGenerationIssuesPayload>>(new Map())
   /** 当前选中的章节 ID */
   const selectedChapterId = ref(stored.workspaces[stored.selectedProjectId]?.chapters[0]?.id ?? '')
   /** 流程面板当前激活的分卷 ID，空字符串时回退到第一个分卷 */
@@ -523,6 +525,31 @@ export const useAppStore = defineStore('app', () => {
     const next = new Map(chapterStateWarnings.value)
     next.delete(chapterId)
     chapterStateWarnings.value = next
+  }
+
+  function handleChapterPostGenerationIssues(payload: CharacterArcChapterPostGenerationIssuesPayload): void {
+    if (characterArcWindowKind !== 'main' || !payload?.chapterId || !Array.isArray(payload.issues)) {
+      return
+    }
+    const next = new Map(chapterPostGenerationIssues.value)
+    if (payload.issues.length === 0) {
+      next.delete(payload.chapterId)
+    } else {
+      next.set(payload.chapterId, payload)
+    }
+    chapterPostGenerationIssues.value = next
+  }
+
+  function getChapterPostGenerationIssues(chapterId: string): CharacterArcChapterPostGenerationIssuesPayload | null {
+    if (!chapterId) return null
+    return chapterPostGenerationIssues.value.get(chapterId) ?? null
+  }
+
+  function dismissChapterPostGenerationIssues(chapterId: string): void {
+    if (!chapterId || !chapterPostGenerationIssues.value.has(chapterId)) return
+    const next = new Map(chapterPostGenerationIssues.value)
+    next.delete(chapterId)
+    chapterPostGenerationIssues.value = next
   }
 
   function handleAssistantMessage(payload: CharacterArcAssistantMessagePayload): void {
@@ -1553,6 +1580,15 @@ export const useAppStore = defineStore('app', () => {
         {
           ...record,
           projectId,
+          usage: record.usage && typeof record.usage === 'object'
+            ? {
+                promptTokens: Number.isFinite(record.usage.promptTokens) ? Math.max(0, Number(record.usage.promptTokens)) : undefined,
+                completionTokens: Number.isFinite(record.usage.completionTokens) ? Math.max(0, Number(record.usage.completionTokens)) : undefined,
+                totalTokens: Number.isFinite(record.usage.totalTokens) ? Math.max(0, Number(record.usage.totalTokens)) : undefined,
+                reasoningTokens: Number.isFinite(record.usage.reasoningTokens) ? Math.max(0, Number(record.usage.reasoningTokens)) : undefined,
+                cachedInputTokens: Number.isFinite(record.usage.cachedInputTokens) ? Math.max(0, Number(record.usage.cachedInputTokens)) : undefined
+              }
+            : undefined,
           usedKnowledge: Array.isArray(record.usedKnowledge)
             ? record.usedKnowledge.map((item) => {
                 const sourceType: AiRunRecord['usedKnowledge'][number]['sourceType'] =
@@ -2883,6 +2919,7 @@ export const useAppStore = defineStore('app', () => {
   } else {
     window.characterArc.onAiRunEvent(handleAiRunEvent)
     window.characterArc.onChapterStateWarnings(handleChapterStateWarnings)
+    window.characterArc.onChapterPostGenerationIssues(handleChapterPostGenerationIssues)
     window.characterArc.onAssistantMessage((payload) => {
       handleAssistantMessage(payload)
     })
@@ -3091,6 +3128,8 @@ export const useAppStore = defineStore('app', () => {
     dismissAiTask,
     cancelAiTask,
     getChapterStateWarnings,
-    dismissChapterStateWarnings
+    dismissChapterStateWarnings,
+    getChapterPostGenerationIssues,
+    dismissChapterPostGenerationIssues
   }
 })

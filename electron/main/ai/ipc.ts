@@ -1,10 +1,10 @@
 import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { AiTaskPayload, AppSettings, ChapterStateWarningsPayload } from './shared-types'
+import type { AiTaskPayload, AppSettings, ChapterPostGenerationIssuesPayload, ChapterStateWarningsPayload } from './shared-types'
 import { runAiTask, streamAiTask, testAiConnection, fetchModels, fetchImageModels, generateImage } from './runtime'
 import { runStreamingAgentTask } from './agent/streaming-orchestrator'
 import { providerSupportsTools } from './provider'
-import { setChapterWarningsEmitter } from './runtime/orchestrator'
+import { setChapterPostGenerationIssuesEmitter, setChapterWarningsEmitter } from './runtime/orchestrator'
 import { retrieveKnowledgeContext } from './knowledge-retrieval'
 import { backfillProjectStateFromChapters } from './state-backfill'
 import { buildStoryStateContext } from '../story-state-store'
@@ -23,6 +23,8 @@ type AiIpcDeps = {
   emitAiRunEvent: (payload: { projectId: string; meta: Record<string, unknown> }) => void
   /** 向 renderer 广播章节状态告警事件 */
   emitChapterStateWarnings: (payload: ChapterStateWarningsPayload) => void
+  /** 向 renderer 广播章节生成后处理问题事件 */
+  emitChapterPostGenerationIssues: (payload: ChapterPostGenerationIssuesPayload) => void
 }
 
 /** 注入的外部依赖，registerAiIpcHandlers 调用时初始化 */
@@ -48,6 +50,7 @@ const activeAiTasks = new Map<string, AbortController>()
 export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
   deps = injectedDeps
   setChapterWarningsEmitter((payload) => deps?.emitChapterStateWarnings(payload))
+  setChapterPostGenerationIssuesEmitter((payload) => deps?.emitChapterPostGenerationIssues(payload))
 
   // ── 非流式 AI 生成（支持 abort） ──
   ipcMain.handle('characterarc:ai-generate', async (_event, payload: AiTaskPayload) => {
@@ -142,7 +145,12 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
               deps!.emitAiRunEvent({ projectId: result.meta.projectId, meta: { id: randomUUID(), ...result.meta } })
             }
             if (!event.sender.isDestroyed()) {
-              event.sender.send('characterarc:ai-stream-event', { streamId, type: 'done', content: (result.result as { content?: string }).content ?? '' })
+              event.sender.send('characterarc:ai-stream-event', {
+                streamId,
+                type: 'done',
+                content: (result.result as { content?: string }).content ?? streamedContent,
+                result: result.result
+              })
             }
           } else {
             const result = await streamAiTask(
@@ -162,7 +170,12 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
               deps!.emitAiRunEvent({ projectId: result.meta.projectId, meta: { id: randomUUID(), ...result.meta } })
             }
             if (!event.sender.isDestroyed()) {
-              event.sender.send('characterarc:ai-stream-event', { streamId, type: 'done', content: (result.result as { content?: string }).content ?? '' })
+              event.sender.send('characterarc:ai-stream-event', {
+                streamId,
+                type: 'done',
+                content: (result.result as { content?: string }).content ?? streamedContent,
+                result: result.result
+              })
             }
           }
         } catch (error) {
@@ -249,7 +262,7 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
             deps!.emitAiRunEvent({ projectId: result.meta.projectId, meta: { id: randomUUID(), ...result.meta } })
           }
           if (!event.sender.isDestroyed()) {
-            event.sender.send('characterarc:ai-stream-event', { streamId, type: 'done', content: streamedContent })
+            event.sender.send('characterarc:ai-stream-event', { streamId, type: 'done', content: streamedContent, result: result.result })
           }
         } catch (error) {
           if (!event.sender.isDestroyed()) {

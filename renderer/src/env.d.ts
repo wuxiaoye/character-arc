@@ -26,6 +26,7 @@ declare global {
         streamId: string
         type: 'done' | 'canceled'
         content?: string
+        result?: unknown
       }
     | {
         streamId: string
@@ -213,6 +214,19 @@ declare global {
     }>
   }
 
+  type CharacterArcChapterPostGenerationIssuesPayload = {
+    projectId: string
+    chapterId: string
+    chapterIndex: number
+    generatedAt: string
+    issues: Array<{
+      stage: 'state-delta' | 'vector-index' | 'pipeline'
+      severity: 'warning' | 'error'
+      message: string
+      detail?: string
+    }>
+  }
+
   type CharacterArcBackfillStateProgressPayload = {
     projectId: string
     current: number
@@ -294,6 +308,7 @@ declare global {
       onAiStreamEvent: (callback: (payload: CharacterArcAiStreamEvent) => void) => () => void
       onAiRunEvent: (callback: (payload: CharacterArcAiRunEventPayload) => void) => () => void
       onChapterStateWarnings: (callback: (payload: CharacterArcChapterStateWarningsPayload) => void) => () => void
+      onChapterPostGenerationIssues: (callback: (payload: CharacterArcChapterPostGenerationIssuesPayload) => void) => () => void
       spiralBootstrap: (payload: unknown) => Promise<{
         success: boolean
         result?: import('@/features/wizard/projectSeed').SpiralBootstrapResult

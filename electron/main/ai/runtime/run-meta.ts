@@ -1,4 +1,4 @@
-import type { AiRunMeta, AiRunKnowledgeItem, AiTaskName, AppSettings, AiTaskResult } from '../shared-types'
+import type { AiRunMeta, AiRunKnowledgeItem, AiRunUsage, AiTaskName, AppSettings, AiTaskResult } from '../shared-types'
 
 /**
  * 构建 AI 运行元数据对象，记录一次 AI 调用的关键信息
@@ -9,6 +9,7 @@ import type { AiRunMeta, AiRunKnowledgeItem, AiTaskName, AppSettings, AiTaskResu
  * @param status - 运行状态（success / error / canceled）
  * @param startedAt - 开始时间 ISO 字符串
  * @param finishedAt - 结束时间 ISO 字符串
+ * @param usage - 本次运行累计 token 用量
  * @param usedKnowledge - 本次使用的知识条目
  * @param usedSkills - 本次使用的技能 ID 列表
  * @param repairTriggered - 是否触发了 JSON 修复
@@ -25,6 +26,7 @@ export function buildRunMeta(
   status: AiRunMeta['status'],
   startedAt: string,
   finishedAt: string,
+  usage: AiRunUsage | undefined,
   usedKnowledge: AiRunKnowledgeItem[],
   usedSkills: string[],
   repairTriggered: boolean,
@@ -49,6 +51,7 @@ export function buildRunMeta(
     startedAt,
     finishedAt,
     durationMs,
+    usage,
     usedKnowledge: usedKnowledge.slice(0, 5),
     usedSkills,
     repairTriggered,

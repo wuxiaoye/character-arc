@@ -86,6 +86,14 @@ contextBridge.exposeInMainWorld('characterArc', {
       ipcRenderer.removeListener('characterarc:chapter-state-warnings', listener)
     }
   },
+  /** 监听章节生成后处理问题事件（状态提取/语义索引/流水线故障） */
+  onChapterPostGenerationIssues: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
+    ipcRenderer.on('characterarc:chapter-post-generation-issues', listener)
+    return () => {
+      ipcRenderer.removeListener('characterarc:chapter-post-generation-issues', listener)
+    }
+  },
   /** 测试 AI 连接是否通畅，发送探测请求验证鉴权和网络 */
   testAiConnection: (settings: unknown) => ipcRenderer.invoke('characterarc:ai-test-connection', toIpcPayload(settings)),
   /** 获取 AI 供应商的可用模型列表 */

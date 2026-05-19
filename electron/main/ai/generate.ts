@@ -1,33 +1,114 @@
-import { generateText, streamText } from 'ai'
-import { createModel } from './provider'
-import type { AppSettings, AiStreamHandlers, PromptPair } from './shared-types'
+import { generateObject, generateText, streamObject, streamText } from 'ai'
+import type { LanguageModelUsage } from 'ai'
+import type { ZodTypeAny } from 'zod'
+import { buildSystemPrompt, createModel } from './provider'
+import type { AiRunUsage, AppSettings, AiStreamHandlers, PromptPair } from './shared-types'
+
+export type AiGenerateOptions = {
+  schema?: ZodTypeAny
+}
+
+export type AiTextGenerationResult = {
+  text: string
+  usage?: AiRunUsage
+}
+
+function toAiRunUsage(usage?: LanguageModelUsage): AiRunUsage | undefined {
+  if (!usage) {
+    return undefined
+  }
+
+  const normalized: AiRunUsage = {
+    promptTokens: Number.isFinite(usage.inputTokens) ? usage.inputTokens : undefined,
+    completionTokens: Number.isFinite(usage.outputTokens) ? usage.outputTokens : undefined,
+    totalTokens: Number.isFinite(usage.totalTokens) ? usage.totalTokens : undefined,
+    reasoningTokens: Number.isFinite(usage.reasoningTokens) ? usage.reasoningTokens : undefined,
+    cachedInputTokens: Number.isFinite(usage.cachedInputTokens) ? usage.cachedInputTokens : undefined
+  }
+
+  return Object.values(normalized).some((value) => value !== undefined) ? normalized : undefined
+}
+
+export function addAiRunUsage(left?: AiRunUsage, right?: AiRunUsage): AiRunUsage | undefined {
+  if (!left) return right
+  if (!right) return left
+
+  const add = (a?: number, b?: number): number | undefined => {
+    if (!Number.isFinite(a) && !Number.isFinite(b)) {
+      return undefined
+    }
+    return (Number.isFinite(a) ? a : 0) + (Number.isFinite(b) ? b : 0)
+  }
+
+  const merged: AiRunUsage = {
+    promptTokens: add(left.promptTokens, right.promptTokens),
+    completionTokens: add(left.completionTokens, right.completionTokens),
+    totalTokens: add(left.totalTokens, right.totalTokens),
+    reasoningTokens: add(left.reasoningTokens, right.reasoningTokens),
+    cachedInputTokens: add(left.cachedInputTokens, right.cachedInputTokens)
+  }
+
+  return Object.values(merged).some((value) => value !== undefined) ? merged : undefined
+}
+
+export async function aiGenerateTextWithUsage(
+  settings: AppSettings,
+  prompt: PromptPair,
+  maxTokens?: number,
+  signal?: AbortSignal,
+  options?: AiGenerateOptions
+): Promise<AiTextGenerationResult> {
+  const system = buildSystemPrompt(settings, prompt.system)
+
+  if (options?.schema) {
+    const result = await generateObject({
+      model: createModel(settings),
+      system,
+      prompt: prompt.user,
+      schema: options.schema,
+      maxOutputTokens: maxTokens,
+      abortSignal: signal
+    })
+    return {
+      text: JSON.stringify(result.object),
+      usage: toAiRunUsage(result.usage)
+    }
+  }
+
+  const result = await generateText({
+    model: createModel(settings),
+    system,
+    prompt: prompt.user,
+    maxOutputTokens: maxTokens,
+    abortSignal: signal
+  })
+  return {
+    text: result.text,
+    usage: toAiRunUsage(result.usage)
+  }
+}
 
 export async function aiGenerateText(
   settings: AppSettings,
   prompt: PromptPair,
   maxTokens?: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: AiGenerateOptions
 ): Promise<string> {
-  const result = await generateText({
-    model: createModel(settings),
-    system: prompt.system,
-    prompt: prompt.user,
-    maxOutputTokens: maxTokens,
-    abortSignal: signal
-  })
+  const result = await aiGenerateTextWithUsage(settings, prompt, maxTokens, signal, options)
   return result.text
 }
 
-export async function aiStreamText(
+export async function aiStreamTextWithUsage(
   settings: AppSettings,
   prompt: PromptPair,
   handlers: AiStreamHandlers,
   signal: AbortSignal,
   maxTokens?: number
-): Promise<string> {
+): Promise<AiTextGenerationResult> {
   const result = streamText({
     model: createModel(settings),
-    system: prompt.system,
+    system: buildSystemPrompt(settings, prompt.system),
     prompt: prompt.user,
     maxOutputTokens: maxTokens,
     abortSignal: signal
@@ -37,5 +118,48 @@ export async function aiStreamText(
     full += chunk
     handlers.onTextDelta(chunk)
   }
-  return full
+  return {
+    text: full,
+    usage: toAiRunUsage(await result.totalUsage)
+  }
+}
+
+export async function aiStreamObjectWithUsage(
+  settings: AppSettings,
+  prompt: PromptPair,
+  handlers: AiStreamHandlers,
+  signal: AbortSignal,
+  schema: ZodTypeAny,
+  maxTokens?: number
+): Promise<AiTextGenerationResult> {
+  const result = streamObject({
+    model: createModel(settings),
+    system: buildSystemPrompt(settings, prompt.system),
+    prompt: prompt.user,
+    schema,
+    maxOutputTokens: maxTokens,
+    abortSignal: signal
+  })
+
+  let full = ''
+  for await (const chunk of result.textStream) {
+    full += chunk
+    handlers.onTextDelta(chunk)
+  }
+
+  return {
+    text: full,
+    usage: toAiRunUsage(await result.usage)
+  }
+}
+
+export async function aiStreamText(
+  settings: AppSettings,
+  prompt: PromptPair,
+  handlers: AiStreamHandlers,
+  signal: AbortSignal,
+  maxTokens?: number
+): Promise<string> {
+  const result = await aiStreamTextWithUsage(settings, prompt, handlers, signal, maxTokens)
+  return result.text
 }

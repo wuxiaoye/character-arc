@@ -558,6 +558,15 @@ export interface AiRunKnowledgeItem {
 /** AI 运行状态 */
 export type AiRunStatus = 'running' | 'success' | 'error' | 'canceled'
 
+/** AI 运行 token 用量 */
+export interface AiRunUsage {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  reasoningTokens?: number
+  cachedInputTokens?: number
+}
+
 /** AI 调用运行记录 */
 export interface AiRunRecord {
   /** 运行记录唯一标识 */
@@ -582,6 +591,8 @@ export interface AiRunRecord {
   finishedAt?: string
   /** 总耗时（毫秒） */
   durationMs?: number
+  /** 本次运行的 token 用量 */
+  usage?: AiRunUsage
   /** 本次使用的知识项 */
   usedKnowledge: AiRunKnowledgeItem[]
   /** 是否触发结构化修复 */

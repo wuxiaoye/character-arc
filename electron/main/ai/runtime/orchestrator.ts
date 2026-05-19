@@ -3,16 +3,20 @@ import type {
   AiTaskKnowledgeContext,
   AiTaskResponse,
   AiTaskResult,
+  AiRunUsage,
   AppSettings,
   AiStreamHandlers,
+  ChapterPostGenerationIssuesPayload,
   ChapterStateWarningsPayload
 } from '../shared-types'
 import { normalizeSettings, validateSettings, resolveMaxTokens, AGENT_TASK_WHITELIST } from '../settings'
 import { getTaskHandler } from '../tasks'
-import { getAllSkills, pickSkillsFor, refreshRegistry } from '../skills'
-import { aiGenerateText, aiStreamText } from '../generate'
+import { getStructuredTaskSchema } from '../tasks/object-schemas'
+import { resolveTaskSkills } from '../skills'
+import { addAiRunUsage, aiGenerateText, aiGenerateTextWithUsage, aiStreamObjectWithUsage, aiStreamTextWithUsage } from '../generate'
 import { providerSupportsTools } from '../provider'
 import { buildPromptInput } from './context-builder'
+import { enrichTaskContextForGeneration } from './task-context'
 import { buildRunMeta, buildResponsePreview } from './run-meta'
 import { logPrompt, logResponse, logSelection, logError } from './logging'
 import { buildRepairPrompt } from '../prompts/repair'
@@ -21,7 +25,7 @@ import { runAgentTask } from '../agent'
 import { ensureWorkspaceDb } from '../../workspace-store'
 import { buildStoryStateContext, formatStoryStateForPrompt, applyStateDelta } from '../../story-state-store'
 import type { StateDelta } from '../../story-state-store'
-import { indexChapterSegments, retrieveHybridContext, formatSemanticSegmentsForPrompt } from '../knowledge-retrieval'
+import { indexChapterSegments } from '../knowledge-retrieval'
 import { runLightCheck } from '../audit/light-check'
 
 /**
@@ -37,11 +41,12 @@ export async function runAiTask(
   knowledgeContext?: AiTaskKnowledgeContext,
   signal?: AbortSignal
 ): Promise<AiTaskResponse> {
+  const handler = getTaskHandler(task.task)
   // 灰度分流：白名单内 + provider 支持 tool_use → 走 agent loop（progressive skill disclosure）。
   // 任意一个不满足 → 走原单次调用路径。renderer 完全无感。
   const settingsForRouting = normalizeSettings(task.settings)
   if (AGENT_TASK_WHITELIST.has(task.task)) {
-    if (providerSupportsTools(settingsForRouting)) {
+    if (handler.outputType === 'text' && providerSupportsTools(settingsForRouting)) {
       return runAgentTask(task, knowledgeContext)
     }
     if (task.task === 'reference-deep-analyze') {
@@ -52,49 +57,36 @@ export async function runAiTask(
   const settings = settingsForRouting
   validateSettings(settings)
   const startedAt = new Date().toISOString()
-  const projectId = String(task.context.projectId ?? '').trim()
   const clientKey = task.clientKey
 
-  const handler = getTaskHandler(task.task)
-  await refreshRegistry(projectId || undefined).catch(() => {})
-  const skills = await pickSkillsFor(task, resolveEnabledSkillOverrides(task, projectId))
-  const usedSkillIds = skills.map((s) => s.id)
+  const { projectId, skills, usedSkillIds } = await resolveTaskSkills(task)
   logSelection(task.task, skills, knowledgeContext?.usedKnowledge ?? [])
-
-  // Phase 1: 为 chapter-first-draft / chapter-assistant / chapter-analysis / chapter-scene-plan
-  // 走混合检索（状态块 + 向量语义段）；story-deep-audit 只需要状态块。
-  if (projectId) {
-    if (task.task === 'chapter-first-draft' || task.task === 'chapter-assistant' ||
-        task.task === 'chapter-analysis' || task.task === 'chapter-scene-plan') {
-      try {
-        const hybrid = await retrieveHybridContext(task, settings)
-        if (hybrid) {
-          if (hybrid.storyStateBlock) task.context.storyStateBlock = hybrid.storyStateBlock
-          const semanticBlock = formatSemanticSegmentsForPrompt(hybrid.semanticSegments)
-          if (semanticBlock) task.context.semanticSegmentsBlock = semanticBlock
-        }
-      } catch { /* 混合检索失败不阻塞生成 */ }
-    } else if (task.task === 'story-deep-audit') {
-      try {
-        const db = await ensureWorkspaceDb()
-        const involvedCharIds = extractInvolvedCharacterIds(task.context)
-        const storyState = buildStoryStateContext(db, projectId, involvedCharIds)
-        const storyStateBlock = formatStoryStateForPrompt(storyState)
-        if (storyStateBlock) task.context.storyStateBlock = storyStateBlock
-      } catch { /* 状态库查询失败不阻塞生成 */ }
-    }
-  }
+  await enrichTaskContextForGeneration(task, settings)
 
   const input = buildPromptInput(task, skills, knowledgeContext)
   const prompt = handler.buildPrompt(input)
   const maxTokens = handler.resolveMaxTokens?.(input) ?? resolveMaxTokens(task)
+  const structuredSchema = handler.outputType === 'json' ? getStructuredTaskSchema(handler.name) : undefined
+
+  if (handler.outputType === 'json' && !structuredSchema) {
+    throw new Error(`任务 ${handler.name} 缺少结构化输出 schema。`)
+  }
 
   logPrompt('REQUEST', settings, prompt, task.task, usedSkillIds)
 
   const requestStartedAt = Date.now()
+  let totalUsage: AiRunUsage | undefined
 
   try {
-    let rawText = await aiGenerateText(settings, prompt, maxTokens, signal)
+    let generation = await aiGenerateTextWithUsage(
+      settings,
+      prompt,
+      maxTokens,
+      signal,
+      structuredSchema ? { schema: structuredSchema } : undefined
+    )
+    totalUsage = addAiRunUsage(totalUsage, generation.usage)
+    let rawText = generation.text
     logResponse('REQUEST', settings, task.task, rawText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
     let result: AiTaskResult
     let normalizeFailed = false
@@ -116,7 +108,15 @@ export async function runAiTask(
         const repairPromptPair = buildRepairPrompt(prompt.system, prompt.user, rawText, validationErrors)
         logPrompt(`REPAIR_${attempt}`, settings, repairPromptPair, task.task, usedSkillIds)
         const repairStartedAt = Date.now()
-        rawText = await aiGenerateText(settings, repairPromptPair, maxTokens, signal)
+        generation = await aiGenerateTextWithUsage(
+          settings,
+          repairPromptPair,
+          maxTokens,
+          signal,
+          structuredSchema ? { schema: structuredSchema } : undefined
+        )
+        totalUsage = addAiRunUsage(totalUsage, generation.usage)
+        rawText = generation.text
         logResponse(`REPAIR_${attempt}`, settings, task.task, rawText, Date.now() - repairStartedAt, { usedSkills: usedSkillIds })
         normalizeFailed = false
         try {
@@ -144,7 +144,7 @@ export async function runAiTask(
       const chIdx = Number(task.context.chapterIndex ?? task.context.chapterSortOrder ?? 0)
 
       if (finalContent.length > 50) {
-        runPostGenerationPipeline(settings, projectId, chIdx, chapterId, finalContent, task.context).catch(() => {})
+        void runPostGenerationPipeline(settings, projectId, chIdx, chapterId, finalContent, task.context)
       }
     }
 
@@ -159,6 +159,7 @@ export async function runAiTask(
         'success',
         startedAt,
         finishedAt,
+        totalUsage,
         knowledgeContext?.usedKnowledge ?? [],
         usedSkillIds,
         repairTriggered,
@@ -180,6 +181,7 @@ export async function runAiTask(
         'error',
         startedAt,
         finishedAt,
+        totalUsage,
         knowledgeContext?.usedKnowledge ?? [],
         usedSkillIds,
         false,
@@ -206,43 +208,44 @@ export async function streamAiTask(
   signal: AbortSignal,
   knowledgeContext?: AiTaskKnowledgeContext
 ): Promise<AiTaskResponse> {
-  if (task.task !== 'chapter-assistant' && task.task !== 'chapter-first-draft') {
-    throw new Error('当前流式输出仅支持章节创作助理和章节初稿生成。')
+  if (
+    task.task !== 'chapter-assistant'
+    && task.task !== 'chapter-first-draft'
+    && task.task !== 'chapter-memo'
+    && task.task !== 'chapter-audit'
+  ) {
+    throw new Error('当前流式输出仅支持章节创作助理、章节初稿、章节备忘和章节审计。')
   }
 
   const settings = normalizeSettings(task.settings)
   validateSettings(settings)
   const startedAt = new Date().toISOString()
-  const projectId = String(task.context.projectId ?? '').trim()
   const clientKey = task.clientKey
 
   const taskHandler = getTaskHandler(task.task)
-  await refreshRegistry(projectId || undefined).catch(() => {})
-  const skills = await pickSkillsFor(task, resolveEnabledSkillOverrides(task, projectId))
-  const usedSkillIds = skills.map((s) => s.id)
+  const { projectId, skills, usedSkillIds } = await resolveTaskSkills(task)
   logSelection(task.task, skills, knowledgeContext?.usedKnowledge ?? [])
-
-  // 流式路径也走混合检索（chapter-first-draft / chapter-assistant）
-  if ((task.task === 'chapter-first-draft' || task.task === 'chapter-assistant') && projectId) {
-    try {
-      const hybrid = await retrieveHybridContext(task, settings)
-      if (hybrid) {
-        if (hybrid.storyStateBlock) task.context.storyStateBlock = hybrid.storyStateBlock
-        const semanticBlock = formatSemanticSegmentsForPrompt(hybrid.semanticSegments)
-        if (semanticBlock) task.context.semanticSegmentsBlock = semanticBlock
-      }
-    } catch { /* 混合检索失败不阻塞生成 */ }
-  }
+  await enrichTaskContextForGeneration(task, settings)
 
   const input = buildPromptInput(task, skills, knowledgeContext)
   const prompt = taskHandler.buildPrompt(input)
   const maxTokens = taskHandler.resolveMaxTokens?.(input) ?? resolveMaxTokens(task)
+  const structuredSchema = taskHandler.outputType === 'json' ? getStructuredTaskSchema(taskHandler.name) : undefined
+
+  if (taskHandler.outputType === 'json' && !structuredSchema) {
+    throw new Error(`任务 ${taskHandler.name} 缺少结构化输出 schema。`)
+  }
 
   logPrompt('STREAM', settings, prompt, task.task, usedSkillIds)
   const requestStartedAt = Date.now()
+  let totalUsage: AiRunUsage | undefined
 
   try {
-    const rawText = await aiStreamText(settings, prompt, handlers, signal, maxTokens)
+    const generation = structuredSchema
+      ? await aiStreamObjectWithUsage(settings, prompt, handlers, signal, structuredSchema, maxTokens)
+      : await aiStreamTextWithUsage(settings, prompt, handlers, signal, maxTokens)
+    totalUsage = addAiRunUsage(totalUsage, generation.usage)
+    const rawText = generation.text
     logResponse('STREAM', settings, task.task, rawText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
     const result = taskHandler.normalize(rawText)
     const finishedAt = new Date().toISOString()
@@ -254,7 +257,7 @@ export async function streamAiTask(
       const chapterId = String(task.context.chapterId ?? '').trim()
       const chIdx = Number(task.context.chapterIndex ?? task.context.chapterSortOrder ?? 0)
       if (finalContent.length > 50) {
-        runPostGenerationPipeline(settings, projectId, chIdx, chapterId, finalContent, task.context).catch(() => {})
+        void runPostGenerationPipeline(settings, projectId, chIdx, chapterId, finalContent, task.context)
       }
     }
 
@@ -268,6 +271,7 @@ export async function streamAiTask(
         status,
         startedAt,
         finishedAt,
+        totalUsage,
         knowledgeContext?.usedKnowledge ?? [],
         usedSkillIds,
         false,
@@ -292,6 +296,7 @@ export async function streamAiTask(
         status,
         startedAt,
         finishedAt,
+        totalUsage,
         knowledgeContext?.usedKnowledge ?? [],
         usedSkillIds,
         false,
@@ -323,49 +328,8 @@ export async function testAiConnection(rawSettings: AppSettings): Promise<{ prov
   return { provider: settings.provider, model: settings.model }
 }
 
-/** 根据任务上下文中的 projectSkills 构建技能启用/禁用映射表 */
-function resolveEnabledSkillOverrides(
-  task: AiTaskPayload,
-  projectId: string
-): Map<string, boolean> | undefined {
-  if (!Array.isArray(task.context.projectSkills)) {
-    return undefined
-  }
-
-  const enabledIds = new Set(
-    task.context.projectSkills
-      .map((skill) => {
-        if (!skill || typeof skill !== 'object') {
-          return ''
-        }
-        return String((skill as { id?: string }).id ?? '').trim()
-      })
-      .filter(Boolean)
-  )
-
-  const allSkills = getAllSkills(projectId || undefined)
-  if (!allSkills.length) {
-    return undefined
-  }
-
-  return new Map(allSkills.map((skill) => [skill.id, enabledIds.has(skill.id)]))
-}
-
-/** 从任务上下文中提取涉及的角色 ID 列表 */
-function extractInvolvedCharacterIds(context: Record<string, unknown>): string[] {
-  const ids: string[] = []
-  const characters = context.characters
-  if (Array.isArray(characters)) {
-    for (const char of characters) {
-      if (char && typeof char === 'object' && 'id' in char) {
-        ids.push(String((char as { id: string }).id))
-      }
-    }
-  }
-  return ids
-}
-
 let chapterWarningsEmitter: ((payload: ChapterStateWarningsPayload) => void) | null = null
+let chapterPostGenerationIssuesEmitter: ((payload: ChapterPostGenerationIssuesPayload) => void) | null = null
 
 /**
  * IPC 层注入一个广播回调：章节轻检发现违规时，把告警推到前端。
@@ -373,6 +337,51 @@ let chapterWarningsEmitter: ((payload: ChapterStateWarningsPayload) => void) | n
  */
 export function setChapterWarningsEmitter(emit: (payload: ChapterStateWarningsPayload) => void): void {
   chapterWarningsEmitter = emit
+}
+
+export function setChapterPostGenerationIssuesEmitter(emit: (payload: ChapterPostGenerationIssuesPayload) => void): void {
+  chapterPostGenerationIssuesEmitter = emit
+}
+
+function buildIssueDetail(error: unknown): string | undefined {
+  const message = error instanceof Error ? error.message : String(error ?? '').trim()
+  return message || undefined
+}
+
+function emitPostGenerationIssues(
+  projectId: string,
+  chapterId: string,
+  chapterIndex: number,
+  generatedAt: string,
+  issues: ChapterPostGenerationIssuesPayload['issues']
+): void {
+  if (!chapterPostGenerationIssuesEmitter || !chapterId) {
+    return
+  }
+
+  chapterPostGenerationIssuesEmitter({
+    projectId,
+    chapterId,
+    chapterIndex,
+    generatedAt,
+    issues
+  })
+}
+
+function extractInvolvedCharacterIds(context: Record<string, unknown>): string[] {
+  const ids: string[] = []
+  const characters = context.characters
+  if (!Array.isArray(characters)) {
+    return ids
+  }
+
+  for (const char of characters) {
+    if (char && typeof char === 'object' && 'id' in char) {
+      ids.push(String((char as { id: string }).id))
+    }
+  }
+
+  return ids
 }
 
 /** 章节初稿生成后的异步后处理管线：提取状态变更 → 轻量审计 → 写入状态库 → 建立向量索引 */
@@ -384,32 +393,72 @@ async function runPostGenerationPipeline(
   chapterContent: string,
   context: Record<string, unknown>
 ): Promise<void> {
-  const db = await ensureWorkspaceDb()
-  const involvedCharIds = extractInvolvedCharacterIds(context)
-  const preState = buildStoryStateContext(db, projectId, involvedCharIds)
+  const generatedAt = new Date().toISOString()
+  const issues: ChapterPostGenerationIssuesPayload['issues'] = []
 
-  const delta = await extractStateDeltaViaLLM(settings, chapterContent, preState)
-  if (delta) {
-    const checkResult = runLightCheck(chapterContent, preState, delta)
-    if (!checkResult.passed) {
-      logResponse('LIGHT_CHECK', settings, 'chapter-first-draft',
-        checkResult.violations.map((v) => `[${v.severity}] ${v.message}`).join('\n'), 0, {})
-      if (chapterWarningsEmitter && chapterId) {
-        chapterWarningsEmitter({
-          projectId,
-          chapterId,
-          chapterIndex,
-          generatedAt: new Date().toISOString(),
-          violations: checkResult.violations
+  try {
+    const db = await ensureWorkspaceDb()
+    const involvedCharIds = extractInvolvedCharacterIds(context)
+    const preState = buildStoryStateContext(db, projectId, involvedCharIds)
+
+    const deltaResult = await extractStateDeltaViaLLMWithDiagnostics(settings, chapterContent, preState)
+    if (deltaResult.issue) {
+      issues.push(deltaResult.issue)
+    }
+
+    if (deltaResult.delta) {
+      const checkResult = runLightCheck(chapterContent, preState, deltaResult.delta)
+      if (!checkResult.passed) {
+        logResponse('LIGHT_CHECK', settings, 'chapter-first-draft',
+          checkResult.violations.map((v) => `[${v.severity}] ${v.message}`).join('\n'), 0, {})
+        if (chapterWarningsEmitter && chapterId) {
+          chapterWarningsEmitter({
+            projectId,
+            chapterId,
+            chapterIndex,
+            generatedAt,
+            violations: checkResult.violations
+          })
+        }
+      }
+
+      try {
+        applyStateDelta(db, projectId, chapterIndex, deltaResult.delta)
+      } catch (error) {
+        logError('POST_GENERATION_APPLY_STATE', settings, 'chapter-first-draft', error, 0)
+        issues.push({
+          stage: 'pipeline',
+          severity: 'error',
+          message: '本章正文已生成，但世界状态写入失败，后续连续性检查可能暂时不准确。',
+          detail: buildIssueDetail(error)
         })
       }
     }
-    applyStateDelta(db, projectId, chapterIndex, delta)
+
+    if (chapterId) {
+      try {
+        await indexChapterSegments(settings, projectId, chapterIndex, chapterContent, chapterId)
+      } catch (error) {
+        logError('POST_GENERATION_INDEX', settings, 'chapter-first-draft', error, 0)
+        issues.push({
+          stage: 'vector-index',
+          severity: 'warning',
+          message: '本章正文已生成，但语义索引更新失败，相关片段可能暂时检索不到。',
+          detail: buildIssueDetail(error)
+        })
+      }
+    }
+  } catch (error) {
+    logError('POST_GENERATION_PIPELINE', settings, 'chapter-first-draft', error, 0)
+    issues.push({
+      stage: 'pipeline',
+      severity: 'error',
+      message: '本章正文已生成，但后处理流水线执行失败，世界状态和语义索引可能没有更新。',
+      detail: buildIssueDetail(error)
+    })
   }
 
-  if (chapterId) {
-    indexChapterSegments(settings, projectId, chapterIndex, chapterContent, chapterId).catch(() => {})
-  }
+  emitPostGenerationIssues(projectId, chapterId, chapterIndex, generatedAt, issues)
 }
 
 /**
@@ -424,6 +473,18 @@ export async function extractStateDeltaViaLLM(
   chapterContent: string,
   preState: ReturnType<typeof buildStoryStateContext>
 ): Promise<StateDelta | null> {
+  const result = await extractStateDeltaViaLLMWithDiagnostics(settings, chapterContent, preState)
+  return result.delta
+}
+
+async function extractStateDeltaViaLLMWithDiagnostics(
+  settings: AppSettings,
+  chapterContent: string,
+  preState: ReturnType<typeof buildStoryStateContext>
+): Promise<{
+  delta: StateDelta | null
+  issue?: ChapterPostGenerationIssuesPayload['issues'][number]
+}> {
   const stateSnapshot = formatStoryStateForPrompt(preState)
   const prompt = {
     system: `你是状态变更提取器。根据小说章节正文和当前世界状态，提取本章发生的所有状态变更。
@@ -451,8 +512,17 @@ ${chapterContent}
     if (!parsed.relationships_delta) parsed.relationships_delta = []
     if (!parsed.foreshadowing_delta) parsed.foreshadowing_delta = { planted: [], advanced: [], resolved: [] }
     if (!parsed.timeline) parsed.timeline = { story_time_elapsed: '', current_story_date: '', events: [] }
-    return parsed
-  } catch {
-    return null
+    return { delta: parsed }
+  } catch (error) {
+    logError('STATE_DELTA_EXTRACT', settings, 'chapter-first-draft', error, 0)
+    return {
+      delta: null,
+      issue: {
+        stage: 'state-delta',
+        severity: 'warning',
+        message: '本章正文已生成，但世界状态增量提取失败，角色状态和伏笔进度可能未同步。',
+        detail: buildIssueDetail(error)
+      }
+    }
   }
 }

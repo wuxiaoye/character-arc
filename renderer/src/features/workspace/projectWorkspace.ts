@@ -197,6 +197,15 @@ function cloneAiRuns(aiRuns?: AiRunRecord[]): AiRunRecord[] {
         startedAt: toIsoTimestamp(run.startedAt),
         finishedAt: run.finishedAt ? toIsoTimestamp(run.finishedAt) : undefined,
         durationMs: Number.isFinite(run.durationMs) ? Math.max(0, Number(run.durationMs)) : undefined,
+        usage: run.usage && typeof run.usage === 'object'
+          ? {
+              promptTokens: Number.isFinite(run.usage.promptTokens) ? Math.max(0, Number(run.usage.promptTokens)) : undefined,
+              completionTokens: Number.isFinite(run.usage.completionTokens) ? Math.max(0, Number(run.usage.completionTokens)) : undefined,
+              totalTokens: Number.isFinite(run.usage.totalTokens) ? Math.max(0, Number(run.usage.totalTokens)) : undefined,
+              reasoningTokens: Number.isFinite(run.usage.reasoningTokens) ? Math.max(0, Number(run.usage.reasoningTokens)) : undefined,
+              cachedInputTokens: Number.isFinite(run.usage.cachedInputTokens) ? Math.max(0, Number(run.usage.cachedInputTokens)) : undefined
+            }
+          : undefined,
         repairTriggered: Boolean(run.repairTriggered),
         error: run.error?.trim() || '',
         responsePreview: run.responsePreview?.trim() || '',

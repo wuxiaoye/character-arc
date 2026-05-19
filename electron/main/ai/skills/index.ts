@@ -9,4 +9,6 @@ export {
   toContextEntries
 } from './registry'
 export { pickSkillsFor } from './matcher'
+export { resolveTaskSkills } from './task-selection'
+export type { ResolvedTaskSkills } from './task-selection'
 export { getProjectSkillsDirPath, scanSkillsFromDisk } from './discovery'

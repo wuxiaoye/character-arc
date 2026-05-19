@@ -94,6 +94,31 @@ function resolveActionLengthLabel(length: ChapterAssistantQuickAction['length'])
       return '中'
   }
 }
+
+function formatTokenCount(value?: number): string {
+  if (!Number.isFinite(value)) {
+    return ''
+  }
+  if ((value ?? 0) >= 10_000) {
+    return `${Math.round((value ?? 0) / 100) / 10}k`
+  }
+  return `${Math.round(value ?? 0)}`
+}
+
+function formatUsageLabel(run: AiRunRecord | undefined): string {
+  const total = formatTokenCount(run?.usage?.totalTokens)
+  if (!total) {
+    return ''
+  }
+
+  const prompt = formatTokenCount(run?.usage?.promptTokens)
+  const completion = formatTokenCount(run?.usage?.completionTokens)
+  if (prompt && completion) {
+    return `${total} tok (${prompt}/${completion})`
+  }
+
+  return `${total} tok`
+}
 </script>
 
 <template>
@@ -157,6 +182,7 @@ function resolveActionLengthLabel(length: ChapterAssistantQuickAction['length'])
         <div class="claude-assistant-run-meta">
           <span>{{ props.latestAiRun.model }}</span>
           <span v-if="props.latestAiRun.durationMs">{{ Math.max(1, Math.round(props.latestAiRun.durationMs / 100) / 10) }}s</span>
+          <span v-if="formatUsageLabel(props.latestAiRun)">{{ formatUsageLabel(props.latestAiRun) }}</span>
           <span v-if="props.latestAiRun.repairTriggered">已触发修复</span>
         </div>
         <p v-if="props.latestAiRun.error" class="claude-assistant-run-error">{{ props.latestAiRun.error }}</p>
@@ -206,6 +232,7 @@ function resolveActionLengthLabel(length: ChapterAssistantQuickAction['length'])
                 <span>{{ run.model }}</span>
                 <span>{{ run.startedAtLabel }}</span>
                 <span v-if="run.durationMs">{{ Math.max(1, Math.round(run.durationMs / 100) / 10) }}s</span>
+                <span v-if="formatUsageLabel(run)">{{ formatUsageLabel(run) }}</span>
                 <span>{{ run.usedKnowledge.length }} 条知识</span>
               </div>
             </div>

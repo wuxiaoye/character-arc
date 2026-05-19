@@ -24,6 +24,13 @@ export type ChapterAuditPayload = {
   }>
 }
 
+type StreamTaskName = 'chapter-first-draft' | 'chapter-memo' | 'chapter-audit'
+
+type StreamTaskResult = {
+  text: string
+  result?: unknown
+}
+
 export function useChapterFirstDraft(): {
   isGenerating: Ref<boolean>
   isStopping: Ref<boolean>
@@ -31,6 +38,8 @@ export function useChapterFirstDraft(): {
   streamingContent: Ref<string>
   streamingCharCount: Ref<number>
   executionLabel: Ref<string>
+  previewTitle: Ref<string>
+  previewContent: Ref<string>
   progressPercent: Ref<number>
   progressText: Ref<string>
   auditResult: Ref<ChapterAuditPayload | null>
@@ -51,9 +60,12 @@ export function useChapterFirstDraft(): {
   const streamingContent = ref('')
   const streamingCharCount = ref(0)
   const executionLabel = ref('')
+  const previewTitle = ref('')
+  const previewContent = ref('')
 
   const streamId = ref<string | null>(null)
-  let resolveStream: ((text: string) => void) | null = null
+  const currentStreamTask = ref<StreamTaskName | null>(null)
+  let resolveStream: ((result: StreamTaskResult) => void) | null = null
   let rejectStream: ((err: Error) => void) | null = null
   let removeListener: (() => void) | null = null
 
@@ -84,6 +96,16 @@ export function useChapterFirstDraft(): {
       progressText.value = ''
       return
     }
+    if (currentStreamTask.value === 'chapter-memo') {
+      progressPercent.value = previewContent.value.trim() ? 14 : 10
+      progressText.value = '正在流式生成本章写作备忘...'
+      return
+    }
+    if (currentStreamTask.value === 'chapter-audit') {
+      progressPercent.value = previewContent.value.trim() ? 98 : 96
+      progressText.value = '正在流式审计本章质量...'
+      return
+    }
     if (!words) {
       progressPercent.value = 12
       progressText.value = '正在整理大纲、文风和角色关系上下文...'
@@ -94,16 +116,30 @@ export function useChapterFirstDraft(): {
     progressText.value = `已生成 ${words} 字 / 目标 ${formatChapterWordTargetLabel(target)}（${progressPercent.value}%）`
   }
 
-  function reset(): void {
+  function reset(finalLabel = ''): void {
     streamId.value = null
+    currentStreamTask.value = null
     streamingCharCount.value = 0
-    executionLabel.value = ''
+    executionLabel.value = finalLabel
     isStopping.value = false
     isGenerating.value = false
     isAuditing.value = false
     isStreaming.value = false
     stopElapsedTimer()
     recompute()
+  }
+
+  function getActiveStreamBuffer(): string {
+    if (currentStreamTask.value === 'chapter-first-draft') {
+      return streamingContent.value
+    }
+    return previewContent.value
+  }
+
+  function getActiveTaskErrorMessage(): string {
+    if (currentStreamTask.value === 'chapter-memo') return 'AI 写作备忘生成失败'
+    if (currentStreamTask.value === 'chapter-audit') return 'AI 章节审计失败'
+    return 'AI 初稿生成失败'
   }
 
   function handleStreamEvent(payload: CharacterArcAiStreamEvent): void {
@@ -129,17 +165,22 @@ export function useChapterFirstDraft(): {
 
     if (payload.type === 'chunk') {
       isStreaming.value = true
-      streamingContent.value += payload.delta
-      if (payload.charCount != null) streamingCharCount.value = payload.charCount
+      if (currentStreamTask.value === 'chapter-first-draft') {
+        streamingContent.value += payload.delta
+        previewContent.value = streamingContent.value
+        if (payload.charCount != null) streamingCharCount.value = payload.charCount
+      } else {
+        previewContent.value += payload.delta
+      }
       recompute()
       return
     }
     if (payload.type === 'done') {
-      const text = (payload.content ?? streamingContent.value).trim()
+      const text = (payload.content?.trim() ? payload.content : getActiveStreamBuffer()).trim()
       const resolve = resolveStream
       resolveStream = null
       rejectStream = null
-      resolve?.(text)
+      resolve?.({ text, result: payload.result })
       return
     }
     if (payload.type === 'canceled') {
@@ -153,7 +194,7 @@ export function useChapterFirstDraft(): {
       const reject = rejectStream
       resolveStream = null
       rejectStream = null
-      reject?.(new Error(payload.error || 'AI 初稿生成失败'))
+      reject?.(new Error(payload.error || getActiveTaskErrorMessage()))
     }
   }
 
@@ -167,23 +208,34 @@ export function useChapterFirstDraft(): {
     removeListener = null
   }
 
-  async function streamDraft(context: Record<string, unknown>): Promise<string> {
-    streamingContent.value = ''
-    streamingCharCount.value = 0
+  async function streamTask(task: StreamTaskName, context: Record<string, unknown>): Promise<StreamTaskResult> {
+    currentStreamTask.value = task
+    if (task === 'chapter-first-draft') {
+      streamingContent.value = ''
+      streamingCharCount.value = 0
+      previewTitle.value = '章节初稿实时输出'
+      previewContent.value = ''
+    } else if (task === 'chapter-memo') {
+      previewTitle.value = '写作备忘实时输出'
+      previewContent.value = ''
+    } else {
+      previewTitle.value = '章节审计实时输出'
+      previewContent.value = ''
+    }
 
     const result = await window.characterArc.startAiStream(toIpcPayload({
-      task: 'chapter-first-draft',
+      task,
       settings: appStore.appSettings,
       context
     }))
 
     const sid = (result.result as { streamId?: string } | undefined)?.streamId
     if (!result.success || !sid) {
-      throw new Error(result.error ?? 'AI 初稿生成启动失败')
+      throw new Error(result.error ?? getActiveTaskErrorMessage())
     }
     streamId.value = sid
 
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<StreamTaskResult>((resolve, reject) => {
       resolveStream = resolve
       rejectStream = reject
     })
@@ -203,9 +255,12 @@ export function useChapterFirstDraft(): {
     streamingContent.value = ''
     auditResult.value = null
     executionLabel.value = '加载角色与关系数据'
+    previewTitle.value = ''
+    previewContent.value = ''
     modalVisible.value = true
     startElapsedTimer()
     recompute()
+    let finalLabel = '本次 AI 初稿流程已完成'
 
     try {
       await appStore.runTrackedAiTask(
@@ -282,17 +337,13 @@ export function useChapterFirstDraft(): {
           executionLabel.value = '检索相关章节与情节线索'
           recompute()
           await new Promise((r) => setTimeout(r, 0))
-          executionLabel.value = '向 AI 发送写作备忘请求…'
+          executionLabel.value = '正在流式生成写作备忘...'
           let chapterMemo: ChapterFirstDraftContextInput['chapterMemo'] | undefined
           try {
-            const memoResult = await window.characterArc.generateAi(toIpcPayload({
-              task: 'chapter-memo',
-              settings: appStore.appSettings,
-              clientTaskId: appStore.getClientTaskId(),
-              context: memoBaseContext
-            })) as { success: boolean; result?: { memo?: ChapterFirstDraftContextInput['chapterMemo'] }; error?: string }
-            if (memoResult.success && memoResult.result?.memo) {
-              chapterMemo = memoResult.result.memo
+            const memoStream = await streamTask('chapter-memo', memoBaseContext)
+            const memoResult = memoStream.result as { memo?: ChapterFirstDraftContextInput['chapterMemo'] } | undefined
+            if (memoResult?.memo) {
+              chapterMemo = memoResult.memo
             }
           } catch {
             // memo 步骤失败不阻塞主流程，回退到无 memo 的写作
@@ -328,30 +379,27 @@ export function useChapterFirstDraft(): {
           executionLabel.value = `正在生成本章初稿（目标约 ${targetWordCount} 字）…`
           isStreaming.value = true
           recompute()
-          const fullText = await streamDraft(context)
+          const draftStream = await streamTask('chapter-first-draft', context)
+          const fullText = draftStream.text
           if (fullText) {
             executionLabel.value = '正在覆盖当前章节'
             appStore.updateChapterContent(ensureEditorHtmlContent(fullText))
 
             if (chapterMemo) {
-              executionLabel.value = '正在审计章节质量…'
+              executionLabel.value = '正在流式审计章节质量...'
               isAuditing.value = true
               try {
-                const auditResp = await window.characterArc.generateAi(toIpcPayload({
-                  task: 'chapter-audit',
-                  settings: appStore.appSettings,
-                  clientTaskId: appStore.getClientTaskId(),
-                  context: {
-                    projectId: project.id,
-                    chapterId: chapter.id,
-                    chapterTitle: chapter.title,
-                    targetWordCount,
-                    draftText: fullText,
-                    chapterMemo
-                  }
-                })) as { success: boolean; result?: { audit?: ChapterAuditPayload }; error?: string }
-                if (auditResp.success && auditResp.result?.audit) {
-                  auditResult.value = auditResp.result.audit
+                const auditStream = await streamTask('chapter-audit', {
+                  projectId: project.id,
+                  chapterId: chapter.id,
+                  chapterTitle: chapter.title,
+                  targetWordCount,
+                  draftText: fullText,
+                  chapterMemo
+                })
+                const auditResp = auditStream.result as { audit?: ChapterAuditPayload } | undefined
+                if (auditResp?.audit) {
+                  auditResult.value = auditResp.audit
                 }
               } catch {
                 // audit 步骤失败不影响章节落盘
@@ -364,9 +412,14 @@ export function useChapterFirstDraft(): {
       )
     } catch (error) {
       const isCanceled = error instanceof Error && error.message === 'canceled'
-      if (!isCanceled) throw error
+      if (isCanceled) {
+        finalLabel = '本次 AI 初稿流程已停止'
+        return
+      }
+      finalLabel = '本次 AI 初稿流程失败'
+      throw error
     } finally {
-      reset()
+      reset(finalLabel)
     }
   }
 
@@ -384,6 +437,8 @@ export function useChapterFirstDraft(): {
     if (isGenerating.value) return
     modalVisible.value = false
     streamingContent.value = ''
+    previewTitle.value = ''
+    previewContent.value = ''
   }
 
   return {
@@ -393,6 +448,8 @@ export function useChapterFirstDraft(): {
     streamingContent,
     streamingCharCount,
     executionLabel,
+    previewTitle,
+    previewContent,
     progressPercent,
     progressText,
     auditResult,
