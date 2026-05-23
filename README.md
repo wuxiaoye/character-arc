@@ -202,4 +202,4 @@ CharacterArc/
 
 ## License
 
-本项目基于 [MIT License](./LICENSE) 开源。
+[MIT](./LICENSE)
