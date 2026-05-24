@@ -64,7 +64,6 @@ Thumbs.db
 # Design / prototype artifacts (not part of source)
 prototypeDesign/
 design-preview/
-docs/
 
 # Optional Python helpers / notebooks
 __pycache__/
