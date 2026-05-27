@@ -208,6 +208,7 @@ export async function ensureWorkspaceDb(): Promise<DatabaseSync> {
 
     CREATE TABLE IF NOT EXISTS knowledge_documents (
       id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL DEFAULT '',
       title TEXT NOT NULL,
       source_type TEXT NOT NULL,
       source_label TEXT NOT NULL,
@@ -334,6 +335,7 @@ export async function ensureWorkspaceDb(): Promise<DatabaseSync> {
   ensureProjectScopedColumns(db)
   ensureVolumeColumns(db)
   ensureWorkflowDocumentColumns(db)
+  ensureKnowledgeDocumentSchema(db)
   initStoryStateSchema(db)
 
   await migrateLegacyWorkspaceFile(db)
@@ -457,6 +459,41 @@ function ensureVolumeColumns(db: DatabaseSync): void {
   if (!outlineColumnNames.has('status')) {
     db.exec(`ALTER TABLE outline_items ADD COLUMN status TEXT NOT NULL DEFAULT 'planned';`)
   }
+}
+
+function ensureKnowledgeDocumentSchema(db: DatabaseSync): void {
+  const columns = db.prepare(`PRAGMA table_info('knowledge_documents')`).all() as Array<{ name: string }>
+  const columnNames = new Set(columns.map((column) => column.name))
+  const foreignKeys = db.prepare(`PRAGMA foreign_key_list('knowledge_documents')`).all() as Array<{ table: string; from: string }>
+  const hasProjectIdFk = foreignKeys.some((fk) => fk.from === 'project_id')
+
+  if (!columnNames.has('project_id')) {
+    db.exec(`ALTER TABLE knowledge_documents ADD COLUMN project_id TEXT NOT NULL DEFAULT '';`)
+    return
+  }
+
+  if (!hasProjectIdFk) return
+
+  db.exec(`
+    CREATE TABLE knowledge_documents__new (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL DEFAULT '',
+      title TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_label TEXT NOT NULL,
+      content TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      keywords_json TEXT NOT NULL DEFAULT '[]',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+    INSERT INTO knowledge_documents__new (id, project_id, title, source_type, source_label, content, summary, keywords_json, metadata_json, created_at, updated_at)
+    SELECT id, project_id, title, source_type, source_label, content, summary, keywords_json, metadata_json, created_at, updated_at
+    FROM knowledge_documents;
+    DROP TABLE knowledge_documents;
+    ALTER TABLE knowledge_documents__new RENAME TO knowledge_documents;
+  `)
 }
 
 function ensureWorkflowDocumentColumns(db: DatabaseSync): void {
@@ -1152,8 +1189,8 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
     `)
 
     const insertKnowledgeDocument = db.prepare(`
-      INSERT OR REPLACE INTO knowledge_documents (id, title, source_type, source_label, content, summary, keywords_json, metadata_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO knowledge_documents (id, project_id, title, source_type, source_label, content, summary, keywords_json, metadata_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertReferenceWork = db.prepare(`
@@ -1419,6 +1456,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       allIds.knowledge_documents.add(document.id)
       insertKnowledgeDocument.run(
         document.id,
+        String((document as Record<string, unknown>).projectId ?? ''),
         document.title,
         document.sourceType,
         document.sourceLabel,

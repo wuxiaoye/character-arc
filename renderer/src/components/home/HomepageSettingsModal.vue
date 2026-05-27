@@ -35,6 +35,14 @@ const uiScaleOptions = [
   { label: '125%', value: 1.25 },
   { label: '140%', value: 1.4 }
 ]
+const aiTimeoutOptions = [
+  { label: '30 秒', value: 30 },
+  { label: '60 秒', value: 60 },
+  { label: '120 秒', value: 120 },
+  { label: '180 秒（默认）', value: 180 },
+  { label: '300 秒', value: 300 },
+  { label: '600 秒', value: 600 }
+]
 
 const draftSettings = reactive<AppSettings>({
   provider: '',
@@ -50,7 +58,8 @@ const draftSettings = reactive<AppSettings>({
   autoSaveInterval: '5m',
   uiScale: 1,
   darkMode: false,
-  darkModeStyle: 'nord'
+  darkModeStyle: 'nord',
+  aiTimeoutSeconds: 180
 })
 const draftTheme = ref<ThemeName>('ocean')
 const editingProfileId = ref<string>('')
@@ -109,6 +118,7 @@ const hasPendingChanges = computed(() =>
   || draftSettings.uiScale !== appStore.appSettings.uiScale
   || draftSettings.darkMode !== appStore.appSettings.darkMode
   || draftSettings.darkModeStyle !== appStore.appSettings.darkModeStyle
+  || draftSettings.aiTimeoutSeconds !== appStore.appSettings.aiTimeoutSeconds
 )
 
 function syncDraftFromStore(): void {
@@ -126,6 +136,7 @@ function syncDraftFromStore(): void {
   draftSettings.uiScale = appStore.appSettings.uiScale
   draftSettings.darkMode = appStore.appSettings.darkMode
   draftSettings.darkModeStyle = appStore.appSettings.darkModeStyle
+  draftSettings.aiTimeoutSeconds = appStore.appSettings.aiTimeoutSeconds
   draftTheme.value = appStore.theme
 }
 
@@ -329,6 +340,7 @@ async function saveSettings(): Promise<void> {
   appStore.updateAppSetting('uiScale', draftSettings.uiScale)
   appStore.updateAppSetting('darkMode', draftSettings.darkMode)
   appStore.updateAppSetting('darkModeStyle', draftSettings.darkModeStyle)
+  appStore.updateAppSetting('aiTimeoutSeconds', draftSettings.aiTimeoutSeconds)
 
   if (draftTheme.value !== appStore.theme) {
     appStore.setTheme(draftTheme.value)
@@ -610,6 +622,18 @@ async function saveSettings(): Promise<void> {
                 :value="draftSettings.uiScale"
                 @update:value="(value) => { draftSettings.uiScale = value ?? 1 }"
               />
+            </n-form-item>
+          </div>
+          <div class="settings-grid">
+            <n-form-item label="AI 请求超时时间">
+              <div class="preset-field">
+                <n-select
+                  :options="aiTimeoutOptions"
+                  :value="draftSettings.aiTimeoutSeconds"
+                  @update:value="(value) => { draftSettings.aiTimeoutSeconds = value ?? 180 }"
+                />
+                <span class="preset-hint">超时后会主动终止本次请求，适当增大可避免慢模型被误中断。</span>
+              </div>
             </n-form-item>
           </div>
           <div class="dark-mode-row">

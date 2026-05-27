@@ -47,6 +47,13 @@ type ReferenceImportProgressPayload = {
   total: number
   percent: number
   sourceTitle?: string
+  bookId?: string
+  bookIndex?: number
+  bookTotal?: number
+  status?: 'queued' | 'running' | 'success' | 'error' | 'canceled'
+  chunkIndex?: number
+  chunkTotal?: number
+  chunkLabel?: string
 }
 
 type WorkspaceAiRunEventPayload = {

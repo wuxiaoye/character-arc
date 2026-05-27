@@ -807,6 +807,8 @@ export interface AppSettings {
   darkMode: boolean
   /** 深色模式风格预设 */
   darkModeStyle: DarkModeStyle
+  /** AI 请求超时时间（秒），超时后主动终止本次请求 */
+  aiTimeoutSeconds: number
 }
 
 /** 封面工作台独立生图历史条目 */

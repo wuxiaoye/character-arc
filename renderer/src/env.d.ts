@@ -94,6 +94,13 @@ declare global {
     total: number
     percent: number
     sourceTitle?: string
+    bookId?: string
+    bookIndex?: number
+    bookTotal?: number
+    status?: 'queued' | 'running' | 'success' | 'error' | 'canceled'
+    chunkIndex?: number
+    chunkTotal?: number
+    chunkLabel?: string
   }
 
   type CharacterArcAiRunEventPayload = {
@@ -351,6 +358,27 @@ declare global {
         success: boolean
         canceled: boolean
         result?: CharacterArcReferenceImportResult
+        error?: string
+      }>
+      importReferenceNovelBatch: (payload: CharacterArcReferenceImportPayload & { filePaths?: string[]; concurrency?: number }) => Promise<{
+        success: boolean
+        canceled: boolean
+        results?: Array<{
+          bookId: string
+          success: boolean
+          result?: CharacterArcReferenceImportResult
+          error?: string
+          fileName: string
+        }>
+        error?: string
+      }>
+      pickReferenceNovelFiles: () => Promise<{
+        success: boolean
+        canceled: boolean
+        files?: Array<{ filePath: string; fileName: string; size: number }>
+      }>
+      cancelReferenceNovelBook: (bookId?: string) => Promise<{
+        success: boolean
         error?: string
       }>
       readReferenceNovelText: (refId: string) => Promise<{

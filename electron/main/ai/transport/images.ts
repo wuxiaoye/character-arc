@@ -49,9 +49,9 @@ export async function generateImage(settings: AppSettings, prompt: string): Prom
     throw new Error('请先在设置中填写专用的图片生成 API Key。')
   }
 
-  const response = await performAiRequest(
-    `${normalized.baseUrl.replace(/\/$/, '')}/images/generations`,
-    {
+  const response = await performAiRequest({
+    url: `${normalized.baseUrl.replace(/\/$/, '')}/images/generations`,
+    init: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -64,8 +64,9 @@ export async function generateImage(settings: AppSettings, prompt: string): Prom
         response_format: 'b64_json'
       })
     },
-    '图片生成接口'
-  )
+    providerLabel: '图片生成接口',
+    timeoutMs: settings.aiTimeoutSeconds ? settings.aiTimeoutSeconds * 1000 : undefined
+  })
 
   const data = (await response.json()) as {
     data?: Array<{

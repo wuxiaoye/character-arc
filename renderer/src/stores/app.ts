@@ -31,7 +31,7 @@ import {
   type LegacyStoredState,
   type StoredState
 } from '@/features/workspace/storeHelpers'
-import { AI_TASK_RETENTION_MS, AI_TASK_DEFAULT_TIMEOUT_MS, type AiTaskRun, type AiTaskRunInput } from '@/features/ai/taskRegistry'
+import { AI_TASK_RETENTION_MS, type AiTaskRun, type AiTaskRunInput } from '@/features/ai/taskRegistry'
 import type {
   AppSettings,
   ChapterDraft,
@@ -2312,8 +2312,8 @@ export const useAppStore = defineStore('app', () => {
       next.set(input.key, run)
     })
 
-    // 超时控制
-    const timeoutMs = input.timeoutMs ?? AI_TASK_DEFAULT_TIMEOUT_MS
+    // 超时控制：优先使用任务级覆盖，其次读取用户配置
+    const timeoutMs = input.timeoutMs ?? (appSettings.value.aiTimeoutSeconds * 1000)
     let timeoutHandle: number | null = null
     let timedOut = false
 

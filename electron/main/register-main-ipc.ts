@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import { existsSync } from 'node:fs'
-import { cp, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 
@@ -36,7 +36,16 @@ type ReferenceImportProgressPayload = {
   total: number
   percent: number
   sourceTitle?: string
+  bookId?: string
+  bookIndex?: number
+  bookTotal?: number
+  status?: 'queued' | 'running' | 'success' | 'error' | 'canceled'
+  chunkIndex?: number
+  chunkTotal?: number
+  chunkLabel?: string
 }
+
+let activeBatchBookControllers: Map<string, AbortController> | null = null
 
 function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(Number)
@@ -573,6 +582,338 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
         error: error instanceof Error ? error.message : '参考作品拆书失败'
       }
     }
+  })
+
+  // ── 选择参考小说文件（不立即开始拆书） ──
+  ipcMain.handle('characterarc:pick-reference-novel-files', async () => {
+    const window = deps.windowManager.getActiveWindow()
+    if (!window) {
+      return { success: false, canceled: true }
+    }
+
+    const result = await dialog.showOpenDialog(window, {
+      title: '选择参考小说',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: '小说文本', extensions: ['txt', 'md', 'docx'] }]
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true }
+    }
+
+    const files: Array<{ filePath: string; fileName: string; size: number }> = []
+    for (const filePath of result.filePaths) {
+      try {
+        const stats = await stat(filePath)
+        files.push({ filePath, fileName: basename(filePath), size: stats.size })
+      } catch {
+        files.push({ filePath, fileName: basename(filePath), size: 0 })
+      }
+    }
+    return { success: true, canceled: false, files }
+  })
+
+  // ── 批量导入参考小说（支持多选、并发控制） ──
+  ipcMain.handle('characterarc:import-reference-novel-batch', async (_event, payload: ReferenceNovelImportRequest & { filePaths?: string[]; concurrency?: number }) => {
+    const window = deps.windowManager.getActiveWindow()
+    if (!window) {
+      return { success: false, canceled: true }
+    }
+
+    const request = (payload ?? {}) as ReferenceNovelImportRequest & { filePaths?: string[]; concurrency?: number }
+    let filePaths = Array.isArray(request.filePaths) ? request.filePaths.filter((p): p is string => typeof p === 'string' && p.length > 0) : []
+
+    // 兼容旧调用：如果未提供 filePaths，则回退到弹原生对话框
+    if (filePaths.length === 0) {
+      const result = await dialog.showOpenDialog(window, {
+        title: '批量导入参考小说',
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: '小说文本', extensions: ['txt', 'md', 'docx'] }]
+      })
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, canceled: true }
+      }
+      filePaths = result.filePaths
+    }
+
+    const bookTotal = filePaths.length
+    const MAX_CONCURRENCY = Math.max(1, Math.min(8, Math.floor(request.concurrency ?? 3)))
+
+    type BookResult = {
+      bookId: string
+      success: boolean
+      result?: {
+        referenceWork: unknown
+        suggestedWritingStylePrompt: string
+        knowledgeDocuments: unknown[]
+      }
+      error?: string
+      fileName: string
+    }
+
+    const results: BookResult[] = []
+    let completedCount = 0
+
+    // 每本书一个 AbortController，支持单本停止
+    const bookControllers = new Map<string, AbortController>()
+    activeBatchBookControllers = bookControllers
+
+    async function processOneBook(filePath: string, bookIndex: number, bookId: string): Promise<BookResult> {
+      const fileName = basename(filePath)
+      const controller = new AbortController()
+      bookControllers.set(bookId, controller)
+
+      const emit = (patch: Partial<ReferenceImportProgressPayload> & { phase: ReferenceImportProgressPayload['phase'] }) => {
+        deps.emitReferenceImportProgress(window!, {
+          message: '',
+          current: 0,
+          total: 1,
+          percent: 0,
+          sourceTitle: fileName,
+          bookId,
+          bookIndex,
+          bookTotal,
+          status: 'running',
+          ...patch
+        })
+      }
+
+      try {
+        if (controller.signal.aborted) throw new Error('已取消')
+
+        emit({ phase: 'extracting', message: '正在读取文件并提取基础信息…', percent: 5 })
+        const localContext = await extractReferenceNovelContext(filePath)
+        if (controller.signal.aborted) throw new Error('已取消')
+        const resolvedTitle = request.preferredTitle?.trim() || localContext.title
+        const resolvedSource = request.preferredSource?.trim() || localContext.fileType.toUpperCase()
+
+        emit({
+          phase: 'chunking',
+          message: `已切分 ${localContext.analysisChunks.length} 个分块`,
+          sourceTitle: resolvedTitle,
+          percent: 16,
+          chunkTotal: localContext.analysisChunks.length
+        })
+
+        const chunkResults: Array<{ label: string; characterCount: number; result: ReferenceStyleChunkResult }> = []
+        const chunkTotal = localContext.analysisChunks.length
+        for (const [index, chunk] of localContext.analysisChunks.entries()) {
+          if (controller.signal.aborted) throw new Error('已取消')
+          emit({
+            phase: 'chunk-analysis',
+            message: `分析分块 ${index + 1}/${chunkTotal}：${chunk.label}`,
+            sourceTitle: resolvedTitle,
+            percent: Math.min(82, 16 + Math.round(((index + 1) / Math.max(chunkTotal, 1)) * 58)),
+            chunkIndex: index + 1,
+            chunkTotal,
+            chunkLabel: chunk.label
+          })
+          chunkResults.push({
+            label: chunk.label,
+            characterCount: chunk.characterCount,
+            result: (await runAiTask({
+              task: 'reference-style-chunk',
+              settings: request.settings,
+              context: {
+                projectId: request.projectId ?? '',
+                projectTitle: request.projectTitle ?? '',
+                projectGenre: request.projectGenre ?? '',
+                projectPlatform: request.projectPlatform ?? '',
+                projectSkills: request.projectSkills ?? [],
+                sourceTitle: resolvedTitle,
+                chunkLabel: chunk.label,
+                chunkIndex: index + 1,
+                chunkTotal,
+                chunkCharacterCount: chunk.characterCount,
+                chunkMetrics: chunk.metrics,
+                chunkKeywords: chunk.topKeywords,
+                chunkText: chunk.text
+              }
+            })).result as ReferenceStyleChunkResult
+          })
+        }
+
+        if (controller.signal.aborted) throw new Error('已取消')
+        emit({
+          phase: 'aggregating',
+          message: '正在汇总所有分块结论…',
+          sourceTitle: resolvedTitle,
+          percent: 90,
+          chunkIndex: chunkTotal,
+          chunkTotal
+        })
+
+        const analysis = (await runAiTask({
+          task: 'reference-style-analysis',
+          settings: request.settings,
+          context: {
+            projectId: request.projectId ?? '',
+            projectTitle: request.projectTitle ?? '',
+            projectGenre: request.projectGenre ?? '',
+            projectPlatform: request.projectPlatform ?? '',
+            projectSkills: request.projectSkills ?? [],
+            sourceTitle: resolvedTitle,
+            sourceFileType: localContext.fileType,
+            sourceCharacterCount: localContext.characterCount,
+            sourceChapterCount: localContext.chapterCount,
+            styleMetrics: localContext.metrics,
+            topKeywords: localContext.topKeywords,
+            sourceExcerpt: localContext.excerpt,
+            analysisSample: localContext.analysisSample,
+            chunkSummaries: deps.formatReferenceChunkSummaries(chunkResults)
+          }
+        })).result as ReferenceStyleAnalysisResult
+
+        if (controller.signal.aborted) throw new Error('已取消')
+        emit({
+          phase: 'saving',
+          message: '正在归档到知识库…',
+          sourceTitle: resolvedTitle,
+          percent: 96
+        })
+
+        const importedAt = new Date().toISOString()
+        const knowledgeDocuments = deps.buildImportedReferenceKnowledgeDocuments(resolvedTitle, localContext, analysis, chunkResults, importedAt)
+
+        const refId = `ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+        const novelStorageDir = join(getWorkspaceDirPath(), 'reference-novels')
+        await mkdir(novelStorageDir, { recursive: true })
+        const rawNovelText = await readFile(filePath, 'utf-8')
+        await writeFile(join(novelStorageDir, `${refId}.txt`), rawNovelText, 'utf-8')
+
+        if (request.projectId) {
+          indexReferenceNovel(request.settings, request.projectId, refId, rawNovelText).catch(() => {})
+        }
+
+        const referenceWork = {
+          id: refId,
+          title: resolvedTitle,
+          source: resolvedSource,
+          notes: analysis.overview,
+          fileName: localContext.fileName,
+          analysis: {
+            createdAt: importedAt,
+            fileName: localContext.fileName,
+            fileType: localContext.fileType,
+            characterCount: localContext.characterCount,
+            chapterCount: localContext.chapterCount,
+            excerpt: localContext.excerpt,
+            topKeywords: localContext.topKeywords,
+            metrics: [
+              ...localContext.metrics,
+              { label: '分析分块数', value: `${localContext.analysisChunks.length} 块` }
+            ],
+            overview: analysis.overview,
+            sentenceStyle: analysis.sentenceStyle,
+            dialogueRatio: analysis.dialogueRatio,
+            pacingControl: analysis.pacingControl,
+            emotionExpression: analysis.emotionExpression,
+            narrativePerspective: analysis.narrativePerspective,
+            styleRules: analysis.styleRules,
+            plotOutline: analysis.plotOutline,
+            reusableStylePrompt: analysis.reusableStylePrompt,
+            avoidRules: analysis.avoidRules
+          }
+        }
+
+        completedCount++
+        emit({
+          phase: 'done',
+          message: `已归档 ${knowledgeDocuments.length} 篇知识文档 · 风格规则 ${analysis.styleRules?.length ?? 0} 条`,
+          sourceTitle: resolvedTitle,
+          percent: 100,
+          status: 'success'
+        })
+
+        return {
+          bookId,
+          success: true,
+          result: {
+            referenceWork,
+            suggestedWritingStylePrompt: deps.buildImportedReferenceStylePrompt(resolvedTitle, analysis),
+            knowledgeDocuments
+          },
+          fileName
+        }
+      } catch (error) {
+        completedCount++
+        const message = error instanceof Error ? error.message : '拆书失败'
+        const isCanceled = controller.signal.aborted || message.includes('已取消')
+        emit({
+          phase: 'done',
+          message: isCanceled ? '已取消' : message,
+          percent: 0,
+          status: isCanceled ? 'canceled' : 'error'
+        })
+        return {
+          bookId,
+          success: false,
+          error: isCanceled ? '已取消' : message,
+          fileName
+        }
+      } finally {
+        bookControllers.delete(bookId)
+      }
+    }
+
+    const queue = filePaths.map((fp, i) => ({
+      filePath: fp,
+      bookIndex: i + 1,
+      bookId: `book-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`
+    }))
+
+    // 上报排队态，让前端可以一次性渲染所有书的初始卡片
+    for (const item of queue) {
+      deps.emitReferenceImportProgress(window!, {
+        phase: 'extracting',
+        message: '排队中…',
+        current: 0,
+        total: 1,
+        percent: 0,
+        sourceTitle: basename(item.filePath),
+        bookId: item.bookId,
+        bookIndex: item.bookIndex,
+        bookTotal,
+        status: 'queued'
+      })
+    }
+
+    const executing = new Set<Promise<void>>()
+    for (const item of queue) {
+      const p = processOneBook(item.filePath, item.bookIndex, item.bookId).then((r) => {
+        results.push(r)
+      })
+      const wrapped = p.then(() => { executing.delete(wrapped) })
+      executing.add(wrapped)
+      if (executing.size >= MAX_CONCURRENCY) {
+        await Promise.race(executing)
+      }
+    }
+    await Promise.all(executing)
+
+    activeBatchBookControllers = null
+
+    results.sort((a, b) => {
+      const ai = queue.findIndex((q) => q.bookId === a.bookId)
+      const bi = queue.findIndex((q) => q.bookId === b.bookId)
+      return ai - bi
+    })
+
+    return { success: true, canceled: false, results }
+  })
+
+  // ── 取消单本/全部批量拆书任务 ──
+  ipcMain.handle('characterarc:cancel-reference-novel-book', async (_event, bookId: unknown) => {
+    if (!activeBatchBookControllers) return { success: false, error: '没有正在进行的批量任务' }
+    if (typeof bookId === 'string' && bookId) {
+      const ctl = activeBatchBookControllers.get(bookId)
+      if (!ctl) return { success: false, error: '未找到该任务' }
+      ctl.abort()
+      return { success: true }
+    }
+    // 不传 bookId 则全部取消
+    for (const ctl of activeBatchBookControllers.values()) ctl.abort()
+    return { success: true }
   })
 
   ipcMain.handle('characterarc:workspace-sync-publish', (event, payload: unknown) => {

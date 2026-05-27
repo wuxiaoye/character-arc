@@ -16,37 +16,55 @@ async function readErrorMessage(response: Response, fallbackLabel: string): Prom
   }
 }
 
-/**
- * 发送 AI 请求的通用函数，自带超时控制和错误处理。
- *
- * @param url - 请求地址
- * @param init - fetch 请求配置
- * @param providerLabel - 供应商名称，用于错误提示
- * @param externalSignal - 外部中止信号
- * @returns 成功的 Response 对象
- * @throws 请求失败或超时时抛出错误
- */
+export interface PerformAiRequestOptions {
+  url: string
+  init: RequestInit
+  providerLabel: string
+  externalSignal?: AbortSignal
+  timeoutMs?: number
+}
+
 async function performAiRequest(
-  url: string,
-  init: RequestInit,
-  providerLabel: string,
+  urlOrOpts: string | PerformAiRequestOptions,
+  init?: RequestInit,
+  providerLabel?: string,
   externalSignal?: AbortSignal
 ): Promise<Response> {
+  let url: string
+  let reqInit: RequestInit
+  let label: string
+  let signal: AbortSignal | undefined
+  let timeoutMs: number
+
+  if (typeof urlOrOpts === 'object') {
+    url = urlOrOpts.url
+    reqInit = urlOrOpts.init
+    label = urlOrOpts.providerLabel
+    signal = urlOrOpts.externalSignal
+    timeoutMs = urlOrOpts.timeoutMs ?? AI_REQUEST_TIMEOUT_MS
+  } else {
+    url = urlOrOpts
+    reqInit = init!
+    label = providerLabel!
+    signal = externalSignal
+    timeoutMs = AI_REQUEST_TIMEOUT_MS
+  }
+
   const timeoutCtl = new AbortController()
-  const timer = setTimeout(() => timeoutCtl.abort(), AI_REQUEST_TIMEOUT_MS)
-  const signal = externalSignal
-    ? AbortSignal.any([externalSignal, timeoutCtl.signal])
+  const timer = setTimeout(() => timeoutCtl.abort(), timeoutMs)
+  const combinedSignal = signal
+    ? AbortSignal.any([signal, timeoutCtl.signal])
     : timeoutCtl.signal
   try {
-    const response = await fetch(url, { ...init, signal })
+    const response = await fetch(url, { ...reqInit, signal: combinedSignal })
     if (!response.ok) {
-      throw new Error(await readErrorMessage(response, providerLabel))
+      throw new Error(await readErrorMessage(response, label))
     }
     return response
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      if (externalSignal?.aborted) throw error
-      throw new Error(`${providerLabel} 请求超时，请检查网络、代理或模型服务状态。`)
+      if (signal?.aborted) throw error
+      throw new Error(`${label} 请求超时，请检查网络、代理或模型服务状态。`)
     }
     throw error
   } finally {
