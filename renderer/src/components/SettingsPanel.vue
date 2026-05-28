@@ -461,7 +461,7 @@ watch(
             :key="preset.id"
             class="style-preset-card"
             :class="{ active: draftWritingStylePresetId === preset.id }"
-            :style="{ background: preset.accent }"
+            :style="{ background: appStore.appSettings.darkMode ? preset.accentDark : preset.accent }"
             @click="draftWritingStylePresetId = preset.id"
           >
             <strong>{{ preset.label }}</strong>

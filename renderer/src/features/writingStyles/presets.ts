@@ -12,6 +12,7 @@ export type WritingStylePreset = {
   description: string
   prompt: string
   accent: string
+  accentDark: string
 }
 
 // 默认写作风格预设 ID
@@ -26,7 +27,8 @@ export const writingStylePresets: WritingStylePreset[] = [
     description: '镜头感强，画面冷白克制，适合科幻、悬疑和都市夜景。',
     prompt:
       '整体写作风格偏冷峻电影感。句子干净克制，画面构图清晰，细节以光线、动作、材质和环境声推进，不要过度抒情。情绪表达以内敛张力为主。',
-    accent: 'linear-gradient(135deg, #dbeafe, #e0f2fe)'
+    accent: 'linear-gradient(135deg, #dbeafe, #e0f2fe)',
+    accentDark: 'linear-gradient(135deg, #1e3a5f, #1a3550)'
   },
   {
     id: 'lyrical-poetic',
@@ -34,7 +36,8 @@ export const writingStylePresets: WritingStylePreset[] = [
     description: '意象更浓，情绪更细，适合成长、情感和奇幻氛围场景。',
     prompt:
       '整体写作风格偏诗性抒情。允许使用更柔和的意象、节奏和感官描写，重视情绪递进与回味，但仍要保证剧情信息清晰，不要空泛堆词。',
-    accent: 'linear-gradient(135deg, #fce7f3, #ede9fe)'
+    accent: 'linear-gradient(135deg, #fce7f3, #ede9fe)',
+    accentDark: 'linear-gradient(135deg, #4a2040, #3b2d5e)'
   },
   {
     id: 'suspense-pressure',
@@ -42,7 +45,8 @@ export const writingStylePresets: WritingStylePreset[] = [
     description: '更强调不安、迟疑和信息落差，适合追踪、潜伏与危机章节。',
     prompt:
       '整体写作风格偏悬疑压迫感。优先制造不确定性、风险感和节奏收束，句子可适度短促，细节围绕异常、停顿、误差和危险信号展开。',
-    accent: 'linear-gradient(135deg, #e2e8f0, #cbd5e1)'
+    accent: 'linear-gradient(135deg, #e2e8f0, #cbd5e1)',
+    accentDark: 'linear-gradient(135deg, #2d3748, #283040)'
   },
   {
     id: 'fast-paced-webnovel',
@@ -50,7 +54,8 @@ export const writingStylePresets: WritingStylePreset[] = [
     description: '节奏更快、信息更直给，适合升级、反击和强推进情节。',
     prompt:
       '整体写作风格偏网文爽感推进。信息传达要直接，冲突要尽快落地，段落节奏明快，强调动作、反馈和结果，不要在同一情绪里停留过久。',
-    accent: 'linear-gradient(135deg, #d1fae5, #dcfce7)'
+    accent: 'linear-gradient(135deg, #d1fae5, #dcfce7)',
+    accentDark: 'linear-gradient(135deg, #1a3d2e, #1c4032)'
   },
   {
     id: 'youthful-light',
@@ -58,7 +63,8 @@ export const writingStylePresets: WritingStylePreset[] = [
     description: '语气更轻盈，角色互动更活，适合校园、冒险和群像对话。',
     prompt:
       '整体写作风格偏轻快少年感。对话和互动要自然有弹性，情绪更鲜活，允许适度幽默和轻松呼吸感，但不要削弱关键冲突的力度。',
-    accent: 'linear-gradient(135deg, #fef3c7, #fde68a)'
+    accent: 'linear-gradient(135deg, #fef3c7, #fde68a)',
+    accentDark: 'linear-gradient(135deg, #4a3b1a, #3d3218)'
   },
   {
     id: 'realist-restraint',
@@ -66,7 +72,8 @@ export const writingStylePresets: WritingStylePreset[] = [
     description: '语言朴实、观察细密，适合现实题材和心理变化描写。',
     prompt:
       '整体写作风格偏克制现实向。语言应当自然、准确、不过分修饰，重视人物行为逻辑和心理波动的细微变化，让情绪从行动和细节里显现。',
-    accent: 'linear-gradient(135deg, #f3f4f6, #e5e7eb)'
+    accent: 'linear-gradient(135deg, #f3f4f6, #e5e7eb)',
+    accentDark: 'linear-gradient(135deg, #333a47, #2e3440)'
   }
 ]
 
@@ -84,6 +91,7 @@ export function buildProjectWritingStyleContext(project?: Pick<ProjectSummary, '
   description: string
   prompt: string
   accent: string
+  accentDark: string
 } {
   const preset = resolveWritingStylePreset(project?.writingStylePresetId)
   const customPrompt = project?.writingStylePrompt?.trim() || ''
@@ -93,6 +101,7 @@ export function buildProjectWritingStyleContext(project?: Pick<ProjectSummary, '
     label: preset.label,
     description: preset.description,
     prompt: [preset.prompt, customPrompt].filter(Boolean).join('\n'),
-    accent: preset.accent
+    accent: preset.accent,
+    accentDark: preset.accentDark
   }
 }
