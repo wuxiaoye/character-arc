@@ -20,7 +20,7 @@ type AnnouncementItem = {
 const LOCAL_ANNOUNCEMENTS: AnnouncementItem[] = [
   {
     title: '弧光 v1.5.0 发布',
-    date: '2026-05',
+    date: '2026-05-28',
     type: 'success',
     items: [
       '修复 AI 助手历史会话保存后重启丢失的问题',
@@ -31,7 +31,7 @@ const LOCAL_ANNOUNCEMENTS: AnnouncementItem[] = [
   },
   {
     title: '弧光 v1.0.1 发布',
-    date: '2025-05',
+    date: '2026-05-25',
     type: 'success',
     items: [
       '修复 Anthropic 中转站兼容性问题',
@@ -41,7 +41,7 @@ const LOCAL_ANNOUNCEMENTS: AnnouncementItem[] = [
   },
   {
     title: '弧光 v1.0.0 正式发布',
-    date: '2025-04',
+    date: '2026-05-24',
     type: 'info',
     items: [
       'AI 辅助小说创作工作台',

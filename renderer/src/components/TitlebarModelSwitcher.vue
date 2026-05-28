@@ -51,7 +51,7 @@ async function handleFetchModels(): Promise<void> {
 
 <template>
   <div v-if="hasProfiles" class="titlebar-switcher">
-    <span class="switcher-label">模型切换</span>
+    <span class="switcher-label">模型切换:</span>
     <n-select
       :value="activeProfileId"
       :options="profileOptions"
