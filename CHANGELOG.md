@@ -4,6 +4,18 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.5.0] - 2026-05-28
+
+### Fixed
+
+- **AI 助手历史会话持久化**：修复会话保存后能够在当前运行期看到，但重启应用后被清空的问题
+- **项目保存级联删除**：将 `projects` 表的写入从 `INSERT OR REPLACE` 调整为 UPSERT，避免触发 `assistant_sessions` 的 `ON DELETE CASCADE`
+- **多 AI 接口配置丢失**：补全 `app_settings` 对 `aiProfiles` 和 `activeAiProfileId` 的持久化，修复重启后只剩一个配置的问题
+- **设置弹窗保存状态判断**：修复修改“配置名称”后“保存设置”按钮无法点击的问题，原因是草稿对象与 store 共享引用
+- **会话保存错误提示**：补上 AI 历史会话保存、加载、删除失败时的显式反馈，避免静默失败
+
+[1.5.0]: https://github.com/zhouyeshan/character-arc/releases/tag/v1.5.0
+
 ## [1.0.1] - 2026-05-25
 
 ### Changed

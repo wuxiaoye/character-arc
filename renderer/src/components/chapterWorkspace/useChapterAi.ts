@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import type { Ref } from 'vue'
 import { buildChapterAssistantContext } from '@/features/ai/chapterAssistantContext'
 import { getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
@@ -50,15 +50,35 @@ function providerSupportsTools(provider: string): boolean {
   return true
 }
 
+export type ContextModule = 'chapter' | 'outline' | 'characters' | 'worldview' | 'plotThreads' | 'knowledge'
+
+const ALL_CONTEXT_MODULES: ContextModule[] = ['chapter', 'outline', 'characters', 'worldview', 'plotThreads', 'knowledge']
+
+export interface SessionSummary {
+  id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
 export function useChapterAi(): {
   messages: Ref<ChapterAiMessage[]>
   isResponding: Ref<boolean>
   agentStatus: Ref<string>
   hasSelection: Ref<boolean>
   selectedText: Ref<string>
+  enabledContextModules: Set<ContextModule>
+  toggleContextModule: (mod: ContextModule) => void
+  currentSessionId: Ref<string | null>
+  sessions: Ref<SessionSummary[]>
   send: (prompt: string) => Promise<void>
   stop: () => Promise<void>
   resetMessages: () => void
+  newSession: () => void
+  saveCurrentSession: () => Promise<void>
+  loadSession: (sessionId: string) => Promise<void>
+  deleteSession: (sessionId: string) => Promise<void>
+  refreshSessions: () => Promise<void>
   applyToChapter: (content: string, mode: ChapterInsertionMode) => boolean
   registerStreamListener: () => void
   unregisterStreamListener: () => void
@@ -67,6 +87,88 @@ export function useChapterAi(): {
   const messages = ref<ChapterAiMessage[]>([])
   const isResponding = computed(() => appStore.isAiTaskRunning(TASK_KEY))
   const agentStatus = ref('')
+  const enabledContextModules = reactive(new Set<ContextModule>(ALL_CONTEXT_MODULES))
+
+  function toggleContextModule(mod: ContextModule): void {
+    if (enabledContextModules.has(mod)) {
+      enabledContextModules.delete(mod)
+    } else {
+      enabledContextModules.add(mod)
+    }
+  }
+
+  const currentSessionId = ref<string | null>(null)
+  const sessions = ref<SessionSummary[]>([])
+
+  function generateSessionId(): string {
+    return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  }
+
+  function deriveSessionTitle(): string {
+    const firstUserMsg = messages.value.find((m) => m.role === 'user')
+    if (!firstUserMsg) return '新对话'
+    const text = firstUserMsg.content.trim()
+    return text.length > 30 ? text.slice(0, 30) + '…' : text
+  }
+
+  async function refreshSessions(): Promise<void> {
+    const projectId = appStore.currentProject?.id
+    if (!projectId) return
+    const result = await window.characterArc.listSessions(projectId)
+    if (result.success && result.result) {
+      sessions.value = result.result
+    }
+  }
+
+  async function saveCurrentSession(): Promise<void> {
+    const projectId = appStore.currentProject?.id
+    if (!projectId || messages.value.length === 0) return
+
+    await appStore.persistWorkspace()
+    if (appStore.persistenceError) {
+      throw new Error(appStore.persistenceError)
+    }
+
+    if (!currentSessionId.value) {
+      currentSessionId.value = generateSessionId()
+    }
+    const result = await window.characterArc.saveSession(toIpcPayload({
+      id: currentSessionId.value,
+      projectId,
+      title: deriveSessionTitle(),
+      messages: messages.value
+    }))
+    if (!result.success) {
+      throw new Error(result.error ?? '保存历史会话失败')
+    }
+    await refreshSessions()
+  }
+
+  async function loadSession(sessionId: string): Promise<void> {
+    const result = await window.characterArc.loadSession(sessionId)
+    if (!result.success || !result.result) {
+      throw new Error(result.error ?? '加载历史会话失败')
+    }
+    currentSessionId.value = result.result.id
+    messages.value = result.result.messages as ChapterAiMessage[]
+  }
+
+  async function deleteSession(sessionId: string): Promise<void> {
+    const result = await window.characterArc.deleteSession(sessionId)
+    if (!result.success) {
+      throw new Error(result.error ?? '删除历史会话失败')
+    }
+    if (currentSessionId.value === sessionId) {
+      currentSessionId.value = null
+      messages.value = []
+    }
+    await refreshSessions()
+  }
+
+  function newSession(): void {
+    currentSessionId.value = null
+    messages.value = []
+  }
 
   const selectedText = computed(() => appStore.currentChapterSelection?.text.trim() ?? '')
   const hasSelection = computed(() =>
@@ -231,43 +333,56 @@ export function useChapterAi(): {
         },
         async () => {
           const sameVolume = appStore.chapters.filter((item) => item.volumeId === chapter.volumeId)
+          const hasModule = (mod: ContextModule) => enabledContextModules.has(mod)
           const context = buildChapterAssistantContext({
             project: appStore.currentProject,
-            chapter,
-            chapterVolume: appStore.selectedChapterVolume,
-            relatedChapters: sameVolume
-              .filter((item) => item.id !== chapter.id)
-              .slice(0, 2)
-              .map((item) => ({
-                title: item.title,
-                summary: item.summary,
-                preview: getChapterPreviewText(item.content, '该章节暂无正文')
-              })),
-            volumeChapterSummaries: sameVolume
-              .filter((item) => item.id !== chapter.id)
-              .map((item) => ({ title: item.title, summary: item.summary })),
+            chapter: hasModule('chapter') ? chapter : undefined,
+            chapterVolume: hasModule('chapter') ? appStore.selectedChapterVolume : undefined,
+            relatedChapters: hasModule('chapter')
+              ? sameVolume
+                  .filter((item) => item.id !== chapter.id)
+                  .slice(0, 2)
+                  .map((item) => ({
+                    title: item.title,
+                    summary: item.summary,
+                    preview: getChapterPreviewText(item.content, '该章节暂无正文')
+                  }))
+              : [],
+            volumeChapterSummaries: hasModule('chapter')
+              ? sameVolume
+                  .filter((item) => item.id !== chapter.id)
+                  .map((item) => ({ title: item.title, summary: item.summary }))
+              : [],
             novelOpenerSummary:
-              appStore.chapters[0] && appStore.chapters[0].id !== chapter.id
+              hasModule('chapter') && appStore.chapters[0] && appStore.chapters[0].id !== chapter.id
                 ? { title: appStore.chapters[0].title, summary: appStore.chapters[0].summary }
                 : undefined,
             recentMessages: messages.value
               .slice(-8, -2)
               .map((item) => ({ role: item.role, content: item.content })),
-            worldviewEntries: appStore.worldviewEntries,
-            characters: appStore.characters,
-            organizations: appStore.organizations,
-            characterRelationships: appStore.characterRelationships,
-            organizationMemberships: appStore.organizationMemberships,
+            worldviewEntries: hasModule('worldview')
+              ? appStore.worldviewEntries.map((e) => ({ ...e, content: '' }))
+              : [],
+            characters: hasModule('characters')
+              ? appStore.characters.map((c) => ({ ...c, description: '' }))
+              : [],
+            organizations: hasModule('characters') ? appStore.organizations : [],
+            characterRelationships: hasModule('characters') ? appStore.characterRelationships : [],
+            organizationMemberships: hasModule('characters') ? appStore.organizationMemberships : [],
             inspirationEntries: appStore.inspirationEntries,
-            outlineItems: appStore.outlineItems,
-            plotThreads: appStore.plotThreads,
-            workflowDocuments: appStore.workflowDocuments,
-            knowledgeDocuments: appStore.knowledgeDocuments,
+            outlineItems: hasModule('outline')
+              ? appStore.outlineItems.map((o) => ({ ...o, summary: '' }))
+              : [],
+            plotThreads: hasModule('plotThreads') ? appStore.plotThreads : [],
+            workflowDocuments: hasModule('outline') ? appStore.workflowDocuments : [],
+            knowledgeDocuments: hasModule('knowledge')
+              ? appStore.knowledgeDocuments.slice(0, 8)
+              : [],
             selectedText: selectedText.value,
             responseMode: 'freeform',
             responseLength: 'medium',
             userPrompt: trimmed,
-            chapterContent: getPlainTextFromEditorContent(chapter.content ?? '')
+            chapterContent: hasModule('chapter') ? getPlainTextFromEditorContent(chapter.content ?? '') : ''
           })
 
           const startFn = useAgentMode
@@ -306,6 +421,14 @@ export function useChapterAi(): {
         assistantMsg.content = `生成失败：${error instanceof Error ? error.message : '未知错误'}`
       }
     }
+
+    void saveCurrentSession().catch((error) => {
+      const errorMessage = error instanceof Error ? error.message : '保存历史会话失败'
+      const existing = messages.value.find((item) => item.role === 'assistant' && item.content === `会话保存失败：${errorMessage}`)
+      if (!existing) {
+        pushMessage('assistant', `会话保存失败：${errorMessage}`)
+      }
+    })
   }
 
   async function stop(): Promise<void> {
@@ -327,9 +450,18 @@ export function useChapterAi(): {
     agentStatus,
     hasSelection,
     selectedText,
+    enabledContextModules,
+    toggleContextModule,
+    currentSessionId,
+    sessions,
     send,
     stop,
     resetMessages,
+    newSession,
+    saveCurrentSession,
+    loadSession,
+    deleteSession,
+    refreshSessions,
     applyToChapter,
     registerStreamListener,
     unregisterStreamListener

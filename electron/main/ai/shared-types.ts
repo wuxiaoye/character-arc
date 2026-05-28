@@ -36,6 +36,8 @@ export type AppSettings = {
   imageApiKey: string
   /** 可选：图片生成独立 Base URL */
   imageBaseUrl: string
+  /** AI 请求超时（秒），默认 180 */
+  aiTimeoutSeconds?: number
 }
 
 /** 所有 AI 任务类型的联合字面量类型。每个值对应 tasks/ 下的一个 TaskHandler。 */

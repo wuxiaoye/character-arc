@@ -769,6 +769,15 @@ export interface CharacterArcExportEnvelope {
 }
 
 /** 应用全局设置 */
+export interface AiProfile {
+  id: string
+  name: string
+  provider: string
+  baseUrl: string
+  apiKey: string
+  model: string
+}
+
 export interface AppSettings {
   /** AI 供应商标识 */
   provider: string
@@ -778,6 +787,10 @@ export interface AppSettings {
   apiKey: string
   /** API 基础地址 */
   baseUrl: string
+  /** 已保存的 AI 接口配置列表 */
+  aiProfiles: AiProfile[]
+  /** 当前激活的 AI 接口配置 ID */
+  activeAiProfileId: string
   /** 图片服务预设标识 */
   imageProvider: string
   /** 图片生成模型名称 */
@@ -794,6 +807,8 @@ export interface AppSettings {
   darkMode: boolean
   /** 深色模式风格预设 */
   darkModeStyle: DarkModeStyle
+  /** AI 请求超时时间（秒），超时后主动终止本次请求 */
+  aiTimeoutSeconds: number
 }
 
 /** 封面工作台独立生图历史条目 */

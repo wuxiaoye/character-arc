@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
-import { FileText, GitMerge, Globe, Plus, Sparkles, Users, X } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { BookOpen, FileText, GitMerge, Globe, History, Plus, Route, Sparkles, Trash2, Users, X } from 'lucide-vue-next'
 import { NTooltip, useMessage } from 'naive-ui'
 import ChapterAiMessages from './ChapterAiMessages.vue'
 import ChapterAiInput from './ChapterAiInput.vue'
@@ -22,7 +22,51 @@ defineEmits<{
 
 const message = useMessage()
 const appStore = useAppStore()
-const { messages, isResponding, agentStatus, hasSelection, send, stop, resetMessages, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream } = useChapterAi()
+const showSessionList = ref(false)
+const { messages, isResponding, agentStatus, hasSelection, enabledContextModules, toggleContextModule, currentSessionId, sessions, send, stop, resetMessages, newSession, saveCurrentSession, loadSession, deleteSession, refreshSessions, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream } = useChapterAi()
+
+function handleNewSession(): void {
+  if (messages.value.length > 0) {
+    void (async () => {
+      try {
+        await saveCurrentSession()
+        newSession()
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '保存历史会话失败')
+      }
+    })()
+    return
+  }
+  newSession()
+}
+
+async function handleLoadSession(sessionId: string): Promise<void> {
+  try {
+    if (messages.value.length > 0 && currentSessionId.value !== sessionId) {
+      await saveCurrentSession()
+    }
+    await loadSession(sessionId)
+    showSessionList.value = false
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载历史会话失败')
+  }
+}
+
+async function handleDeleteSession(sessionId: string): Promise<void> {
+  try {
+    await deleteSession(sessionId)
+    message.success('已删除历史会话')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '删除历史会话失败')
+  }
+}
+
+function toggleSessionList(): void {
+  if (!showSessionList.value) {
+    void refreshSessions()
+  }
+  showSessionList.value = !showSessionList.value
+}
 const draft = useChapterFirstDraft()
 const detect = useChapterThreadDetect()
 const summary = useChapterSummary()
@@ -30,20 +74,14 @@ const inspiration = useChapterInspiration()
 const humanize = useChapterHumanize()
 
 const contextChips = computed(() => {
-  const chips: { label: string; icon: string; active: boolean }[] = []
   const chapter = appStore.selectedChapter
-  if (chapter) {
-    chips.push({ label: '当前章节', icon: 'file-text', active: true })
-    if (chapter.summary) {
-      chips.push({ label: '章节大纲', icon: 'git-merge', active: true })
-    }
-  }
-  if (appStore.characters.length > 0) {
-    chips.push({ label: '角色卡', icon: 'users', active: true })
-  }
-  if (appStore.worldviewEntries.length > 0) {
-    chips.push({ label: '世界观', icon: 'globe', active: true })
-  }
+  const chips: { label: string; icon: string; module: import('./useChapterAi').ContextModule; available: boolean }[] = []
+  chips.push({ label: '当前章节', icon: 'file-text', module: 'chapter', available: !!chapter })
+  chips.push({ label: '章节大纲', icon: 'git-merge', module: 'outline', available: appStore.outlineItems.length > 0 })
+  chips.push({ label: '角色卡', icon: 'users', module: 'characters', available: appStore.characters.length > 0 })
+  chips.push({ label: '世界观', icon: 'globe', module: 'worldview', available: appStore.worldviewEntries.length > 0 })
+  chips.push({ label: '剧情线索', icon: 'route', module: 'plotThreads', available: appStore.plotThreads.length > 0 })
+  chips.push({ label: '知识文档', icon: 'book-open', module: 'knowledge', available: appStore.knowledgeDocuments.length > 0 })
   return chips
 })
 
@@ -118,6 +156,7 @@ defineExpose({ sendPrompt })
 onMounted(() => {
   registerChatStream()
   draft.registerStreamListener()
+  void refreshSessions()
 })
 onBeforeUnmount(() => {
   unregisterChatStream()
@@ -135,11 +174,19 @@ onBeforeUnmount(() => {
       <div class="ai-header-actions">
         <n-tooltip placement="bottom">
           <template #trigger>
-            <button class="icon-btn" :disabled="isResponding" @click="resetMessages">
+            <button class="icon-btn" :disabled="isResponding" @click="handleNewSession">
               <Plus :size="13" />
             </button>
           </template>
           新对话
+        </n-tooltip>
+        <n-tooltip placement="bottom">
+          <template #trigger>
+            <button class="icon-btn" :class="{ active: showSessionList }" @click="toggleSessionList">
+              <History :size="13" />
+            </button>
+          </template>
+          历史会话
         </n-tooltip>
         <n-tooltip placement="bottom">
           <template #trigger>
@@ -150,12 +197,37 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <div v-if="contextChips.length" class="context-strip">
-      <span v-for="chip in contextChips" :key="chip.label" class="ctx-chip" :class="{ active: chip.active }">
+    <div v-if="showSessionList" class="session-list">
+      <div v-if="sessions.length === 0" class="session-empty">暂无历史会话</div>
+      <div
+        v-for="session in sessions"
+        :key="session.id"
+        class="session-item"
+        :class="{ active: currentSessionId === session.id }"
+        @click="handleLoadSession(session.id)"
+      >
+        <span class="session-item-title">{{ session.title }}</span>
+        <button class="session-item-delete" title="删除" @click.stop="handleDeleteSession(session.id)">
+          <Trash2 :size="11" />
+        </button>
+      </div>
+    </div>
+
+    <div class="context-strip">
+      <span class="context-label">上下文</span>
+      <span
+        v-for="chip in contextChips"
+        :key="chip.module"
+        class="ctx-chip"
+        :class="{ active: chip.available && enabledContextModules.has(chip.module), inactive: !chip.available || !enabledContextModules.has(chip.module) }"
+        @click="chip.available && toggleContextModule(chip.module)"
+      >
         <FileText v-if="chip.icon === 'file-text'" :size="11" />
         <GitMerge v-if="chip.icon === 'git-merge'" :size="11" />
         <Users v-if="chip.icon === 'users'" :size="11" />
         <Globe v-if="chip.icon === 'globe'" :size="11" />
+        <Route v-if="chip.icon === 'route'" :size="11" />
+        <BookOpen v-if="chip.icon === 'book-open'" :size="11" />
         {{ chip.label }}
       </span>
     </div>
@@ -280,31 +352,143 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
+.icon-btn.active {
+  background: var(--arc-primary-soft);
+  color: var(--arc-primary);
+}
+
+/* ── Session List ── */
+.session-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--arc-border);
+  background: var(--arc-bg-weak);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--arc-text-hint);
+  font-size: 12px;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.session-item:hover {
+  background: var(--arc-bg-surface-hover);
+}
+
+.session-item.active {
+  background: var(--arc-primary-soft);
+}
+
+.session-item-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--arc-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-item.active .session-item-title {
+  color: var(--arc-primary);
+}
+
+.session-item-delete {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--arc-text-hint);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.session-item:hover .session-item-delete {
+  display: inline-flex;
+}
+
+.session-item-delete:hover {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
 .context-strip {
   padding: 8px 12px;
   background: var(--arc-bg-weak);
   border-bottom: 1px solid var(--arc-border);
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.context-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--arc-text-hint);
+  margin-right: 2px;
+  user-select: none;
 }
 
 .ctx-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
-  background: var(--arc-bg-surface);
-  border: 1px solid var(--arc-border);
-  border-radius: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 11px;
-  color: var(--arc-text-secondary);
+  font-weight: 550;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ctx-chip.active {
   background: var(--arc-primary-soft);
-  border-color: color-mix(in srgb, var(--arc-primary) 20%, transparent);
+  border-color: color-mix(in srgb, var(--arc-primary) 18%, transparent);
   color: var(--arc-primary);
+}
+
+.ctx-chip.active:hover {
+  background: color-mix(in srgb, var(--arc-primary) 12%, var(--arc-bg-surface));
+  border-color: color-mix(in srgb, var(--arc-primary) 28%, transparent);
+}
+
+.ctx-chip.inactive {
+  background: var(--arc-bg-surface);
+  color: var(--arc-text-hint);
+  border-color: var(--arc-border);
+  text-decoration: line-through;
+  text-decoration-color: var(--arc-border-strong);
+}
+
+.ctx-chip.inactive:hover {
+  background: var(--arc-bg-surface-hover);
+  color: var(--arc-text-secondary);
+  border-color: var(--arc-border-strong);
+  text-decoration: none;
 }
 
 .selection-hint {

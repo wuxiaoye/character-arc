@@ -11,6 +11,7 @@ import DeconstructionLibraryPage from '@/pages/DeconstructionLibraryPage.vue'
 import SkillsPage from '@/pages/SkillsPage.vue'
 import CoverWorkbenchPage from '@/pages/CoverWorkbenchPage.vue'
 import AiTaskProgressDock from '@/components/AiTaskProgressDock.vue'
+import TitlebarModelSwitcher from '@/components/TitlebarModelSwitcher.vue'
 
 // 全局应用状态
 const appStore = useAppStore()
@@ -36,7 +37,7 @@ const appStyleVars = computed(() => {
   const dark = appStore.appSettings.darkMode
   const darkPreset = getDarkModePreset(appStore.appSettings.darkModeStyle)
   return {
-    '--arc-bg-body': dark ? darkPreset.bgBody : '#f6f6f7',
+    '--arc-bg-body': dark ? darkPreset.bgBody : '#f8f8f9',
     '--arc-bg-weak': dark ? darkPreset.bgWeak : '#fafafb',
     '--arc-bg-surface': dark ? darkPreset.bgSurface : '#ffffff',
     '--arc-bg-surface-hover': dark ? darkPreset.bgSurfaceHover : '#eef0f3',
@@ -137,6 +138,7 @@ onBeforeUnmount(() => {
               {{ appName }}
               <span v-if="appVersion" class="app-titlebar__version">v{{ appVersion }}</span>
             </span>
+            <TitlebarModelSwitcher />
           </div>
           <div class="app-content">
             <div v-if="appStore.persistenceError" class="app-error-banner">

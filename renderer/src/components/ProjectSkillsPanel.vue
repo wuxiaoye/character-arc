@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { BookOpenText } from 'lucide-vue-next'
+import { computed, reactive, ref, watch } from 'vue'
+import { BookOpenText, ChevronDown } from 'lucide-vue-next'
 import { NButton, NTag, useMessage } from 'naive-ui'
 import { novelWorkflowStageDefinitions } from '@/features/novelWorkflow/stages'
 import { useAppStore } from '@/stores/app'
@@ -40,6 +40,38 @@ const builtinProjectSkillCount = computed(() =>
 const importedProjectSkillCount = computed(() =>
   resolvedProjectSkills.value.filter((skill) => skill.scope !== 'builtin').length
 )
+
+const groupedSkills = computed(() => {
+  const groups: Array<{ name: string; label: string; skills: typeof resolvedProjectSkills.value }> = []
+  const groupMap = new Map<string, typeof resolvedProjectSkills.value>()
+
+  for (const skill of resolvedProjectSkills.value) {
+    const segments = skill.path.split('/')
+    const groupName = segments.length > 2 ? segments[1] : '_root'
+    if (!groupMap.has(groupName)) groupMap.set(groupName, [])
+    groupMap.get(groupName)!.push(skill)
+  }
+
+  const groupLabels: Record<string, string> = {
+    '_root': '内置 Skills'
+  }
+
+  for (const [name, skills] of groupMap) {
+    groups.push({
+      name,
+      label: groupLabels[name] ?? name,
+      skills
+    })
+  }
+
+  return groups
+})
+
+const collapsedGroups = reactive<Record<string, boolean>>({})
+
+function toggleGroup(groupName: string): void {
+  collapsedGroups[groupName] = !collapsedGroups[groupName]
+}
 
 watch(
   () => currentProject.value?.id,
@@ -232,54 +264,62 @@ function toggleProjectSkillStage(skillId: string, stageId: NovelWorkflowStageId)
         </div>
       </div>
 
-      <div v-if="resolvedProjectSkills.length > 0" class="project-skill-list">
-        <article v-for="skill in resolvedProjectSkills" :key="skill.id" class="project-skill-card">
-          <div class="project-skill-head">
-            <div>
-              <div class="project-skill-title-row">
-                <strong>{{ skill.name }}</strong>
-                <n-tag size="small" round :bordered="false">{{ skill.scope === 'builtin' ? '内置' : '项目' }}</n-tag>
-                <n-tag size="small" round :bordered="false">{{ resolveSkillCategoryLabel(skill.category) }}</n-tag>
-                <n-tag
+      <div v-if="resolvedProjectSkills.length > 0" class="project-skill-groups">
+        <div v-for="group in groupedSkills" :key="group.name" class="skill-group">
+          <button class="skill-group-header" @click="toggleGroup(group.name)">
+            <ChevronDown :size="16" class="skill-group-chevron" :class="{ collapsed: collapsedGroups[group.name] }" />
+            <strong>{{ group.label }}</strong>
+            <span class="skill-group-count">{{ group.skills.length }} 个</span>
+            <span class="skill-group-enabled">{{ group.skills.filter(s => s.enabled).length }} 已启用</span>
+          </button>
+          <div v-if="!collapsedGroups[group.name]" class="project-skill-list">
+            <article v-for="skill in group.skills" :key="skill.id" class="project-skill-card">
+              <div class="project-skill-head">
+                <div>
+                  <div class="project-skill-title-row">
+                    <strong>{{ skill.name }}</strong>
+                    <n-tag size="small" round :bordered="false">{{ resolveSkillCategoryLabel(skill.category) }}</n-tag>
+                    <n-tag
+                      size="small"
+                      round
+                      :bordered="false"
+                      :type="skill.compatibility === 'native' ? 'success' : (skill.compatibility === 'external-only' ? 'warning' : 'default')"
+                    >
+                      {{ resolveSkillCompatibilityLabel(skill.compatibility) }}
+                    </n-tag>
+                  </div>
+                  <p class="project-skill-description">{{ skill.description || '当前 skill 未提供描述。' }}</p>
+                </div>
+                <n-button
                   size="small"
-                  round
-                  :bordered="false"
-                  :type="skill.compatibility === 'native' ? 'success' : (skill.compatibility === 'external-only' ? 'warning' : 'default')"
-                >
-                  {{ resolveSkillCompatibilityLabel(skill.compatibility) }}
-                </n-tag>
+                  :type="skill.enabled ? 'primary' : 'default'"
+                  :secondary="!skill.enabled"
+                  :disabled="skill.compatibility === 'external-only'"
+                  @click="toggleProjectSkill(skill.id)"
+                >{{ skill.compatibility === 'external-only' ? '暂不接入' : (skill.enabled ? '已启用' : '已停用') }}</n-button>
               </div>
-              <p>{{ skill.path }}<span v-if="skill.version"> · v{{ skill.version }}</span></p>
-            </div>
-            <n-button
-              size="small"
-              :type="skill.enabled ? 'primary' : 'default'"
-              :secondary="!skill.enabled"
-              :disabled="skill.compatibility === 'external-only'"
-              @click="toggleProjectSkill(skill.id)"
-            >{{ skill.compatibility === 'external-only' ? '暂不接入' : (skill.enabled ? '已启用' : '已停用') }}</n-button>
+              <div class="project-skill-meta-row">
+                <span v-if="skill.source">来源：{{ skill.source }}</span>
+                <span v-if="skill.referencesCount">资料：{{ skill.referencesCount }} 份</span>
+                <span v-if="skill.version">v{{ skill.version }}</span>
+              </div>
+              <div class="project-skill-stage-row">
+                <span class="project-skill-stage-label">适用阶段</span>
+                <div class="project-skill-stage-chips">
+                  <n-button
+                    v-for="stage in workflowStages"
+                    :key="`${skill.id}-${stage.id}`"
+                    size="tiny"
+                    :type="skill.stageIds.includes(stage.id) ? 'primary' : 'default'"
+                    :secondary="!skill.stageIds.includes(stage.id)"
+                    :disabled="skill.compatibility === 'external-only'"
+                    @click="toggleProjectSkillStage(skill.id, stage.id)"
+                  >{{ stage.title }}</n-button>
+                </div>
+              </div>
+            </article>
           </div>
-          <p class="project-skill-description">{{ skill.description || '当前 skill 未提供描述。' }}</p>
-          <div class="project-skill-meta-row">
-            <span v-if="skill.source">来源：{{ skill.source }}</span>
-            <span v-if="skill.referencesCount">资料：{{ skill.referencesCount }} 份</span>
-          </div>
-          <p v-if="skill.compatibilityNote" class="project-skill-note">{{ skill.compatibilityNote }}</p>
-          <div class="project-skill-stage-row">
-            <span class="project-skill-stage-label">适用阶段</span>
-            <div class="project-skill-stage-chips">
-              <n-button
-                v-for="stage in workflowStages"
-                :key="`${skill.id}-${stage.id}`"
-                size="tiny"
-                :type="skill.stageIds.includes(stage.id) ? 'primary' : 'default'"
-                :secondary="!skill.stageIds.includes(stage.id)"
-                :disabled="skill.compatibility === 'external-only'"
-                @click="toggleProjectSkillStage(skill.id, stage.id)"
-              >{{ stage.title }}</n-button>
-            </div>
-          </div>
-        </article>
+        </div>
       </div>
       <div v-else class="skills-empty-state">
         <BookOpenText :size="18" />
@@ -342,10 +382,68 @@ function toggleProjectSkillStage(skillId: string, stageId: NovelWorkflowStageId)
   justify-content: flex-end;
 }
 
+.project-skill-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.skill-group {
+  border: 1px solid var(--arc-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.skill-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 18px;
+  border: none;
+  background: var(--arc-bg-body);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.skill-group-header:hover {
+  background: var(--arc-bg-surface-hover);
+}
+
+.skill-group-header strong {
+  color: var(--arc-text-primary);
+  font-size: 14px;
+  font-weight: 680;
+}
+
+.skill-group-count {
+  color: var(--arc-text-hint);
+  font-size: 12px;
+}
+
+.skill-group-enabled {
+  margin-left: auto;
+  color: var(--arc-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.skill-group-chevron {
+  color: var(--arc-text-hint);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.skill-group-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
 .project-skill-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0;
+  padding: 0 18px 14px;
 }
 
 .project-skill-overview {
@@ -375,10 +473,13 @@ function toggleProjectSkillStage(skillId: string, stageId: NovelWorkflowStageId)
 }
 
 .project-skill-card {
-  border: 1px solid var(--arc-border);
-  border-radius: 10px;
+  border-bottom: 1px solid var(--arc-bg-surface-hover);
   background: var(--arc-bg-surface);
-  padding: 16px 18px;
+  padding: 14px 0;
+}
+
+.project-skill-card:last-child {
+  border-bottom: none;
 }
 
 .project-skill-head {
@@ -409,10 +510,14 @@ function toggleProjectSkillStage(skillId: string, stageId: NovelWorkflowStageId)
 }
 
 .project-skill-description {
-  margin: 12px 0 0;
+  margin: 4px 0 0;
   color: var(--arc-text-secondary);
-  font-size: 13px;
-  line-height: 1.75;
+  font-size: 12.5px;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .project-skill-meta-row {
@@ -422,13 +527,6 @@ function toggleProjectSkillStage(skillId: string, stageId: NovelWorkflowStageId)
   margin-top: 12px;
   color: var(--arc-text-hint);
   font-size: 11px;
-}
-
-.project-skill-note {
-  margin: 12px 0 0;
-  color: var(--arc-text-secondary);
-  font-size: 12px;
-  line-height: 1.7;
 }
 
 .project-skill-stage-row {
@@ -475,14 +573,6 @@ function toggleProjectSkillStage(skillId: string, stageId: NovelWorkflowStageId)
   margin: 0;
   font-size: 12px;
   line-height: 1.7;
-}
-
-@media (min-width: 1280px) {
-  .project-skill-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-  }
 }
 
 @media (max-width: 980px) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Search, Sparkles } from 'lucide-vue-next'
 import {
   NAlert,
@@ -14,11 +14,8 @@ import {
   NList,
   NListItem,
   NModal,
-  NProgress,
   NScrollbar,
   NStatistic,
-  NStep,
-  NSteps,
   NTag,
   useDialog,
   useMessage
@@ -31,6 +28,7 @@ import {
   type ReferenceAssetLibrary
 } from '@/features/knowledge/knowledgeCenter'
 import { useAppStore } from '@/stores/app'
+import BatchImportModal from './BatchImportModal.vue'
 
 const appStore = useAppStore()
 const dialog = useDialog()
@@ -38,9 +36,7 @@ const message = useMessage()
 
 const keyword = ref('')
 const selectedDocument = ref<KnowledgeDocumentView | null>(null)
-const isImportingReferenceNovel = ref(false)
-const referenceImportProgress = ref<CharacterArcReferenceImportProgressPayload | null>(null)
-const progressModalVisible = ref(false)
+const showBatchImportModal = ref(false)
 
 const allState = computed(() => buildKnowledgeCenterState(appStore.knowledgeDocuments))
 const referenceAssets = computed(() =>
@@ -56,8 +52,6 @@ const detailVisible = computed({
 })
 
 const healthTone = computed(() => (referenceAssets.value.length > 0 ? 'stable' : 'attention'))
-
-const isReferenceOperationActive = computed(() => isImportingReferenceNovel.value)
 
 const librarySummaryCards = computed(() => [
   {
@@ -85,73 +79,6 @@ const librarySummaryCards = computed(() => [
     hint: '累计沉淀的可复用写法'
   }
 ])
-
-const cleanupReferenceImportProgress = window.characterArc.onReferenceImportProgress((payload) => {
-  referenceImportProgress.value = payload
-})
-
-onBeforeUnmount(() => {
-  cleanupReferenceImportProgress()
-})
-
-function setReferenceProgress(payload: CharacterArcReferenceImportProgressPayload | null): void {
-  referenceImportProgress.value = payload
-  progressModalVisible.value = Boolean(payload)
-}
-
-async function importReferenceNovelAnalysis(): Promise<void> {
-  if (isImportingReferenceNovel.value) {
-    return
-  }
-
-  isImportingReferenceNovel.value = true
-  setReferenceProgress({
-    phase: 'extracting',
-    message: '准备打开文件并开始拆书分析...',
-    current: 0,
-    total: 1,
-    percent: 2
-  })
-  try {
-    const result = await window.characterArc.importReferenceNovelAnalysis(JSON.parse(JSON.stringify({
-      settings: appStore.appSettings,
-      projectSkills: []
-    })))
-
-    if (result.canceled) {
-      setReferenceProgress(null)
-      return
-    }
-
-    if (!result.success || !result.result) {
-      throw new Error(result.error ?? '参考作品拆书失败')
-    }
-
-    appStore.upsertReferenceWork(result.result.referenceWork)
-    appStore.mergeKnowledgeDocuments(result.result.knowledgeDocuments)
-
-    setReferenceProgress({
-      phase: 'done',
-      message: `《${result.result.referenceWork.title}》已加入拆书知识库，相关拆书资产已完成归档。`,
-      current: 1,
-      total: 1,
-      percent: 100,
-      sourceTitle: result.result.referenceWork.title
-    })
-    message.success(`已完成《${result.result.referenceWork.title}》拆书并归档到知识库`)
-  } catch (error) {
-    setReferenceProgress({
-      phase: 'done',
-      message: error instanceof Error ? error.message : '参考作品拆书失败',
-      current: 0,
-      total: 1,
-      percent: 0
-    })
-    message.error(error instanceof Error ? error.message : '参考作品拆书失败')
-  } finally {
-    isImportingReferenceNovel.value = false
-  }
-}
 
 function openDocument(documentView: KnowledgeDocumentView): void {
   selectedDocument.value = documentView
@@ -337,18 +264,6 @@ function resolveAssetDocuments(asset: ReferenceAssetLibrary): KnowledgeDocumentV
     .filter((item) => asset.relatedDocumentIds.includes(item.document.id))
     .sort((left, right) => compareReferenceAssetDocuments(left.document, right.document))
 }
-
-const progressStepPhases = ['extracting', 'chunk-analysis', 'aggregating', 'saving'] as const
-const progressStepLabels = ['读取/切分', '逐块分析', '汇总结论', '归档资产']
-
-const progressCurrentStep = computed(() => {
-  const phase = referenceImportProgress.value?.phase
-  if (!phase) return 0
-  const index = progressStepPhases.indexOf(phase as typeof progressStepPhases[number])
-  if (phase === 'chunking') return 1
-  if (phase === 'done') return 5
-  return index >= 0 ? index + 1 : 0
-})
 </script>
 
 <template>
@@ -362,8 +277,8 @@ const progressCurrentStep = computed(() => {
         </n-tag>
       </div>
       <div class="knowledge-header-actions">
-        <n-button secondary :disabled="isReferenceOperationActive" @click="importReferenceNovelAnalysis">
-          {{ isImportingReferenceNovel ? '拆书中...' : '导入小说并拆书' }}
+        <n-button secondary @click="showBatchImportModal = true">
+          导入小说并拆书
         </n-button>
       </div>
     </div>
@@ -478,30 +393,8 @@ const progressCurrentStep = computed(() => {
     </div>
 
 
-    <!-- Progress Modal -->
-    <n-modal v-model:show="progressModalVisible" :mask-closable="false">
-      <n-card style="width: min(520px, 92vw)" :bordered="false" title="拆书处理中" role="dialog" aria-modal="true" closable @close="progressModalVisible = false">
-        <div class="progress-body">
-          <div class="progress-top">
-            <strong>
-              {{
-                (referenceImportProgress?.percent ?? 0) >= 100
-                    ? `《${referenceImportProgress?.sourceTitle || ''}》处理完毕`
-                    : referenceImportProgress?.sourceTitle
-                        ? `正在处理《${referenceImportProgress.sourceTitle}》`
-                        : '等待开始'
-              }}
-            </strong>
-            <n-tag size="small" type="primary" :bordered="false">{{ referenceImportProgress?.percent ?? 0 }}%</n-tag>
-          </div>
-          <n-progress type="line" :percentage="referenceImportProgress?.percent ?? 0" :show-indicator="false" />
-          <p class="progress-message">{{ referenceImportProgress?.message || '导入后会依次完成：读取正文、切分分块、逐块分析、汇总结论、归档到知识库。' }}</p>
-          <n-steps :current="progressCurrentStep" size="small">
-            <n-step v-for="(label, index) in progressStepLabels" :key="index" :title="label" />
-          </n-steps>
-        </div>
-      </n-card>
-    </n-modal>
+    <!-- Batch Import Modal -->
+    <BatchImportModal v-model:show="showBatchImportModal" />
 
     <!-- Detail Modal -->
     <n-modal v-model:show="detailVisible">
@@ -536,7 +429,7 @@ const progressCurrentStep = computed(() => {
             </n-tag>
           </div>
 
-          <n-scrollbar style="max-height: 56vh">
+          <n-scrollbar style="max-height: 36vh">
             <pre class="detail-content">{{ selectedDocument.document.content || '暂无正文内容。' }}</pre>
           </n-scrollbar>
         </div>
@@ -749,31 +642,6 @@ const progressCurrentStep = computed(() => {
   margin: 0;
   color: var(--arc-text-secondary);
   font-size: 12px;
-  line-height: 1.6;
-}
-
-.progress-body {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.progress-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.progress-top strong {
-  font-size: 14px;
-  color: var(--arc-text-primary);
-}
-
-.progress-message {
-  margin: 0;
-  color: var(--arc-text-secondary);
-  font-size: 13px;
   line-height: 1.6;
 }
 

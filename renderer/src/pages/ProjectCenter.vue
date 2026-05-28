@@ -3,6 +3,8 @@ import { computed, h, ref } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
 
 import HomepageHero from '@/components/home/HomepageHero.vue'
+import HomepageAnnouncementModal from '@/components/home/HomepageAnnouncementModal.vue'
+import HomepageUpdateModal from '@/components/home/HomepageUpdateModal.vue'
 import HomepageProjectCollection from '@/components/home/HomepageProjectCollection.vue'
 import HomepageSettingsModal from '@/components/home/HomepageSettingsModal.vue'
 import ProjectEditorModal from '@/components/home/ProjectEditorModal.vue'
@@ -15,6 +17,8 @@ const message = useMessage()
 
 const settingsVisible = ref(false)
 const editorVisible = ref(false)
+const announcementVisible = ref(false)
+const updateVisible = ref(false)
 const editingProject = ref<ProjectSummary | null>(null)
 
 const projectMenuOptions = computed(() => [
@@ -147,6 +151,8 @@ function requestDeleteProject(projectId: string): void {
         @open-cover-workbench="openCoverWorkbenchPage"
         @open-skills="openSkillsPage"
         @open-settings="settingsVisible = true"
+        @open-announcement="announcementVisible = true"
+        @check-update="updateVisible = true"
       />
 
       <HomepageProjectCollection
@@ -165,6 +171,8 @@ function requestDeleteProject(projectId: string): void {
     />
 
     <HomepageSettingsModal v-model:show="settingsVisible" />
+    <HomepageAnnouncementModal v-model:show="announcementVisible" />
+    <HomepageUpdateModal v-model:show="updateVisible" />
   </section>
 </template>
 

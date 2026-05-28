@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { Cpu, Download, MonitorCog, Moon, Palette, PlugZap, RefreshCw, Save } from 'lucide-vue-next'
+import { Copy, Cpu, Download, Image, MonitorCog, Moon, Palette, PlugZap, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
 import { NButton, NFormItem, NInput, NModal, NSelect, NSwitch, useMessage } from 'naive-ui'
-import { autoSaveOptions, formatAutoSaveIntervalLabel, isLiveAutoSaveInterval } from '@/features/settings/autoSave'
+import { autoSaveOptions } from '@/features/settings/autoSave'
 import { getProviderPreset, providerOptions, resolveProviderDefaults } from '@/features/settings/providerPresets'
-import { getImageProviderPreset, imageProviderOptions, resolveImageProviderDefaults } from '@/features/settings/imageProviderPresets'
+import { imageProviderOptions, resolveImageProviderDefaults } from '@/features/settings/imageProviderPresets'
 import { useAppStore } from '@/stores/app'
 import { darkModePresets, themePresets } from '@/theme/presets'
 import { toIpcPayload } from '@/utils/ipcPayload'
-import type { AppSettings, DarkModeStyle, ThemeName } from '@/types/app'
+import type { AiProfile, AppSettings, DarkModeStyle, ThemeName } from '@/types/app'
 
 const props = defineProps<{
   show: boolean
@@ -27,7 +27,6 @@ const isFetchingImageModels = ref(false)
 const fetchedImageModels = ref<Array<{ id: string; ownedBy: string | null }>>([])
 
 const autoSaveSelectOptions = [...autoSaveOptions]
-const themeOptions = themePresets.map((preset) => ({ label: preset.label, value: preset.name }))
 const uiScaleOptions = [
   { label: '75%', value: 0.75 },
   { label: '85%', value: 0.85 },
@@ -36,12 +35,22 @@ const uiScaleOptions = [
   { label: '125%', value: 1.25 },
   { label: '140%', value: 1.4 }
 ]
+const aiTimeoutOptions = [
+  { label: '30 秒', value: 30 },
+  { label: '60 秒', value: 60 },
+  { label: '120 秒', value: 120 },
+  { label: '180 秒（默认）', value: 180 },
+  { label: '300 秒', value: 300 },
+  { label: '600 秒', value: 600 }
+]
 
 const draftSettings = reactive<AppSettings>({
   provider: '',
   model: '',
   apiKey: '',
   baseUrl: '',
+  aiProfiles: [],
+  activeAiProfileId: '',
   imageProvider: '',
   imageModel: '',
   imageApiKey: '',
@@ -49,15 +58,49 @@ const draftSettings = reactive<AppSettings>({
   autoSaveInterval: '5m',
   uiScale: 1,
   darkMode: false,
-  darkModeStyle: 'nord'
+  darkModeStyle: 'nord',
+  aiTimeoutSeconds: 180
 })
 const draftTheme = ref<ThemeName>('ocean')
+const editingProfileId = ref<string>('')
 
-const activeProviderPreset = computed(() => getProviderPreset(draftSettings.provider))
-const activeImageProviderPreset = computed(() => getImageProviderPreset(draftSettings.imageProvider))
-const activeThemePreset = computed(() => themePresets.find((preset) => preset.name === draftTheme.value) ?? themePresets[0])
-const draftAutoSaveLabel = computed(() => formatAutoSaveIntervalLabel(draftSettings.autoSaveInterval))
-const isDraftLiveAutoSave = computed(() => isLiveAutoSaveInterval(draftSettings.autoSaveInterval))
+const editingProfile = computed<AiProfile | undefined>(() =>
+  draftSettings.aiProfiles.find((p) => p.id === editingProfileId.value)
+)
+const isEditingActiveProfile = computed(
+  () => editingProfileId.value === draftSettings.activeAiProfileId
+)
+
+const scrollContainer = ref<HTMLElement | null>(null)
+const activeNav = ref('sec-ai')
+const navItems = [
+  { id: 'sec-ai', label: 'AI 接口配置', icon: Cpu },
+  { id: 'sec-image', label: '图片生成配置', icon: Image },
+  { id: 'sec-theme', label: '界面主题', icon: Palette },
+  { id: 'sec-prefs', label: '应用偏好', icon: MonitorCog }
+]
+
+function scrollToSection(id: string): void {
+  activeNav.value = id
+  const el = document.getElementById(id)
+  el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function handleScroll(): void {
+  const container = scrollContainer.value
+  if (!container) return
+  const sections = container.querySelectorAll<HTMLElement>('.settings-section')
+  for (const section of sections) {
+    const rect = section.getBoundingClientRect()
+    const containerRect = container.getBoundingClientRect()
+    if (rect.top - containerRect.top < 80) {
+      activeNav.value = section.id
+    }
+  }
+}
+
+const activeProviderPreset = computed(() => getProviderPreset(editingProfile.value?.provider ?? draftSettings.provider))
+const currentVersion = window.characterArc.version
 const modelSelectOptions = computed(() =>
   fetchedModels.value.map((m) => ({ label: m.id, value: m.id }))
 )
@@ -66,10 +109,7 @@ const imageModelSelectOptions = computed(() =>
 )
 const hasPendingChanges = computed(() =>
   draftTheme.value !== appStore.theme
-  || draftSettings.provider !== appStore.appSettings.provider
-  || draftSettings.model !== appStore.appSettings.model
-  || draftSettings.apiKey !== appStore.appSettings.apiKey
-  || draftSettings.baseUrl !== appStore.appSettings.baseUrl
+  || JSON.stringify(draftSettings.aiProfiles) !== JSON.stringify(appStore.appSettings.aiProfiles)
   || draftSettings.imageProvider !== appStore.appSettings.imageProvider
   || draftSettings.imageModel !== appStore.appSettings.imageModel
   || draftSettings.imageApiKey !== appStore.appSettings.imageApiKey
@@ -78,6 +118,7 @@ const hasPendingChanges = computed(() =>
   || draftSettings.uiScale !== appStore.appSettings.uiScale
   || draftSettings.darkMode !== appStore.appSettings.darkMode
   || draftSettings.darkModeStyle !== appStore.appSettings.darkModeStyle
+  || draftSettings.aiTimeoutSeconds !== appStore.appSettings.aiTimeoutSeconds
 )
 
 function syncDraftFromStore(): void {
@@ -85,6 +126,8 @@ function syncDraftFromStore(): void {
   draftSettings.model = appStore.appSettings.model
   draftSettings.apiKey = appStore.appSettings.apiKey
   draftSettings.baseUrl = appStore.appSettings.baseUrl
+  draftSettings.aiProfiles = appStore.appSettings.aiProfiles.map((profile) => ({ ...profile }))
+  draftSettings.activeAiProfileId = appStore.appSettings.activeAiProfileId
   draftSettings.imageProvider = appStore.appSettings.imageProvider
   draftSettings.imageModel = appStore.appSettings.imageModel
   draftSettings.imageApiKey = appStore.appSettings.imageApiKey
@@ -93,6 +136,7 @@ function syncDraftFromStore(): void {
   draftSettings.uiScale = appStore.appSettings.uiScale
   draftSettings.darkMode = appStore.appSettings.darkMode
   draftSettings.darkModeStyle = appStore.appSettings.darkModeStyle
+  draftSettings.aiTimeoutSeconds = appStore.appSettings.aiTimeoutSeconds
   draftTheme.value = appStore.theme
 }
 
@@ -101,6 +145,8 @@ watch(
   (show) => {
     if (show) {
       syncDraftFromStore()
+      editingProfileId.value = draftSettings.activeAiProfileId || draftSettings.aiProfiles[0]?.id || ''
+      fetchedModels.value = []
     }
   },
   { immediate: true }
@@ -111,11 +157,90 @@ function closeModal(): void {
   emit('update:show', false)
 }
 
+function selectProfile(profileId: string): void {
+  editingProfileId.value = profileId
+  fetchedModels.value = []
+}
+
+function generateProfileId(): string {
+  return `profile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function generateUniqueName(base: string): string {
+  const existing = new Set(draftSettings.aiProfiles.map((p) => p.name))
+  if (!existing.has(base)) return base
+  let i = 2
+  while (existing.has(`${base} ${i}`)) i++
+  return `${base} ${i}`
+}
+
+function handleAddProfile(): void {
+  const id = generateProfileId()
+  const newProfile: AiProfile = {
+    id,
+    name: generateUniqueName('新接口配置'),
+    provider: 'openai-compatible',
+    baseUrl: '',
+    apiKey: '',
+    model: ''
+  }
+  draftSettings.aiProfiles.push(newProfile)
+  editingProfileId.value = id
+  fetchedModels.value = []
+}
+
+function handleCopyProfile(): void {
+  if (!editingProfile.value) return
+  const source = editingProfile.value
+  const id = generateProfileId()
+  const copy: AiProfile = {
+    id,
+    name: generateUniqueName(`${source.name} 副本`),
+    provider: source.provider,
+    baseUrl: source.baseUrl,
+    apiKey: source.apiKey,
+    model: source.model
+  }
+  draftSettings.aiProfiles.push(copy)
+  editingProfileId.value = id
+  fetchedModels.value = []
+}
+
+function handleDeleteProfile(): void {
+  if (!editingProfile.value) return
+  if (isEditingActiveProfile.value) {
+    message.warning('当前激活的接口不能删除，请先在标题栏切换到其他接口')
+    return
+  }
+  if (draftSettings.aiProfiles.length <= 1) {
+    message.warning('至少保留一个接口配置')
+    return
+  }
+  const removingId = editingProfileId.value
+  draftSettings.aiProfiles = draftSettings.aiProfiles.filter((p) => p.id !== removingId)
+  editingProfileId.value = draftSettings.activeAiProfileId || draftSettings.aiProfiles[0]?.id || ''
+  fetchedModels.value = []
+}
+
+function updateEditingProfile(updates: Partial<AiProfile>): void {
+  const profile = editingProfile.value
+  if (!profile) return
+  Object.assign(profile, updates)
+  if (isEditingActiveProfile.value) {
+    if (updates.provider !== undefined) draftSettings.provider = updates.provider
+    if (updates.model !== undefined) draftSettings.model = updates.model
+    if (updates.apiKey !== undefined) draftSettings.apiKey = updates.apiKey
+    if (updates.baseUrl !== undefined) draftSettings.baseUrl = updates.baseUrl
+  }
+}
+
 function handleProviderChange(provider: string): void {
   const defaults = resolveProviderDefaults(provider)
-  draftSettings.provider = provider
-  draftSettings.model = defaults.model
-  draftSettings.baseUrl = defaults.baseUrl
+  updateEditingProfile({
+    provider,
+    model: defaults.model,
+    baseUrl: defaults.baseUrl
+  })
   fetchedModels.value = []
 }
 
@@ -147,11 +272,23 @@ async function handleFetchImageModels(): Promise<void> {
   }
 }
 
+function buildProfilePayload(): AppSettings {
+  const profile = editingProfile.value
+  if (!profile) return { ...draftSettings }
+  return {
+    ...draftSettings,
+    provider: profile.provider,
+    model: profile.model,
+    apiKey: profile.apiKey,
+    baseUrl: profile.baseUrl
+  }
+}
+
 async function handleFetchModels(): Promise<void> {
   if (isFetchingModels.value) return
   isFetchingModels.value = true
   try {
-    const result = await window.characterArc.fetchModels(toIpcPayload({ ...draftSettings }))
+    const result = await window.characterArc.fetchModels(toIpcPayload(buildProfilePayload()))
     if (!result.success) throw new Error(result.error ?? '获取模型列表失败')
     fetchedModels.value = result.result ?? []
     if (fetchedModels.value.length === 0) {
@@ -171,10 +308,11 @@ async function handleTestAiConnection(): Promise<void> {
   if (isTestingAiConnection.value) return
   isTestingAiConnection.value = true
   try {
-    const result = await window.characterArc.testAiConnection(toIpcPayload({ ...draftSettings }))
+    const payload = buildProfilePayload()
+    const result = await window.characterArc.testAiConnection(toIpcPayload(payload))
     if (!result.success) throw new Error(result.error ?? '模型连接测试失败')
-    const payload = result.result as { provider?: string; model?: string } | undefined
-    message.success(`模型连接成功：${payload?.provider ?? draftSettings.provider} / ${payload?.model ?? draftSettings.model}`)
+    const res = result.result as { provider?: string; model?: string } | undefined
+    message.success(`模型连接成功：${res?.provider ?? payload.provider} / ${res?.model ?? payload.model}`)
   } catch (error) {
     message.error(error instanceof Error ? error.message : '模型连接测试失败')
   } finally {
@@ -183,10 +321,17 @@ async function handleTestAiConnection(): Promise<void> {
 }
 
 async function saveSettings(): Promise<void> {
-  appStore.updateAppSetting('provider', draftSettings.provider)
-  appStore.updateAppSetting('model', draftSettings.model)
-  appStore.updateAppSetting('apiKey', draftSettings.apiKey)
-  appStore.updateAppSetting('baseUrl', draftSettings.baseUrl)
+  appStore.updateAppSetting('aiProfiles', draftSettings.aiProfiles.map((profile) => ({ ...profile })))
+  appStore.updateAppSetting('activeAiProfileId', draftSettings.activeAiProfileId)
+
+  const activeProfile = draftSettings.aiProfiles.find(p => p.id === draftSettings.activeAiProfileId)
+  if (activeProfile) {
+    appStore.updateAppSetting('provider', activeProfile.provider)
+    appStore.updateAppSetting('model', activeProfile.model)
+    appStore.updateAppSetting('apiKey', activeProfile.apiKey)
+    appStore.updateAppSetting('baseUrl', activeProfile.baseUrl)
+  }
+
   appStore.updateAppSetting('imageProvider', draftSettings.imageProvider)
   appStore.updateAppSetting('imageModel', draftSettings.imageModel)
   appStore.updateAppSetting('imageApiKey', draftSettings.imageApiKey)
@@ -195,6 +340,7 @@ async function saveSettings(): Promise<void> {
   appStore.updateAppSetting('uiScale', draftSettings.uiScale)
   appStore.updateAppSetting('darkMode', draftSettings.darkMode)
   appStore.updateAppSetting('darkModeStyle', draftSettings.darkModeStyle)
+  appStore.updateAppSetting('aiTimeoutSeconds', draftSettings.aiTimeoutSeconds)
 
   if (draftTheme.value !== appStore.theme) {
     appStore.setTheme(draftTheme.value)
@@ -221,118 +367,151 @@ async function saveSettings(): Promise<void> {
     @close="closeModal"
   >
     <div class="settings-layout">
-      <aside class="settings-rail">
+      <nav class="settings-nav">
+        <button
+          v-for="item in navItems"
+          :key="item.id"
+          class="nav-item"
+          :class="{ active: activeNav === item.id }"
+          @click="scrollToSection(item.id)"
+        >
+          <component :is="item.icon" :size="18" />
+          {{ item.label }}
+        </button>
+        <div class="nav-version">v{{ currentVersion }}</div>
+      </nav>
 
-
-        <div class="rail-stack">
-          <div class="rail-card">
-            <span class="rail-card-label">当前模型</span>
-            <strong>{{ activeProviderPreset.label }}</strong>
-            <p>{{ draftSettings.model }}</p>
-          </div>
-          <div class="rail-card theme-card">
-            <span class="rail-card-label">当前主题</span>
-            <strong>{{ activeThemePreset.label }}</strong>
-            <div class="rail-theme-preview" :style="{ background: activeThemePreset.primary }"></div>
-          </div>
-          <div class="rail-card">
-            <span class="rail-card-label">自动保存</span>
-            <strong>{{ draftAutoSaveLabel }}</strong>
-            <p>{{ isDraftLiveAutoSave ? '正文与工作区修改会尽快落盘。' : '按设定节奏进入自动保存队列。' }}</p>
-          </div>
-          <div class="rail-card draft-state-card" :class="{ pending: hasPendingChanges }">
-            <span class="rail-card-label">保存状态</span>
-            <strong>{{ hasPendingChanges ? '有未保存修改' : '已与当前设置同步' }}</strong>
-            <p>{{ hasPendingChanges ? '点击右下角保存设置后才会正式生效。' : '当前草稿和已保存设置一致。' }}</p>
-          </div>
-        </div>
-      </aside>
-
-      <div class="settings-main arc-scrollbar">
-        <section class="settings-section">
+      <div ref="scrollContainer" class="settings-main arc-scrollbar" @scroll="handleScroll">
+        <section id="sec-ai" class="settings-section">
           <div class="section-title">
             <Cpu :size="18" />
             <div>
               <strong>AI 接口配置</strong>
-              <p>选择协议类型，填写接口地址和密钥，然后拉取或手动输入模型名称。</p>
+              <p>管理多个接口配置，可在标题栏快速切换。</p>
             </div>
           </div>
-          <div class="settings-grid">
-            <n-form-item label="协议类型">
-              <n-select
-                :options="providerOptions"
-                :value="draftSettings.provider"
-                @update:value="(value) => handleProviderChange(value ?? 'openai-compatible')"
-              />
-            </n-form-item>
-            <n-form-item label="Base URL">
-              <n-input
-                :value="draftSettings.baseUrl"
-                :placeholder="draftSettings.provider === 'anthropic' ? '例如：https://api.anthropic.com（自动补 /v1）' : '例如：https://api.deepseek.com/v1'"
-                @update:value="(value) => { draftSettings.baseUrl = value }"
-              />
-            </n-form-item>
+
+          <div class="profile-tabs">
+            <div class="profile-tab-list">
+              <button
+                v-for="profile in draftSettings.aiProfiles"
+                :key="profile.id"
+                class="profile-tab"
+                :class="{
+                  active: editingProfileId === profile.id,
+                  'is-active-profile': profile.id === draftSettings.activeAiProfileId
+                }"
+                @click="selectProfile(profile.id)"
+              >
+                <span class="profile-tab-name">{{ profile.name }}</span>
+                <span v-if="profile.id === draftSettings.activeAiProfileId" class="profile-tab-badge">当前</span>
+              </button>
+            </div>
+            <div class="profile-tab-actions">
+              <button class="profile-action-btn" title="新建配置" @click="handleAddProfile">
+                <Plus :size="14" />
+              </button>
+              <button class="profile-action-btn" title="复制当前配置" :disabled="!editingProfile" @click="handleCopyProfile">
+                <Copy :size="14" />
+              </button>
+              <button
+                class="profile-action-btn profile-action-btn--danger"
+                title="删除当前配置"
+                :disabled="!editingProfile || isEditingActiveProfile || draftSettings.aiProfiles.length <= 1"
+                @click="handleDeleteProfile"
+              >
+                <Trash2 :size="14" />
+              </button>
+            </div>
           </div>
-          <div class="settings-grid">
-            <n-form-item label="API Key">
-              <n-input
-                type="password"
-                show-password-on="click"
-                :value="draftSettings.apiKey"
-                placeholder="填写接口对应的 API Key / Token"
-                @update:value="(value) => { draftSettings.apiKey = value }"
-              />
-            </n-form-item>
-            <n-form-item label="模型名称">
-              <div class="model-input-row">
-                <n-select
-                  v-if="fetchedModels.length > 0"
-                  :options="modelSelectOptions"
-                  :value="draftSettings.model"
-                  filterable
-                  tag
-                  placeholder="选择或输入模型名称"
-                  @update:value="(value: string) => { draftSettings.model = value }"
-                />
+
+          <template v-if="editingProfile">
+            <div class="profile-name-row">
+              <n-form-item label="配置名称">
                 <n-input
-                  v-else
-                  :value="draftSettings.model"
-                  placeholder="填写 URL 和 Key 后可点右侧按钮拉取"
-                  @update:value="(value) => { draftSettings.model = value }"
+                  :value="editingProfile.name"
+                  placeholder="为这个接口配置起个名字"
+                  @update:value="(value) => updateEditingProfile({ name: value })"
                 />
-                <n-button
-                  quaternary
-                  class="model-fetch-btn"
-                  :disabled="isFetchingModels || !draftSettings.baseUrl.trim()"
-                  @click="handleFetchModels"
-                >
-                  <template #icon>
-                    <RefreshCw v-if="fetchedModels.length > 0" :size="16" :class="{ 'spin-icon': isFetchingModels }" />
-                    <Download v-else :size="16" :class="{ 'spin-icon': isFetchingModels }" />
-                  </template>
-                </n-button>
-              </div>
-            </n-form-item>
-          </div>
-          <div class="provider-hint-block">
-            <p>{{ activeProviderPreset.hint }}</p>
-          </div>
-          <div class="section-actions">
-            <n-button round strong secondary :disabled="isTestingAiConnection" @click="handleTestAiConnection">
-              <template #icon>
-                <PlugZap :size="16" />
-              </template>
-              {{ isTestingAiConnection ? '测试中...' : '测试模型连接' }}
-            </n-button>
-          </div>
+              </n-form-item>
+            </div>
+            <div class="settings-grid">
+              <n-form-item label="协议类型">
+                <n-select
+                  :options="providerOptions"
+                  :value="editingProfile.provider"
+                  @update:value="(value) => handleProviderChange(value ?? 'openai-compatible')"
+                />
+              </n-form-item>
+              <n-form-item label="Base URL">
+                <n-input
+                  :value="editingProfile.baseUrl"
+                  :placeholder="editingProfile.provider === 'anthropic' ? '例如：https://api.anthropic.com（自动补 /v1）' : '例如：https://api.deepseek.com/v1'"
+                  @update:value="(value) => updateEditingProfile({ baseUrl: value })"
+                />
+              </n-form-item>
+            </div>
+            <div class="settings-grid">
+              <n-form-item label="API Key">
+                <n-input
+                  type="password"
+                  show-password-on="click"
+                  :value="editingProfile.apiKey"
+                  placeholder="填写接口对应的 API Key / Token"
+                  @update:value="(value) => updateEditingProfile({ apiKey: value })"
+                />
+              </n-form-item>
+              <n-form-item label="模型名称">
+                <div class="model-input-row">
+                  <n-select
+                    v-if="fetchedModels.length > 0"
+                    :options="modelSelectOptions"
+                    :value="editingProfile.model"
+                    filterable
+                    tag
+                    placeholder="选择或输入模型名称"
+                    @update:value="(value: string) => updateEditingProfile({ model: value })"
+                  />
+                  <n-input
+                    v-else
+                    :value="editingProfile.model"
+                    placeholder="填写 URL 和 Key 后可点右侧按钮拉取"
+                    @update:value="(value) => updateEditingProfile({ model: value })"
+                  />
+                  <n-button
+                    quaternary
+                    class="model-fetch-btn"
+                    :disabled="isFetchingModels || !editingProfile.baseUrl.trim()"
+                    @click="handleFetchModels"
+                  >
+                    <template #icon>
+                      <RefreshCw v-if="fetchedModels.length > 0" :size="16" :class="{ 'spin-icon': isFetchingModels }" />
+                      <Download v-else :size="16" :class="{ 'spin-icon': isFetchingModels }" />
+                    </template>
+                  </n-button>
+                </div>
+              </n-form-item>
+            </div>
+            <div class="provider-hint-block">
+              <p>{{ activeProviderPreset.hint }}</p>
+            </div>
+            <div class="section-actions">
+              <n-button round strong secondary :disabled="isTestingAiConnection" @click="handleTestAiConnection">
+                <template #icon>
+                  <PlugZap :size="16" />
+                </template>
+                {{ isTestingAiConnection ? '测试中...' : '测试模型连接' }}
+              </n-button>
+            </div>
+          </template>
         </section>
 
-        <section class="settings-section">
+        <section id="sec-image" class="settings-section">
           <div class="section-title">
-            <Download :size="18" />
+            <Image :size="18" />
             <div>
               <strong>图片生成配置</strong>
-              <p>封面工作台使用专用的图片生成接口，需单独配置，不会回退到文本模型。</p>
+              <p>封面工作台使用专用的图片生成接口，需单独配置。</p>
             </div>
           </div>
           <div class="settings-grid">
@@ -397,14 +576,9 @@ async function saveSettings(): Promise<void> {
               />
             </n-form-item>
           </div>
-          <div class="provider-hint-block">
-            <strong>{{ activeImageProviderPreset.label }}</strong>
-            <p>{{ activeImageProviderPreset.hint }}</p>
-            <code>{{ draftSettings.imageBaseUrl || '未填写地址' }}</code>
-          </div>
         </section>
 
-        <section class="settings-section">
+        <section id="sec-theme" class="settings-section">
           <div class="section-title">
             <Palette :size="18" />
             <div>
@@ -412,13 +586,6 @@ async function saveSettings(): Promise<void> {
               <p>统一首页与工作台的主色体验。</p>
             </div>
           </div>
-          <n-form-item label="应用主题色">
-            <n-select
-              :options="themeOptions"
-              :value="draftTheme"
-              @update:value="(value) => { draftTheme = (value ?? 'ocean') as ThemeName }"
-            />
-          </n-form-item>
           <div class="theme-swatches">
             <button
               v-for="preset in themePresets"
@@ -433,12 +600,12 @@ async function saveSettings(): Promise<void> {
           </div>
         </section>
 
-        <section class="settings-section">
+        <section id="sec-prefs" class="settings-section">
           <div class="section-title">
             <MonitorCog :size="18" />
             <div>
               <strong>应用偏好</strong>
-              <p>影响整个应用的保存节奏与显示比例。</p>
+              <p>保存节奏与显示比例。</p>
             </div>
           </div>
           <div class="settings-grid">
@@ -457,11 +624,25 @@ async function saveSettings(): Promise<void> {
               />
             </n-form-item>
           </div>
+          <div class="settings-grid">
+            <n-form-item label="AI 请求超时时间">
+              <div class="preset-field">
+                <n-select
+                  :options="aiTimeoutOptions"
+                  :value="draftSettings.aiTimeoutSeconds"
+                  @update:value="(value) => { draftSettings.aiTimeoutSeconds = value ?? 180 }"
+                />
+                <span class="preset-hint">超时后会主动终止本次请求，适当增大可避免慢模型被误中断。</span>
+              </div>
+            </n-form-item>
+          </div>
           <div class="dark-mode-row">
             <div class="dark-mode-label">
               <Moon :size="15" />
-              <span>深色模式</span>
-              <span class="dark-mode-hint">将界面切换为深色背景，适合夜间长时间写作。</span>
+              <div>
+                <span class="dark-mode-text">深色模式</span>
+                <span class="dark-mode-hint">适合夜间长时间写作</span>
+              </div>
             </div>
             <n-switch
               :value="draftSettings.darkMode"
@@ -500,10 +681,10 @@ async function saveSettings(): Promise<void> {
               </div>
             </button>
           </div>
-          <div class="storage-note">
-            <Save :size="16" />
-            <span>{{ appStore.persistenceError || '当前工作区内容已接入本地 SQLite 持久化。' }}</span>
-          </div>
+<!--          <div class="storage-note">-->
+<!--            <Save :size="16" />-->
+<!--            <span>{{ appStore.persistenceError || '当前工作区内容已接入本地 SQLite 持久化。' }}</span>-->
+<!--          </div>-->
         </section>
       </div>
     </div>
@@ -520,118 +701,91 @@ async function saveSettings(): Promise<void> {
 <style scoped>
 .settings-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
-  gap: 22px;
+  grid-template-columns: 192px minmax(0, 1fr);
+  gap: 0;
+  min-height: 0;
 }
 
-.settings-rail {
+/* ── Left Nav ── */
+.settings-nav {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 2px;
+  padding: 16px 12px;
+  border-right: 1px solid var(--arc-border);
+  background: var(--arc-bg-weak);
 }
 
-.settings-rail-head {
-  padding: 4px 2px;
-}
-
-.rail-kicker {
-  display: inline-flex;
-  min-height: 30px;
+.nav-item {
+  display: flex;
   align-items: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--arc-primary) 10%, var(--arc-bg-mix));
-  color: var(--arc-primary);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 0 12px;
-}
-
-.settings-rail-head h3 {
-  margin: 14px 0 10px;
-  color: var(--arc-text-primary);
-  font-size: 24px;
-  font-weight: 730;
-  letter-spacing: -0.03em;
-}
-
-.settings-rail-head p {
-  margin: 0;
-  color: var(--arc-text-secondary);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.rail-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.rail-card {
-  border: 1px solid color-mix(in srgb, var(--arc-primary) 12%, var(--arc-border));
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
   border-radius: 8px;
-  background: var(--arc-bg-surface);
-  padding: 16px;
+  background: transparent;
+  color: var(--arc-text-secondary);
+  font-size: 13.5px;
+  font-weight: 550;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s;
 }
 
-.draft-state-card.pending {
-  border-color: color-mix(in srgb, var(--arc-primary) 28%, var(--arc-border));
-  background: color-mix(in srgb, var(--arc-primary) 6%, var(--arc-bg-mix));
+.nav-item:hover {
+  background: var(--arc-bg-surface-hover);
+  color: var(--arc-text-primary);
 }
 
-.rail-card-label {
-  display: block;
+.nav-item.active {
+  background: color-mix(in srgb, var(--arc-primary) 8%, var(--arc-bg-surface));
+  color: var(--arc-primary);
+}
+
+.nav-item :deep(svg) {
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.nav-item.active :deep(svg) {
+  opacity: 1;
+}
+
+.nav-version {
+  margin-top: auto;
+  padding: 12px 12px 4px;
   color: var(--arc-text-hint);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 500;
 }
 
-.rail-card strong {
-  display: block;
-  margin-top: 8px;
-  color: var(--arc-text-primary);
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.rail-card p {
-  margin: 6px 0 0;
-  color: var(--arc-text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.rail-theme-preview {
-  width: 100%;
-  height: 44px;
-  margin-top: 12px;
-  border-radius: 14px;
-}
-
+/* ── Right Content ── */
 .settings-main {
-  max-height: min(76vh, 760px);
-  overflow: auto;
-  padding-right: 4px;
+  max-height: min(76vh, 720px);
+  overflow-y: auto;
+  padding: 24px 28px;
+  scroll-behavior: smooth;
 }
 
 .settings-section {
-  border: 1px solid var(--arc-border);
-  border-radius: 10px;
-  background: var(--arc-bg-surface);
-  padding: 20px;
+  padding-bottom: 28px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--arc-bg-surface-hover);
 }
 
-.settings-section + .settings-section {
-  margin-top: 16px;
+.settings-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 8px;
 }
 
 .section-title {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .section-title :deep(svg) {
@@ -647,9 +801,9 @@ async function saveSettings(): Promise<void> {
 }
 
 .section-title p {
-  margin: 6px 0 0;
-  color: var(--arc-text-secondary);
-  font-size: 12px;
+  margin: 4px 0 0;
+  color: var(--arc-text-hint);
+  font-size: 12.5px;
 }
 
 .settings-grid {
@@ -660,34 +814,16 @@ async function saveSettings(): Promise<void> {
 
 .provider-hint-block {
   margin: -2px 0 16px;
-  border: 1px solid color-mix(in srgb, var(--arc-primary) 12%, var(--arc-border));
+  padding: 10px 14px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--arc-primary) 4%, var(--arc-bg-mix));
-  padding: 14px 16px;
-}
-
-.provider-hint-block strong {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--arc-text-primary);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.provider-hint-block p {
-  margin: 0 0 8px;
-  color: var(--arc-text-secondary);
+  background: var(--arc-bg-weak);
+  color: var(--arc-text-hint);
   font-size: 12px;
   line-height: 1.7;
 }
 
-.provider-hint-block code {
-  display: inline-block;
-  border-radius: 8px;
-  background: var(--arc-glass-08);
-  color: var(--arc-text-hint);
-  font-size: 12px;
-  padding: 3px 8px;
+.provider-hint-block p {
+  margin: 0;
 }
 
 .section-actions {
@@ -696,16 +832,121 @@ async function saveSettings(): Promise<void> {
   margin-top: 4px;
 }
 
+/* ── Profile Tabs ── */
+.profile-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--arc-border);
+}
+
+.profile-tab-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.profile-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--arc-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--arc-text-secondary);
+  font-size: 12.5px;
+  font-weight: 550;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.profile-tab:hover {
+  background: var(--arc-bg-surface-hover);
+  color: var(--arc-text-primary);
+}
+
+.profile-tab.active {
+  background: color-mix(in srgb, var(--arc-primary) 8%, var(--arc-bg-surface));
+  border-color: color-mix(in srgb, var(--arc-primary) 30%, var(--arc-border));
+  color: var(--arc-primary);
+}
+
+.profile-tab-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-tab-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--arc-primary) 12%, transparent);
+  color: var(--arc-primary);
+}
+
+.profile-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.profile-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--arc-border);
+  border-radius: 6px;
+  background: var(--arc-bg-surface);
+  color: var(--arc-text-hint);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.profile-action-btn:hover {
+  border-color: var(--arc-border-strong);
+  color: var(--arc-text-primary);
+  background: var(--arc-bg-weak);
+}
+
+.profile-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.profile-action-btn--danger:hover:not(:disabled) {
+  border-color: #fca5a5;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.profile-name-row {
+  margin-bottom: 4px;
+}
+
+.profile-name-row .n-form-item {
+  max-width: 320px;
+}
+
 .model-input-row {
   display: flex;
   gap: 6px;
   width: 100%;
 }
 
-.model-input-row .n-select {
-  flex: 1;
-}
-
+.model-input-row .n-select,
 .model-input-row .n-input {
   flex: 1;
 }
@@ -739,56 +980,39 @@ async function saveSettings(): Promise<void> {
 .theme-swatches {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .theme-dot {
   display: flex;
-  min-height: 82px;
+  min-height: 64px;
   align-items: flex-end;
   justify-content: center;
   border: 2px solid transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   color: white;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 12px;
+  font-size: 11.5px;
+  font-weight: 650;
+  padding: 10px;
   transition:
-    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.18s,
+    border-color 0.18s;
 }
 
 .theme-dot:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
 }
 
 .theme-dot:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
 .theme-dot.active {
   border-color: white;
   box-shadow: 0 0 0 2px var(--arc-bg-surface), 0 0 0 4px color-mix(in srgb, var(--arc-primary) 34%, transparent);
-}
-
-.storage-note {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  margin-top: 4px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--arc-primary) 5%, var(--arc-bg-mix));
-  color: var(--arc-text-secondary);
-  font-size: 12px;
-  padding: 0 12px;
-}
-
-.storage-note :deep(svg) {
-  color: var(--arc-primary);
 }
 
 .dark-mode-row {
@@ -798,17 +1022,14 @@ async function saveSettings(): Promise<void> {
   gap: 16px;
   margin-top: 14px;
   border: 1px solid var(--arc-border);
-  border-radius: 14px;
+  border-radius: 10px;
   padding: 12px 16px;
 }
 
 .dark-mode-label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--arc-text-primary);
-  font-size: 14px;
-  font-weight: 600;
+  gap: 10px;
 }
 
 .dark-mode-label :deep(svg) {
@@ -816,8 +1037,15 @@ async function saveSettings(): Promise<void> {
   flex-shrink: 0;
 }
 
+.dark-mode-text {
+  font-size: 13.5px;
+  font-weight: 620;
+  color: var(--arc-text-primary);
+}
+
 .dark-mode-hint {
-  color: var(--arc-text-secondary);
+  display: block;
+  color: var(--arc-text-hint);
   font-size: 12px;
   font-weight: 400;
 }
@@ -880,13 +1108,8 @@ async function saveSettings(): Promise<void> {
   letter-spacing: 0.02em;
 }
 
-.dark-style-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .dark-style-meta strong {
+  display: block;
   font-size: 13px;
   font-weight: 600;
   color: var(--arc-text-primary);
@@ -899,10 +1122,21 @@ async function saveSettings(): Promise<void> {
   color: var(--arc-text-secondary);
 }
 
-@media (max-width: 720px) {
-  .dark-style-grid {
-    grid-template-columns: 1fr;
-  }
+.storage-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin-top: 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--arc-primary) 5%, var(--arc-bg-weak));
+  color: var(--arc-text-secondary);
+  font-size: 12px;
+  padding: 0 12px;
+}
+
+.storage-note :deep(svg) {
+  color: var(--arc-primary);
 }
 
 .settings-footer-actions {
@@ -915,6 +1149,10 @@ async function saveSettings(): Promise<void> {
   .settings-layout {
     grid-template-columns: 1fr;
   }
+
+  .settings-nav {
+    display: none;
+  }
 }
 
 @media (max-width: 720px) {
@@ -923,9 +1161,8 @@ async function saveSettings(): Promise<void> {
     grid-template-columns: 1fr;
   }
 
-  .settings-section,
-  .rail-card {
-    border-radius: 8px;
+  .dark-style-grid {
+    grid-template-columns: 1fr;
   }
 
   .settings-footer-actions {

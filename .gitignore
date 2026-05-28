@@ -68,6 +68,7 @@ design-preview/
 docs/*
 !docs/assets/
 !docs/release-notes/
+prototype/
 
 # Optional Python helpers / notebooks
 __pycache__/

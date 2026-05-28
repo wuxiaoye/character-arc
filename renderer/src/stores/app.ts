@@ -31,7 +31,7 @@ import {
   type LegacyStoredState,
   type StoredState
 } from '@/features/workspace/storeHelpers'
-import { AI_TASK_RETENTION_MS, AI_TASK_DEFAULT_TIMEOUT_MS, type AiTaskRun, type AiTaskRunInput } from '@/features/ai/taskRegistry'
+import { AI_TASK_RETENTION_MS, type AiTaskRun, type AiTaskRunInput } from '@/features/ai/taskRegistry'
 import type {
   AppSettings,
   ChapterDraft,
@@ -2120,6 +2120,48 @@ export const useAppStore = defineStore('app', () => {
     scheduleSettingsPersist()
   }
 
+  function switchAiProfile(profileId: string): void {
+    const profile = appSettings.value.aiProfiles.find(p => p.id === profileId)
+    if (!profile) return
+    appSettings.value.activeAiProfileId = profileId
+    appSettings.value.provider = profile.provider
+    appSettings.value.model = profile.model
+    appSettings.value.apiKey = profile.apiKey
+    appSettings.value.baseUrl = profile.baseUrl
+    scheduleSettingsPersist()
+  }
+
+  function updateActiveAiProfileModel(model: string): void {
+    appSettings.value.model = model
+    const profile = appSettings.value.aiProfiles.find(p => p.id === appSettings.value.activeAiProfileId)
+    if (profile) profile.model = model
+    scheduleSettingsPersist()
+  }
+
+  function addAiProfile(profile: import('@/types/app').AiProfile): void {
+    appSettings.value.aiProfiles.push(profile)
+    scheduleSettingsPersist()
+  }
+
+  function deleteAiProfile(profileId: string): void {
+    if (profileId === appSettings.value.activeAiProfileId) return
+    appSettings.value.aiProfiles = appSettings.value.aiProfiles.filter(p => p.id !== profileId)
+    scheduleSettingsPersist()
+  }
+
+  function updateAiProfile(profileId: string, updates: Partial<import('@/types/app').AiProfile>): void {
+    const profile = appSettings.value.aiProfiles.find(p => p.id === profileId)
+    if (!profile) return
+    Object.assign(profile, updates)
+    if (profileId === appSettings.value.activeAiProfileId) {
+      if (updates.provider !== undefined) appSettings.value.provider = updates.provider
+      if (updates.model !== undefined) appSettings.value.model = updates.model
+      if (updates.apiKey !== undefined) appSettings.value.apiKey = updates.apiKey
+      if (updates.baseUrl !== undefined) appSettings.value.baseUrl = updates.baseUrl
+    }
+    scheduleSettingsPersist()
+  }
+
   function updateCoverWorkbenchHistory(items: import('@/types/app').CoverWorkbenchHistoryItem[]): void {
     coverWorkbenchHistory.value = items
     schedulePersist('fast')
@@ -2270,8 +2312,8 @@ export const useAppStore = defineStore('app', () => {
       next.set(input.key, run)
     })
 
-    // 超时控制
-    const timeoutMs = input.timeoutMs ?? AI_TASK_DEFAULT_TIMEOUT_MS
+    // 超时控制：优先使用任务级覆盖，其次读取用户配置
+    const timeoutMs = input.timeoutMs ?? (appSettings.value.aiTimeoutSeconds * 1000)
     let timeoutHandle: number | null = null
     let timedOut = false
 
@@ -2473,6 +2515,11 @@ export const useAppStore = defineStore('app', () => {
     setTheme,
     theme,
     updateAppSetting,
+    switchAiProfile,
+    updateActiveAiProfileModel,
+    addAiProfile,
+    deleteAiProfile,
+    updateAiProfile,
     updateCoverWorkbenchHistory,
     updateProject,
     activeWorkflowVolumeId,

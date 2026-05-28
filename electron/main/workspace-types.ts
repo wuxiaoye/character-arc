@@ -280,6 +280,15 @@ export type WorkspacePayload = {
     model: string
     apiKey: string
     baseUrl: string
+    aiProfiles: Array<{
+      id: string
+      name: string
+      provider: string
+      baseUrl: string
+      apiKey: string
+      model: string
+    }>
+    activeAiProfileId: string
     imageProvider: string
     imageModel: string
     imageApiKey: string
@@ -419,6 +428,20 @@ export function normalizeAppSettings(
     model: settings?.model || '',
     apiKey: settings?.apiKey || '',
     baseUrl: settings?.baseUrl || '',
+    aiProfiles: Array.isArray(settings?.aiProfiles)
+      ? settings.aiProfiles
+          .filter((item): item is NonNullable<typeof settings.aiProfiles>[number] => !!item && typeof item === 'object')
+          .map((item) => ({
+            id: String(item.id ?? '').trim(),
+            name: String(item.name ?? '').trim(),
+            provider: String(item.provider ?? '').trim(),
+            baseUrl: String(item.baseUrl ?? '').trim(),
+            apiKey: String(item.apiKey ?? '').trim(),
+            model: String(item.model ?? '').trim()
+          }))
+          .filter((item) => item.id)
+      : [],
+    activeAiProfileId: typeof settings?.activeAiProfileId === 'string' ? settings.activeAiProfileId : '',
     imageProvider: settings?.imageProvider || '',
     imageModel: settings?.imageModel || '',
     imageApiKey: settings?.imageApiKey || '',

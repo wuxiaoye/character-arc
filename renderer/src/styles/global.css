@@ -1,8 +1,8 @@
 :root {
   color: #18181b;
-  background: #f6f6f7;
+  background: #f8f8f9;
   /* Neutral */
-  --arc-bg-body: #f6f6f7;
+  --arc-bg-body: #f8f8f9;
   --arc-bg-weak: #fafafb;
   --arc-bg-surface: #ffffff;
   --arc-bg-surface-hover: #eef0f3;
@@ -98,9 +98,11 @@ input {
 .app-titlebar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   height: 40px;
   flex-shrink: 0;
   padding: 0 14px;
+  padding-right: 144px;
   -webkit-app-region: drag;
   app-region: drag;
   background: var(--arc-bg-body);
@@ -108,6 +110,7 @@ input {
 
 .app-shell.platform-darwin .app-titlebar {
   padding-left: 80px;
+  padding-right: 14px;
 }
 
 .app-titlebar__brand {

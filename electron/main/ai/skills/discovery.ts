@@ -43,7 +43,7 @@ export async function scanSkillsFromDisk(projectId?: string): Promise<SkillDefin
   return Array.from(mergedMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
 }
 
-/** 扫描指定根目录下所有子目录，将每个目录解析为 SkillDefinition */
+/** 扫描指定根目录下所有子目录，将每个目录解析为 SkillDefinition（支持一层分组目录） */
 async function scanSkillsUnderRoot(root: string, scope: 'builtin' | 'project'): Promise<SkillDefinition[]> {
   if (!existsSync(root)) return []
 
@@ -52,15 +52,27 @@ async function scanSkillsUnderRoot(root: string, scope: 'builtin' | 'project'): 
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
-    const skill = await loadSkillDefinition(root, entry.name, scope)
-    if (skill) skills.push(skill)
+    const dirPath = join(root, entry.name)
+    if (existsSync(join(dirPath, 'SKILL.md'))) {
+      const skill = await loadSkillDefinition(root, entry.name, scope)
+      if (skill) skills.push(skill)
+    } else {
+      const subEntries = await readdir(dirPath, { withFileTypes: true })
+      for (const subEntry of subEntries) {
+        if (!subEntry.isDirectory()) continue
+        if (existsSync(join(dirPath, subEntry.name, 'SKILL.md'))) {
+          const skill = await loadSkillDefinition(dirPath, subEntry.name, scope, entry.name)
+          if (skill) skills.push(skill)
+        }
+      }
+    }
   }
 
   return skills
 }
 
 /** 从单个 skill 目录加载完整定义，解析失败时返回 null */
-async function loadSkillDefinition(root: string, dirName: string, scope: 'builtin' | 'project'): Promise<SkillDefinition | null> {
+async function loadSkillDefinition(root: string, dirName: string, scope: 'builtin' | 'project', group?: string): Promise<SkillDefinition | null> {
   const skillDir = join(root, dirName)
   const skillPath = join(skillDir, 'SKILL.md')
 
@@ -74,12 +86,14 @@ async function loadSkillDefinition(root: string, dirName: string, scope: 'builti
     const referencesDir = join(skillDir, 'references')
     const referenceFiles = existsSync(referencesDir) ? await listFilesRecursive(referencesDir) : []
     const referencesCount = referenceFiles.length
+    const pathPrefix = scope === 'builtin' ? 'skills' : 'project-skills'
+    const pathSegment = group ? `${pathPrefix}/${group}/${dirName}` : `${pathPrefix}/${dirName}`
 
     return {
       id: dirName,
       name: frontmatter.name || dirName,
       version: frontmatter.version || '',
-      path: `${scope === 'builtin' ? 'skills' : 'project-skills'}/${dirName}`,
+      path: pathSegment,
       scope,
       rootDir: skillDir,
       description: frontmatter.description || '',

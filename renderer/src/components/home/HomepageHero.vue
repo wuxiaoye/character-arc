@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ImagePlus, LibraryBig, Plus, Settings2, Wrench } from 'lucide-vue-next'
+import { Bell, ImagePlus, LibraryBig, Plus, RefreshCw, Settings2, Wrench } from 'lucide-vue-next'
 import { NButton } from 'naive-ui'
 
 const emit = defineEmits<{
@@ -8,6 +8,8 @@ const emit = defineEmits<{
   (e: 'openCoverWorkbench'): void
   (e: 'openSkills'): void
   (e: 'openSettings'): void
+  (e: 'openAnnouncement'): void
+  (e: 'checkUpdate'): void
 }>()
 </script>
 
@@ -19,6 +21,13 @@ const emit = defineEmits<{
     </div>
 
     <div class="hero-actions">
+      <button class="hero-icon-btn" title="公告" @click="emit('openAnnouncement')">
+        <Bell :size="18" />
+      </button>
+      <button class="hero-icon-btn" title="检查更新" @click="emit('checkUpdate')">
+        <RefreshCw :size="18" />
+      </button>
+
       <div class="action-group secondary-actions">
         <n-button quaternary circle size="large" title="拆书知识库" @click="emit('openDeconstruction')">
           <template #icon><LibraryBig :size="20" /></template>
@@ -48,8 +57,9 @@ const emit = defineEmits<{
   align-items: flex-end;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 22px;
-  padding-bottom: 10px;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--arc-border);
 }
 
 .hero-copy {
@@ -59,23 +69,52 @@ const emit = defineEmits<{
 .hero-copy h1 {
   margin: 0;
   color: var(--arc-text-primary);
-  font-size: clamp(28px, 3vw, 36px);
-  font-weight: 720;
-  letter-spacing: -0.04em;
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 740;
+  letter-spacing: -0.03em;
 }
 
 .hero-copy p {
-  margin: 8px 0 0;
-  color: var(--arc-text-secondary);
+  margin: 6px 0 0;
+  color: var(--arc-text-hint);
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
 .hero-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   flex-shrink: 0;
+}
+
+.hero-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--arc-border);
+  border-radius: 10px;
+  background: var(--arc-bg-surface);
+  color: var(--arc-text-secondary);
+  cursor: pointer;
+  transition:
+    border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.2s,
+    background 0.2s,
+    transform 0.15s;
+}
+
+.hero-icon-btn:hover {
+  border-color: var(--arc-border-strong);
+  color: var(--arc-text-primary);
+  background: var(--arc-bg-weak);
+  transform: translateY(-1px);
+}
+
+.hero-icon-btn:active {
+  transform: translateY(0) scale(0.96);
 }
 
 .action-group {
@@ -89,10 +128,10 @@ const emit = defineEmits<{
 }
 
 .create-btn {
-  border-radius: 12px !important;
+  border-radius: 10px !important;
   font-weight: 700 !important;
-  padding: 0 20px !important;
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--arc-primary) 25%, transparent);
+  padding: 0 18px !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--arc-primary) 18%, transparent);
 }
 
 @media (max-width: 720px) {
@@ -103,9 +142,8 @@ const emit = defineEmits<{
 
   .hero-actions {
     width: 100%;
-    flex-direction: column-reverse;
-    align-items: stretch;
-    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .action-group {
@@ -113,7 +151,8 @@ const emit = defineEmits<{
   }
 
   .create-btn {
-    width: 100%;
+    flex: 1;
+    justify-content: center;
   }
 }
 </style>

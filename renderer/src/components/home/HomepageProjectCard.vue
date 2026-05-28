@@ -68,44 +68,43 @@ const emit = defineEmits<{
   border-radius: 10px;
   background: var(--arc-bg-surface);
   cursor: pointer;
-  padding: 18px;
-  animation: card-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+  animation: card-enter 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
   transition:
-    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-    background 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    border-color 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .homepage-project-card:hover {
-  border-color: color-mix(in srgb, var(--arc-primary) 16%, var(--arc-border));
-  background: var(--arc-bg-surface);
-  transform: translateY(-1px);
+  border-color: var(--arc-border-strong);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06), 0 12px 28px rgba(0, 0, 0, 0.06);
+  transform: translateY(-2px);
 }
 
 .homepage-project-card:active {
-  transform: scale(0.995);
+  transform: translateY(-1px) scale(0.995);
 }
 
 .card-main {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
 }
 
 .card-cover {
   display: flex;
-  width: 62px;
-  height: 86px;
+  width: 68px;
+  height: 96px;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
   flex-shrink: 0;
   box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06),
-    0 10px 20px -5px rgba(15, 23, 42, 0.15);
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    0 2px 4px rgba(0, 0, 0, 0.08),
+    0 6px 14px rgba(0, 0, 0, 0.1);
+  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .card-cover-placeholder {
@@ -116,8 +115,9 @@ const emit = defineEmits<{
 }
 
 .card-cover--empty {
-  border: 1px dashed var(--arc-border);
+  border: 1.5px dashed var(--arc-border-strong);
   background: var(--arc-bg-weak);
+  box-shadow: none;
 }
 
 .homepage-project-card:hover .card-cover {
@@ -132,10 +132,18 @@ const emit = defineEmits<{
 .card-copy h3 {
   margin: 0;
   color: var(--arc-text-primary);
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
+  font-size: 16.5px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.homepage-project-card:hover .card-copy h3 {
+  color: var(--arc-primary);
 }
 
 .card-tags {
@@ -148,58 +156,70 @@ const emit = defineEmits<{
 .card-tag {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--arc-primary) 8%, var(--arc-bg-weak));
-  color: var(--arc-primary);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.card-meta,
-.card-footer {
+  padding: 2.5px 9px;
+  border-radius: 999px;
+  background: var(--arc-bg-surface-hover);
   color: var(--arc-text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 11px;
+  font-weight: 680;
+  letter-spacing: 0.01em;
 }
 
 .card-meta {
-  margin: 10px 0 0;
-  opacity: 0.8;
+  margin: 8px 0 0;
+  color: var(--arc-text-hint);
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
 .card-menu {
   display: inline-flex;
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   align-items: center;
   justify-content: center;
-  border: none;
+  border: 1px solid var(--arc-border);
   border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
   color: var(--arc-text-hint);
   cursor: pointer;
+  opacity: 0;
+  transform: translateY(-2px);
   transition:
-    background 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-    color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.2s,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.15s,
+    color 0.15s;
+}
+
+.homepage-project-card:hover .card-menu {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .card-menu:hover {
-  background: color-mix(in srgb, var(--arc-primary) 5%, var(--arc-bg-mix));
-  color: var(--arc-text-primary);
+  background: var(--arc-bg-surface);
+  color: var(--arc-text-secondary);
+  border-color: var(--arc-border-strong);
 }
 
 .card-footer {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 14px;
+  gap: 5px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--arc-bg-surface-hover);
+  color: var(--arc-text-hint);
+  font-size: 12px;
+  font-weight: 520;
+  font-variant-numeric: tabular-nums;
 }
 
 @keyframes card-enter {
   from {
     opacity: 0;
-    transform: translateY(3px);
+    transform: translateY(8px);
   }
 
   to {

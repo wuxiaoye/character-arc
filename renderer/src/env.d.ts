@@ -94,6 +94,13 @@ declare global {
     total: number
     percent: number
     sourceTitle?: string
+    bookId?: string
+    bookIndex?: number
+    bookTotal?: number
+    status?: 'queued' | 'running' | 'success' | 'error' | 'canceled'
+    chunkIndex?: number
+    chunkTotal?: number
+    chunkLabel?: string
   }
 
   type CharacterArcAiRunEventPayload = {
@@ -353,6 +360,27 @@ declare global {
         result?: CharacterArcReferenceImportResult
         error?: string
       }>
+      importReferenceNovelBatch: (payload: CharacterArcReferenceImportPayload & { filePaths?: string[]; concurrency?: number }) => Promise<{
+        success: boolean
+        canceled: boolean
+        results?: Array<{
+          bookId: string
+          success: boolean
+          result?: CharacterArcReferenceImportResult
+          error?: string
+          fileName: string
+        }>
+        error?: string
+      }>
+      pickReferenceNovelFiles: () => Promise<{
+        success: boolean
+        canceled: boolean
+        files?: Array<{ filePath: string; fileName: string; size: number }>
+      }>
+      cancelReferenceNovelBook: (bookId?: string) => Promise<{
+        success: boolean
+        error?: string
+      }>
       readReferenceNovelText: (refId: string) => Promise<{
         success: boolean
         content?: string
@@ -385,6 +413,39 @@ declare global {
       }>
       onWorkspaceSync: (callback: (payload: unknown) => void) => () => void
       onReferenceImportProgress: (callback: (payload: CharacterArcReferenceImportProgressPayload) => void) => () => void
+      checkUpdate: () => Promise<{
+        success: boolean
+        result?: {
+          hasUpdate: boolean
+          currentVersion: string
+          latestVersion: string
+          releaseTitle: string
+          releaseNotes: string
+          releaseUrl: string
+          publishedAt: string
+          assets: Array<{ name: string; downloadUrl: string; size: number }>
+        }
+        error?: string
+      }>
+      openExternalUrl: (url: string) => Promise<void>
+      listSessions: (projectId: string) => Promise<{
+        success: boolean
+        result?: Array<{ id: string; title: string; created_at: string; updated_at: string }>
+        error?: string
+      }>
+      loadSession: (sessionId: string) => Promise<{
+        success: boolean
+        result?: { id: string; project_id: string; title: string; messages: unknown[]; created_at: string; updated_at: string }
+        error?: string
+      }>
+      saveSession: (payload: { id: string; projectId: string; title: string; messages: unknown[] }) => Promise<{
+        success: boolean
+        error?: string
+      }>
+      deleteSession: (sessionId: string) => Promise<{
+        success: boolean
+        error?: string
+      }>
     }
   }
 }
