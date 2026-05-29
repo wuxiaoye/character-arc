@@ -293,86 +293,46 @@ CharacterArc/
 
 ## 🧰 内置 Skill 包
 
-应用在 `resources/skills/` 下预置了一批可直接启用的 Skill：
+应用当前在 `resources/skills/` 下内置 3 组、共 28 个 Skill。技能面板会按来源分组展示，开发版与打包版使用同一套目录结构。
 
-<table>
-  <thead>
-    <tr>
-      <th>分类</th>
-      <th>Skill</th>
-      <th>用途</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td rowspan="3"><b>长篇</b></td>
-      <td><code>story-long-write</code></td>
-      <td>长篇小说写作辅助</td>
-    </tr>
-    <tr>
-      <td><code>story-long-analyze</code></td>
-      <td>长篇小说分析</td>
-    </tr>
-    <tr>
-      <td><code>story-long-scan</code></td>
-      <td>长篇市场扫描</td>
-    </tr>
-    <tr>
-      <td rowspan="3"><b>短篇</b></td>
-      <td><code>story-short-write</code></td>
-      <td>短篇小说写作辅助</td>
-    </tr>
-    <tr>
-      <td><code>story-short-analyze</code></td>
-      <td>短篇小说分析</td>
-    </tr>
-    <tr>
-      <td><code>story-short-scan</code></td>
-      <td>短篇市场扫描</td>
-    </tr>
-    <tr>
-      <td rowspan="2"><b>章节</b></td>
-      <td><code>story-chapter-exec</code></td>
-      <td>章节执行</td>
-    </tr>
-    <tr>
-      <td><code>story-chapter-repair</code></td>
-      <td>章节修复</td>
-    </tr>
-    <tr>
-      <td rowspan="3"><b>风格</b></td>
-      <td><code>humanizer-zh</code></td>
-      <td>中文去 AI 味润色</td>
-    </tr>
-    <tr>
-      <td><code>style-fingerprint</code></td>
-      <td>风格指纹提取</td>
-    </tr>
-    <tr>
-      <td><code>style-fusion</code></td>
-      <td>风格融合</td>
-    </tr>
-    <tr>
-      <td rowspan="4"><b>其他</b></td>
-      <td><code>story-cover</code></td>
-      <td>封面文案与题材拆解</td>
-    </tr>
-    <tr>
-      <td><code>story-deslop</code></td>
-      <td>口水话/套路化表达清理</td>
-    </tr>
-    <tr>
-      <td><code>story-blueprint</code></td>
-      <td>故事蓝图规划</td>
-    </tr>
-    <tr>
-      <td><code>story-format-tomato</code></td>
-      <td>番茄小说排版</td>
-    </tr>
-  </tbody>
-</table>
+| 来源 | 数量 | 代表 Skill | 说明 |
+|---|---:|---|---|
+| `oh-story-claudecode` | 12 | `story-long-write`、`story-short-write`、`story-chapter-exec` | 核心网文写作工作流，覆盖长篇、短篇、章节执行、拆文、扫榜、封面、去 AI 味、故事蓝图与番茄排版 |
+| `community-skills` | 3 | `humanizer-zh`、`style-fingerprint`、`style-fusion` | 通用风格与润色能力，适合中文去 AI 味、风格提取和风格融合 |
+| `Distilled-Novel-Toolbox` | 13 | `novel-pacing`、`novel-worldbuilding`、`novel-commercialization` | 工程化网文知识库，覆盖题材、人设、世界观、节奏、情绪、爽点、润色、平台、合规与反检测 |
 
-> 每个项目还可以导入独立的 Skill 包，作用范围仅限该项目。
+### `oh-story-claudecode`
+
+- `story-long-write`、`story-long-analyze`、`story-long-scan`
+- `story-short-write`、`story-short-analyze`、`story-short-scan`
+- `story-chapter-exec`、`story-chapter-repair`
+- `story-blueprint`、`story-cover`、`story-deslop`、`story-format-tomato`
+
+### `community-skills`
+
+- `humanizer-zh`：中文小说去 AI 味润色
+- `style-fingerprint`：提取参考文本的风格指纹
+- `style-fusion`：组合多个来源的风格特征
+
+### `Distilled-Novel-Toolbox`
+
+- `novel-anti-detection`：反 AI 检测与混合创作风控
+- `novel-character-design`：主角、配角、反派与人物弧光设计
+- `novel-commercialization`：平台选择、签约与商业化方向
+- `novel-compliance`：平台规则、敏感词与内容合规
+- `novel-emotion`：情绪曲线、共情点与沉浸感设计
+- `novel-genres`：题材选择、子类融合与赛道判断
+- `novel-innovation`：反套路、微创新与趋势参考
+- `novel-language-style`：文风、视角、修辞与画面感
+- `novel-pacing`：开篇、断章、高潮与整体节奏
+- `novel-pleasure-points`：爽点设计与疲劳管理
+- `novel-polishing`：润色、去 AI 味与风格增强
+- `novel-tools`：提示词、写作工作流与发布分析
+- `novel-worldbuilding`：世界观、势力、规则与设定一致性
+
+> `resources/skills/<来源>/<skill-id>/SKILL.md` 会被自动扫描为内置 Skill；同级的 `scripts/` 等辅助目录不会被当成 Skill。
+>
+> 还可以导入独立的 Skill 包，作用范围仅限该项目。
 
 ## 💾 数据存储
 
