@@ -188,7 +188,7 @@ onBeforeUnmount(() => {
           <Wand2 :size="13" />
           <span>生成初稿</span>
         </button>
-        <button class="toolbtn primary" @click="emit('toggleAi')">
+        <button class="toolbtn" :class="{ primary: !aiOpen, active: aiOpen }" @click="emit('toggleAi')">
           <Sparkles :size="13" />
           <span>AI 助理</span>
         </button>
@@ -437,6 +437,16 @@ onBeforeUnmount(() => {
 
 .toolbtn.primary:hover {
   background: color-mix(in srgb, var(--arc-primary) 14%, var(--arc-bg-surface));
+}
+
+.toolbtn.active {
+  background: var(--arc-primary);
+  color: white;
+}
+
+.toolbtn.active:hover {
+  background: var(--arc-primary-hover);
+  color: white;
 }
 
 .ep-scroll {

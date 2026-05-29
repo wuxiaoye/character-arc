@@ -290,17 +290,17 @@ export function useChapterFirstDraft(): {
         },
         async () => {
           const targetWordCount = parseChapterWordTarget(chapter.wordTarget)
-          const relatedChapters = appStore.chapters
-            .filter((item) => item.id !== chapter.id)
+          const currentChapterIndex = appStore.chapters.findIndex((item) => item.id === chapter.id)
+          const precedingChapters = appStore.chapters.slice(0, currentChapterIndex)
+          const relatedChapters = precedingChapters
             .slice(-4)
             .map((item) => ({
               title: item.title,
-              summary: item.summary,
-              preview: getChapterPreviewText(item.content, '该章节暂无正文')
+              summary: item.summary
             }))
           const relatedTitles = new Set(relatedChapters.map((r) => r.title))
-          const volumeChapterSummaries = appStore.chapters
-            .filter((c) => c.volumeId === chapter.volumeId && c.id !== chapter.id && !relatedTitles.has(c.title))
+          const volumeChapterSummaries = precedingChapters
+            .filter((c) => c.volumeId === chapter.volumeId && !relatedTitles.has(c.title))
             .map((c) => ({ title: c.title, summary: c.summary }))
           const firstChapter = appStore.chapters[0]
           const novelOpenerSummary =
@@ -308,8 +308,8 @@ export function useChapterFirstDraft(): {
               ? { title: firstChapter.title, summary: firstChapter.summary }
               : undefined
 
-          const recentEndingsTrail = appStore.chapters
-            .filter((c) => c.id !== chapter.id && Boolean(c.content?.trim()))
+          const recentEndingsTrail = precedingChapters
+            .filter((c) => Boolean(c.content?.trim()))
             .slice(-3)
             .map((c) => {
               const plain = getPlainTextFromEditorContent(c.content ?? '').trim()
@@ -320,6 +320,10 @@ export function useChapterFirstDraft(): {
               }
             })
             .filter((entry) => entry.endingLine)
+
+          const currentChapterOutlineIndex = appStore.outlineItems
+            .filter((item) => item.volumeId === chapter.volumeId)
+            .findIndex((item) => item.title === chapter.title)
 
           const memoBaseContext: Record<string, unknown> = {
             projectId: project.id,
@@ -346,7 +350,12 @@ export function useChapterFirstDraft(): {
             })),
             outlineItems: appStore.outlineItems
               .filter((item) => item.volumeId === chapter.volumeId)
-              .map((item) => ({ title: item.title, summary: item.summary }))
+              .slice(0, currentChapterOutlineIndex + 1)
+              .map((item, idx) => ({
+                title: item.title,
+                summary: item.summary,
+                isCurrent: idx === currentChapterOutlineIndex
+              }))
           }
 
           executionLabel.value = '检索相关章节与情节线索'
@@ -377,9 +386,11 @@ export function useChapterFirstDraft(): {
             characterRelationships: appStore.characterRelationships,
             organizationMemberships: appStore.organizationMemberships,
             inspirationEntries: appStore.inspirationEntries,
-            outlineItems: appStore.outlineItems.filter((item) => item.volumeId === chapter.volumeId),
+            outlineItems: appStore.outlineItems
+              .filter((item) => item.volumeId === chapter.volumeId)
+              .slice(0, currentChapterOutlineIndex + 1),
             plotThreads: appStore.plotThreads,
-            chapterContent: getPlainTextFromEditorContent(chapter.content ?? ''),
+            chapterContent: '',
             targetWordCount,
             userPrompt: `请生成这一章的完整初稿，目标字数约 ${targetWordCount} 字（参考值，优先保证情节自然完整）。如果当前正文为空，就从零起稿；如果当前正文不为空，也按整章重写处理，而不是续写。`,
             projectSkills: await loadEnabledProjectSkillsContext(project, 'draft'),

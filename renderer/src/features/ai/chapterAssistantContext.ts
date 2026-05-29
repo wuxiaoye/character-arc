@@ -72,7 +72,7 @@ export type ChapterFirstDraftContextInput = {
   relatedChapters: Array<{
     title: string
     summary: string
-    preview: string
+    preview?: string
   }>
   volumeChapterSummaries: Array<{                       // 当前分卷内其他章节的摘要
     title: string

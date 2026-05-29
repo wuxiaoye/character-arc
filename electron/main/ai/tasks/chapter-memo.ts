@@ -17,7 +17,13 @@ const handler: TaskHandler = {
     const targetWordCount = String(context.targetWordCount ?? context.chapterWordTarget ?? '').trim()
 
     return {
-      system: `${capabilityPreamble.system}\n\n你是小说写作的章节备忘规划师。任务：基于章节摘要、相邻章节、活跃伏笔和角色关系，输出本章的"写作备忘"——这是后续 Writer 写正文的硬指令，不是泛泛的写作建议。
+      system: `${capabilityPreamble.system}\n\n你是小说写作的章节备忘规划师。任务：严格基于"当前章节摘要"，输出本章的"写作备忘"——这是后续 Writer 写正文的硬指令，不是泛泛的写作建议。
+
+【重要约束】
+- 你只负责规划"当前章节"这一章的内容，不要规划后续章节的内容。
+- "当前章节摘要"是本章的唯一剧情边界，所有规划必须围绕这个摘要展开。
+- 分卷摘要仅供了解整体方向，不要把分卷中其他章节的剧情写进本章备忘。
+- 如果当前章节是第一章（没有相邻章节参考），就按开篇来规划。
 
 只返回 JSON 对象，不要返回 markdown 或解释。每个字段都要具体可落地：写"林秋发现父亲的旧账本"而不是"推进调查线"。
 
