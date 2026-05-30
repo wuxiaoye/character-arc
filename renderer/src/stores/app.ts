@@ -820,8 +820,8 @@ export const useAppStore = defineStore('app', () => {
     selectedProjectId.value = projectId
     pendingChapterInsertion.value = null
     currentView.value = 'workbench'
-    activePanel.value = 'workflow'
-    lastWorkbenchPanel.value = 'workflow'
+    activePanel.value = 'overview'
+    lastWorkbenchPanel.value = 'overview'
     syncSelectedChapter(projectId)
     schedulePersist('fast')
   }
