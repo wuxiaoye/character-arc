@@ -1,10 +1,61 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { ArrowDown, Copy, Edit3, Replace, RotateCw, Undo2 } from 'lucide-vue-next'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { ArrowDown, Check, ChevronDown as ChevronDownIcon, Copy, Edit3, Replace, RotateCw, Sparkles, Undo2 } from 'lucide-vue-next'
 import { useMessage } from 'naive-ui'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import hljs from 'highlight.js/lib/core'
+import javascript from 'highlight.js/lib/languages/javascript'
+import typescript from 'highlight.js/lib/languages/typescript'
+import python from 'highlight.js/lib/languages/python'
+import json from 'highlight.js/lib/languages/json'
+import xml from 'highlight.js/lib/languages/xml'
+import css from 'highlight.js/lib/languages/css'
+import markdown from 'highlight.js/lib/languages/markdown'
 import ChapterAiToolCard from './ChapterAiToolCard.vue'
 import type { ChapterAiMessage } from './useChapterAi'
 import { useAppStore } from '@/stores/app'
+
+// Register highlight.js languages
+hljs.registerLanguage('javascript', javascript)
+hljs.registerLanguage('js', javascript)
+hljs.registerLanguage('typescript', typescript)
+hljs.registerLanguage('ts', typescript)
+hljs.registerLanguage('python', python)
+hljs.registerLanguage('py', python)
+hljs.registerLanguage('json', json)
+hljs.registerLanguage('html', xml)
+hljs.registerLanguage('xml', xml)
+hljs.registerLanguage('css', css)
+hljs.registerLanguage('markdown', markdown)
+hljs.registerLanguage('md', markdown)
+
+// Configure marked
+marked.setOptions({
+  breaks: true,
+  gfm: true
+})
+
+// Custom renderer for code blocks
+const renderer = new marked.Renderer()
+renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
+  const language = lang && hljs.getLanguage(lang) ? lang : ''
+  const highlighted = language
+    ? hljs.highlight(text, { language }).value
+    : hljs.highlightAuto(text).value
+  const langLabel = language || 'code'
+  return `<div class="code-block"><div class="code-header"><span class="code-lang">${langLabel}</span><button class="code-copy-btn" data-code="${encodeURIComponent(text)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div><pre><code class="hljs">${highlighted}</code></pre></div>`
+}
+
+marked.use({ renderer })
+
+const ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a', 'span', 'del', 'div', 'button', 'svg', 'rect', 'path']
+const ALLOWED_ATTR = ['class', 'href', 'target', 'rel', 'data-code', 'width', 'height', 'viewBox', 'fill', 'stroke', 'stroke-width', 'x', 'y', 'rx', 'd']
+
+function renderMarkdown(content: string): string {
+  const html = marked.parse(content) as string
+  return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR })
+}
 
 const props = defineProps<{
   messages: ChapterAiMessage[]
@@ -16,18 +67,41 @@ const emit = defineEmits<{
   apply: [content: string, mode: 'cursor' | 'append' | 'replace-selection']
   regenerate: [prompt: string]
   undo: [versionId: string]
+  send: [prompt: string]
 }>()
 
 const message = useMessage()
+const appStore = useAppStore()
 const scrollRef = ref<HTMLDivElement | null>(null)
+const isAtBottom = ref(true)
+const showScrollBtn = ref(false)
+const copiedMsgId = ref<string | null>(null)
 
 const lastMsg = computed(() => props.messages[props.messages.length - 1])
 
+function checkScrollPosition(): void {
+  if (!scrollRef.value) return
+  const { scrollTop, scrollHeight, clientHeight } = scrollRef.value
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+  isAtBottom.value = distanceFromBottom < 100
+  showScrollBtn.value = distanceFromBottom > 200
+}
+
+function scrollToBottom(smooth = true): void {
+  if (!scrollRef.value) return
+  scrollRef.value.scrollTo({
+    top: scrollRef.value.scrollHeight,
+    behavior: smooth ? 'smooth' : 'auto'
+  })
+}
+
 watch(
   () => [props.messages.length, lastMsg.value?.content, lastMsg.value?.toolCalls?.length, lastMsg.value?.editEvents?.length] as const,
-  () => nextTick(() => {
-    if (scrollRef.value) scrollRef.value.scrollTop = scrollRef.value.scrollHeight
-  })
+  () => {
+    if (isAtBottom.value) {
+      nextTick(() => scrollToBottom(false))
+    }
+  }
 )
 
 function isStreaming(msg: ChapterAiMessage): boolean {
@@ -48,86 +122,200 @@ function findUserPromptBefore(msgId: string): string | undefined {
   return undefined
 }
 
-async function copyMessage(content: string): Promise<void> {
+async function copyMessage(content: string, msgId: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(content)
-    message.success('已复制')
+    copiedMsgId.value = msgId
+    setTimeout(() => { copiedMsgId.value = null }, 2000)
   } catch {
     message.error('复制失败')
   }
 }
+
+function handleCodeCopy(event: MouseEvent): void {
+  const btn = (event.target as HTMLElement).closest('.code-copy-btn') as HTMLElement | null
+  if (!btn) return
+  const code = decodeURIComponent(btn.dataset.code || '')
+  if (code) {
+    navigator.clipboard.writeText(code).then(() => {
+      btn.classList.add('copied')
+      setTimeout(() => btn.classList.remove('copied'), 2000)
+    })
+  }
+}
+
+const quickSuggestions = [
+  '帮我分析当前章节的节奏感',
+  '基于大纲给出下一段的写作建议',
+  '检查对话是否自然'
+]
+
+onMounted(() => {
+  scrollRef.value?.addEventListener('scroll', checkScrollPosition)
+  scrollRef.value?.addEventListener('click', handleCodeCopy)
+})
+
+onBeforeUnmount(() => {
+  scrollRef.value?.removeEventListener('scroll', checkScrollPosition)
+  scrollRef.value?.removeEventListener('click', handleCodeCopy)
+})
 </script>
 
 <template>
-  <div ref="scrollRef" class="messages arc-scrollbar">
-    <div v-if="!messages.length && !isResponding" class="empty">
-      问问 AI 怎么写下一段、改写当前段落，或基于大纲给建议。
-    </div>
-
-    <div v-for="msg in messages" :key="msg.id" class="msg" :class="msg.role">
-      <!-- Tool call cards -->
-      <div v-if="msg.toolCalls?.length" class="tool-calls">
-        <ChapterAiToolCard v-for="tc in msg.toolCalls" :key="tc.toolUseId" :tool-call="tc" />
-      </div>
-
-      <!-- Edit events -->
-      <div v-if="msg.editEvents?.length" class="edit-events">
-        <div v-for="edit in msg.editEvents" :key="edit.versionId" class="edit-card">
-          <Edit3 :size="12" />
-          <span>{{ edit.preview }}</span>
-          <button class="mini" @click="emit('undo', edit.versionId)">
-            <Undo2 :size="11" /> 撤销
+  <div class="messages-container">
+    <div ref="scrollRef" class="messages arc-scrollbar">
+      <!-- Empty state -->
+      <div v-if="!messages.length && !isResponding" class="empty">
+        <Sparkles :size="28" class="empty-icon" />
+        <p class="empty-text">问问 AI 怎么写下一段、改写当前段落，或基于大纲给建议。</p>
+        <div class="empty-suggestions">
+          <button
+            v-for="suggestion in quickSuggestions"
+            :key="suggestion"
+            class="suggestion-btn"
+            @click="emit('send', suggestion)"
+          >
+            {{ suggestion }}
           </button>
         </div>
       </div>
 
-      <!-- Text bubble -->
-      <div v-if="msg.content || isStreaming(msg)" class="bubble" :class="{ streaming: isStreaming(msg) }">
-        <template v-if="msg.content">{{ msg.content }}</template>
-        <template v-else-if="isStreaming(msg) && !msg.toolCalls?.length">
-          <span class="dot" /><span class="dot" /><span class="dot" />
+      <!-- Messages -->
+      <div v-for="msg in messages" :key="msg.id" class="msg" :class="msg.role">
+        <!-- User message: single bubble -->
+        <template v-if="msg.role === 'user'">
+          <div class="bubble user">{{ msg.content }}</div>
         </template>
-        <span v-if="isStreaming(msg) && msg.content" class="cursor" />
-      </div>
 
-      <div v-if="msg.role === 'assistant' && !isStreaming(msg) && msg.content" class="msg-footer">
-        <span v-if="msg.createdAt" class="msg-time">{{ formatTime(msg.createdAt) }}</span>
-        <div class="actions">
-          <button
-            v-if="hasSelection"
-            class="mini primary"
-            title="替换当前选区"
-            @click="emit('apply', msg.content, 'replace-selection')"
-          >
-            <Replace :size="11" /> 替换选区
-          </button>
-          <button
-            class="mini"
-            title="插入到光标处"
-            @click="emit('apply', msg.content, 'cursor')"
-          >
-            <ArrowDown :size="11" /> 插入光标
-          </button>
-          <button class="mini" title="复制" @click="copyMessage(msg.content)">
-            <Copy :size="11" />
-          </button>
-          <button
-            class="mini"
-            title="重新生成"
-            :disabled="isResponding"
-            @click="() => { const p = findUserPromptBefore(msg.id); if (p) emit('regenerate', p) }"
-          >
-            <RotateCw :size="11" />
-          </button>
-        </div>
+        <!-- AI message: multi-turn display -->
+        <template v-else>
+          <!-- 新结构：使用 turns -->
+          <div v-if="msg.turns && msg.turns.length > 0" class="ai-turns">
+            <div v-for="(turn, idx) in msg.turns" :key="idx" class="turn">
+              <!-- Turn text bubble -->
+              <div
+                v-if="turn.text || (isStreaming(msg) && idx === msg.turns.length - 1 && turn.toolCalls.length === 0)"
+                class="bubble ai"
+                :class="{ streaming: isStreaming(msg) && idx === msg.turns.length - 1 }"
+              >
+                <template v-if="turn.text">
+                  <div class="markdown-body" v-html="renderMarkdown(turn.text)" />
+                  <span v-if="isStreaming(msg) && idx === msg.turns.length - 1" class="cursor" />
+                </template>
+                <template v-else-if="isStreaming(msg)">
+                  <span class="dot" /><span class="dot" /><span class="dot" />
+                </template>
+              </div>
+
+              <!-- Turn tool calls -->
+              <div v-if="turn.toolCalls.length > 0" class="turn-tools">
+                <ChapterAiToolCard v-for="tc in turn.toolCalls" :key="tc.toolUseId" :tool-call="tc" />
+              </div>
+
+              <!-- Turn edit events -->
+              <div v-if="turn.editEvents.length > 0" class="turn-edits">
+                <div v-for="edit in turn.editEvents" :key="edit.versionId" class="edit-card">
+                  <Edit3 :size="12" />
+                  <span>{{ edit.preview }}</span>
+                  <button class="mini" @click="emit('undo', edit.versionId)">
+                    <Undo2 :size="11" /> 撤销
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 旧结构：向后兼容 -->
+          <template v-else>
+            <!-- Tool call cards -->
+            <div v-if="msg.toolCalls?.length" class="tool-calls">
+              <ChapterAiToolCard v-for="tc in msg.toolCalls" :key="tc.toolUseId" :tool-call="tc" />
+            </div>
+
+            <!-- Edit events -->
+            <div v-if="msg.editEvents?.length" class="edit-events">
+              <div v-for="edit in msg.editEvents" :key="edit.versionId" class="edit-card">
+                <Edit3 :size="12" />
+                <span>{{ edit.preview }}</span>
+                <button class="mini" @click="emit('undo', edit.versionId)">
+                  <Undo2 :size="11" /> 撤销
+                </button>
+              </div>
+            </div>
+
+            <!-- Text bubble -->
+            <div
+              v-if="msg.content || (isStreaming(msg) && (!msg.toolCalls || msg.toolCalls.length === 0))"
+              class="bubble ai"
+              :class="{ streaming: isStreaming(msg) }"
+            >
+              <template v-if="msg.content">
+                <div class="markdown-body" v-html="renderMarkdown(msg.content)" />
+                <span v-if="isStreaming(msg)" class="cursor" />
+              </template>
+              <template v-else-if="isStreaming(msg)">
+                <span class="dot" /><span class="dot" /><span class="dot" />
+              </template>
+            </div>
+          </template>
+
+          <!-- Message footer with actions -->
+          <div v-if="!isStreaming(msg) && (msg.content || (msg.turns && msg.turns.some(t => t.text)))" class="msg-footer">
+            <span v-if="msg.createdAt" class="msg-time">{{ formatTime(msg.createdAt) }}</span>
+            <div class="actions">
+              <button
+                v-if="hasSelection"
+                class="mini primary"
+                title="替换当前选区"
+                @click="emit('apply', msg.content, 'replace-selection')"
+              >
+                <Replace :size="11" /> 替换选区
+              </button>
+              <button
+                class="mini"
+                title="插入到光标处"
+                @click="emit('apply', msg.content, 'cursor')"
+              >
+                <ArrowDown :size="11" /> 插入光标
+              </button>
+              <span class="actions-divider" />
+              <button class="mini" title="复制" @click="copyMessage(msg.content, msg.id)">
+                <Check v-if="copiedMsgId === msg.id" :size="11" class="icon-success" />
+                <Copy v-else :size="11" />
+              </button>
+              <button
+                class="mini"
+                title="重新生成"
+                :disabled="isResponding"
+                @click="() => { const p = findUserPromptBefore(msg.id); if (p) emit('regenerate', p) }"
+              >
+                <RotateCw :size="11" />
+              </button>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
+
+    <!-- Scroll to bottom button -->
+    <Transition name="fade">
+      <button v-if="showScrollBtn" class="scroll-bottom-btn" @click="scrollToBottom()">
+        <ChevronDownIcon :size="16" />
+      </button>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
-.messages {
+.messages-container {
   flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.messages {
+  height: 100%;
   overflow-y: auto;
   padding: 16px;
   display: flex;
@@ -135,16 +323,57 @@ async function copyMessage(content: string): Promise<void> {
   gap: 20px;
 }
 
+/* ── Empty State ── */
 .empty {
   margin: auto;
   text-align: center;
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.empty-icon {
+  color: var(--arc-primary);
+  opacity: 0.6;
+}
+
+.empty-text {
   font-size: 13px;
   color: var(--arc-text-hint);
   max-width: 240px;
   line-height: 1.7;
-  padding: 32px 0;
 }
 
+.empty-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  width: 100%;
+  max-width: 280px;
+}
+
+.suggestion-btn {
+  padding: 8px 12px;
+  border: 1px solid var(--arc-border);
+  border-radius: 8px;
+  background: var(--arc-bg-weak);
+  color: var(--arc-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.suggestion-btn:hover {
+  border-color: var(--arc-primary);
+  color: var(--arc-primary);
+  background: var(--arc-primary-soft);
+}
+
+/* ── Messages ── */
 .msg {
   display: flex;
   flex-direction: column;
@@ -155,35 +384,76 @@ async function copyMessage(content: string): Promise<void> {
 .msg.user { align-items: flex-end; }
 .msg.assistant { align-items: flex-start; }
 
+/* ── Multi-turn AI messages ── */
+.ai-turns {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  max-width: 96%;
+  width: 100%;
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.turn-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 12px;
+}
+
+/* 如果 turn 只有工具调用没有文本，不缩进 */
+.turn:not(:has(.bubble)) .turn-tools {
+  padding-left: 0;
+}
+
+.turn-edits {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 12px;
+}
+
+.turn:not(:has(.bubble)) .turn-edits {
+  padding-left: 0;
+}
+
+/* ── Bubbles ── */
 .bubble {
   max-width: 92%;
   padding: 10px 14px;
   font-size: 13px;
   line-height: 1.7;
-  white-space: pre-wrap;
   word-break: break-word;
 }
 
-.msg.user .bubble {
+.bubble.user {
   background: var(--arc-primary);
   color: white;
-  border-radius: 14px 14px 2px 14px;
+  border-radius: 16px 16px 4px 16px;
   box-shadow: 0 2px 8px color-mix(in srgb, var(--arc-primary) 20%, transparent);
+  white-space: pre-wrap;
 }
 
-.msg.assistant .bubble {
+.bubble.ai {
+  max-width: 96%;
   background: var(--arc-bg-weak);
   border: 1px solid var(--arc-border);
   color: var(--arc-text-primary);
-  border-radius: 14px 14px 14px 2px;
+  border-radius: 4px 16px 16px 16px;
 }
 
-.bubble.streaming {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+.bubble.ai.streaming {
+  border-left: 2px solid var(--arc-primary);
 }
 
+/* ── Streaming indicators ── */
 .cursor {
   display: inline-block;
   width: 2px;
@@ -217,13 +487,14 @@ async function copyMessage(content: string): Promise<void> {
   30% { opacity: 1; transform: translateY(-3px); }
 }
 
+/* ── Message Footer ── */
 .msg-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 2px 4px 0;
   align-self: stretch;
-  max-width: 92%;
+  max-width: 96%;
 }
 
 .msg-time {
@@ -235,6 +506,20 @@ async function copyMessage(content: string): Promise<void> {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+  align-items: center;
+  opacity: 0.65;
+  transition: opacity 0.15s;
+}
+
+.msg-footer:hover .actions {
+  opacity: 1;
+}
+
+.actions-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--arc-border);
+  margin: 0 2px;
 }
 
 .mini {
@@ -274,6 +559,11 @@ async function copyMessage(content: string): Promise<void> {
   color: white;
 }
 
+.icon-success {
+  color: var(--arc-success, #16a34a);
+}
+
+/* ── Tool Calls & Edit Events ── */
 .tool-calls {
   display: flex;
   flex-direction: column;
@@ -305,4 +595,252 @@ async function copyMessage(content: string): Promise<void> {
   padding: 3px 8px;
   font-size: 10.5px;
 }
+
+/* ── Scroll to Bottom Button ── */
+.scroll-bottom-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--arc-border);
+  background: var(--arc-bg-surface);
+  color: var(--arc-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.15s;
+  z-index: 10;
+}
+
+.scroll-bottom-btn:hover {
+  border-color: var(--arc-primary);
+  color: var(--arc-primary);
+  background: var(--arc-primary-soft);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
+
+<style>
+/* Markdown body styles (unscoped for v-html content) */
+.markdown-body {
+  font-size: 13px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.markdown-body p {
+  margin: 0 0 8px;
+}
+
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.markdown-body h1 { font-size: 1.3em; }
+.markdown-body h2 { font-size: 1.2em; }
+.markdown-body h3 { font-size: 1.1em; }
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 { font-size: 1em; }
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.markdown-body li {
+  margin: 3px 0;
+}
+
+.markdown-body li > p {
+  margin: 0;
+}
+
+.markdown-body blockquote {
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--arc-primary);
+  background: color-mix(in srgb, var(--arc-primary) 5%, var(--arc-bg-surface));
+  border-radius: 0 6px 6px 0;
+  color: var(--arc-text-secondary);
+}
+
+.markdown-body blockquote p {
+  margin: 0;
+}
+
+.markdown-body code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--arc-text-primary) 8%, var(--arc-bg-surface));
+  font-size: 0.9em;
+  font-family: 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+}
+
+.markdown-body pre {
+  margin: 0;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: 12px;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+}
+
+.markdown-body em {
+  font-style: italic;
+}
+
+.markdown-body del {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.markdown-body a {
+  color: var(--arc-primary);
+  text-decoration: none;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 6px 10px;
+  border: 1px solid var(--arc-border);
+  text-align: left;
+}
+
+.markdown-body th {
+  background: var(--arc-bg-surface);
+  font-weight: 600;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--arc-border);
+  margin: 12px 0;
+}
+
+/* ── Code Block ── */
+.markdown-body .code-block {
+  margin: 8px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--arc-border);
+  background: #1e1e2e;
+}
+
+.markdown-body .code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #181825;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.markdown-body .code-lang {
+  font-size: 10px;
+  font-weight: 500;
+  color: #a6adc8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.markdown-body .code-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #a6adc8;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.markdown-body .code-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cdd6f4;
+}
+
+.markdown-body .code-copy-btn.copied {
+  color: #a6e3a1;
+}
+
+.markdown-body .code-block pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #45475a transparent;
+}
+
+.markdown-body .code-block pre code {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #cdd6f4;
+  font-family: 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+}
+
+/* highlight.js theme overrides (Catppuccin-inspired) */
+.markdown-body .hljs-keyword { color: #cba6f7; }
+.markdown-body .hljs-string { color: #a6e3a1; }
+.markdown-body .hljs-number { color: #fab387; }
+.markdown-body .hljs-comment { color: #6c7086; font-style: italic; }
+.markdown-body .hljs-function { color: #89b4fa; }
+.markdown-body .hljs-title { color: #89b4fa; }
+.markdown-body .hljs-params { color: #f5c2e7; }
+.markdown-body .hljs-built_in { color: #f38ba8; }
+.markdown-body .hljs-literal { color: #fab387; }
+.markdown-body .hljs-type { color: #f9e2af; }
+.markdown-body .hljs-attr { color: #89dceb; }
+.markdown-body .hljs-selector-class { color: #a6e3a1; }
+.markdown-body .hljs-selector-tag { color: #cba6f7; }
+.markdown-body .hljs-property { color: #89dceb; }
+.markdown-body .hljs-punctuation { color: #bac2de; }
+.markdown-body .hljs-variable { color: #cdd6f4; }
+.markdown-body .hljs-operator { color: #89dceb; }
+.markdown-body .hljs-meta { color: #f38ba8; }
 </style>

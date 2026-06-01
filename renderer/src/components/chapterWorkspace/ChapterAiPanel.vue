@@ -259,6 +259,7 @@ onBeforeUnmount(() => {
       @apply="handleApply"
       @regenerate="send"
       @undo="handleUndoEdit"
+      @send="send"
     />
 
     <!-- Agent 状态条 -->

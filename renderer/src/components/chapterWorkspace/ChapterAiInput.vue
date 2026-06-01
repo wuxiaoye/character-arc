@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { ArrowUp, ChevronDown, Info, Pen, Square, X } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { ArrowUp, ChevronDown, GripHorizontal, Info, Pen, Square, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   disabled: boolean
@@ -18,6 +18,10 @@ const emit = defineEmits<{
 }>()
 
 const text = ref('')
+const isDragging = ref(false)
+const inputHeight = ref(120)
+const minHeight = 60
+const maxHeight = computed(() => Math.floor(window.innerHeight * 0.5))
 
 type AiMode = '问答' | '改写' | '续写'
 const modes: AiMode[] = ['问答', '改写', '续写']
@@ -27,6 +31,43 @@ const placeholders: Record<AiMode, string> = {
   '问答': '向 AI 提问，或描述你想要的修改 (Enter 发送)',
   '改写': '描述你想如何改写选中的段落...',
   '续写': '给出续写方向，或留空让 AI 自由发挥...'
+}
+
+onMounted(() => {
+  const saved = localStorage.getItem('arc-ai-input-height')
+  if (saved) {
+    const val = Number(saved)
+    if (val >= minHeight && val <= maxHeight.value) {
+      inputHeight.value = val
+    }
+  }
+})
+
+function startDrag(e: MouseEvent): void {
+  e.preventDefault()
+  isDragging.value = true
+  const startY = e.clientY
+  const startHeight = inputHeight.value
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'row-resize'
+
+  function onMove(ev: MouseEvent): void {
+    const delta = startY - ev.clientY
+    const newHeight = Math.max(minHeight, Math.min(maxHeight.value, startHeight + delta))
+    inputHeight.value = newHeight
+  }
+
+  function onEnd(): void {
+    isDragging.value = false
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+    localStorage.setItem('arc-ai-input-height', String(inputHeight.value))
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onEnd)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onEnd)
 }
 
 function handleSend(): void {
@@ -47,6 +88,15 @@ function handleKey(event: KeyboardEvent): void {
 
 <template>
   <div class="ai-composer">
+    <!-- Drag handle -->
+    <div
+      class="drag-handle"
+      :class="{ dragging: isDragging }"
+      @mousedown="startDrag"
+    >
+      <GripHorizontal :size="14" class="drag-icon" />
+    </div>
+
     <div class="composer-toolbar">
       <button class="composer-btn" @click="emit('open-commands')">
         <ChevronDown :size="12" />
@@ -83,6 +133,7 @@ function handleKey(event: KeyboardEvent): void {
         v-model="text"
         :placeholder="disabled ? 'AI 正在生成...' : placeholders[activeMode]"
         :disabled="disabled"
+        :style="{ height: inputHeight + 'px' }"
         @keydown="handleKey"
       />
       <div class="composer-input-footer">
@@ -101,12 +152,41 @@ function handleKey(event: KeyboardEvent): void {
 .ai-composer {
   border-top: 1px solid var(--arc-border);
   background: var(--arc-bg-surface);
-  padding: 10px 12px;
+  padding: 0 12px 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+/* ── Drag Handle ── */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 12px;
+  cursor: row-resize;
+  position: relative;
+  flex-shrink: 0;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.drag-handle:hover,
+.drag-handle.dragging {
+  opacity: 1;
+}
+
+.drag-icon {
+  color: var(--arc-text-hint);
+  transition: color 0.15s;
+}
+
+.drag-handle:hover .drag-icon,
+.drag-handle.dragging .drag-icon {
+  color: var(--arc-primary);
+}
+
+/* ── Toolbar ── */
 .composer-toolbar {
   display: flex;
   align-items: center;
@@ -152,6 +232,7 @@ function handleKey(event: KeyboardEvent): void {
   padding: 0 4px;
 }
 
+/* ── Selection Preview ── */
 .composer-selection {
   display: flex;
   align-items: center;
@@ -196,6 +277,7 @@ function handleKey(event: KeyboardEvent): void {
   color: var(--arc-text-primary);
 }
 
+/* ── Input Wrap ── */
 .composer-input-wrap {
   display: flex;
   flex-direction: column;
@@ -216,6 +298,7 @@ function handleKey(event: KeyboardEvent): void {
   opacity: 0.6;
 }
 
+/* ── Mode Tabs ── */
 .composer-mode-tabs {
   display: flex;
   padding: 6px 8px 0;
@@ -245,6 +328,7 @@ function handleKey(event: KeyboardEvent): void {
   font-weight: 600;
 }
 
+/* ── Textarea ── */
 .composer-input-wrap textarea {
   width: 100%;
   border: none;
@@ -258,9 +342,9 @@ function handleKey(event: KeyboardEvent): void {
   color: var(--arc-text-primary);
   user-select: text;
   min-height: 48px;
-  max-height: 140px;
 }
 
+/* ── Footer ── */
 .composer-input-footer {
   display: flex;
   align-items: center;

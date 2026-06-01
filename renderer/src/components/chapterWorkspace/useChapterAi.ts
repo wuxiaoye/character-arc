@@ -24,14 +24,21 @@ export type ChapterAiEditEvent = {
   versionId: string
 }
 
+export type ChapterAiTurn = {
+  text: string
+  toolCalls: ChapterAiToolCall[]
+  editEvents: ChapterAiEditEvent[]
+}
+
 export interface ChapterAiMessage {
   id: string
   role: ChapterAiRole
-  content: string
+  content: string  // 保留用于向后兼容
   createdAt: number
   chapterId?: string
-  toolCalls?: ChapterAiToolCall[]
-  editEvents?: ChapterAiEditEvent[]
+  toolCalls?: ChapterAiToolCall[]  // 保留用于向后兼容
+  editEvents?: ChapterAiEditEvent[]  // 保留用于向后兼容
+  turns?: ChapterAiTurn[]  // 新增：多轮推理结构
 }
 
 const TASK_KEY = 'chapter-workspace-chat'
@@ -178,12 +185,29 @@ export function useChapterAi(): {
 
   function finalizeStreamingMsg(): void {
     const msg = messages.value.find((m) => m.id === streamingMsgId)
-    if (!msg?.toolCalls) return
-    for (const tc of msg.toolCalls) {
-      if (tc.status === 'running') {
-        tc.status = 'error'
-        tc.result = '（连接中断）'
-        tc.isError = true
+    if (!msg) return
+
+    // 处理旧结构的 toolCalls
+    if (msg.toolCalls) {
+      for (const tc of msg.toolCalls) {
+        if (tc.status === 'running') {
+          tc.status = 'error'
+          tc.result = '（连接中断）'
+          tc.isError = true
+        }
+      }
+    }
+
+    // 处理新结构的 turns
+    if (msg.turns) {
+      for (const turn of msg.turns) {
+        for (const tc of turn.toolCalls) {
+          if (tc.status === 'running') {
+            tc.status = 'error'
+            tc.result = '（连接中断）'
+            tc.isError = true
+          }
+        }
       }
     }
   }
@@ -193,51 +217,128 @@ export function useChapterAi(): {
 
     if (payload.type === 'chunk') {
       const msg = messages.value.find((m) => m.id === streamingMsgId)
-      if (msg) msg.content += payload.delta
+      if (!msg) return
+
+      // 向后兼容：更新 content
+      msg.content += payload.delta
+
+      // 新结构：更新 turns
+      if (!msg.turns) msg.turns = []
+      if (msg.turns.length === 0) {
+        msg.turns.push({ text: '', toolCalls: [], editEvents: [] })
+      }
+
+      const currentTurn = msg.turns[msg.turns.length - 1]
+
+      // 如果当前 turn 有工具调用但还没有文本，说明工具调用完成后开始输出文本，创建新 turn
+      if (currentTurn.toolCalls.length > 0 && currentTurn.text === '') {
+        msg.turns.push({ text: payload.delta, toolCalls: [], editEvents: [] })
+      } else {
+        currentTurn.text += payload.delta
+      }
+
       return
     }
+
     if (payload.type === 'tool_use_start') {
       const msg = messages.value.find((m) => m.id === streamingMsgId)
-      if (msg) {
-        if (!msg.toolCalls) msg.toolCalls = []
-        msg.toolCalls.push({
-          toolUseId: payload.toolUseId,
-          toolName: payload.toolName,
-          args: payload.args,
-          status: 'running'
-        })
+      if (!msg) return
+
+      // 向后兼容：更新 toolCalls
+      if (!msg.toolCalls) msg.toolCalls = []
+      msg.toolCalls.push({
+        toolUseId: payload.toolUseId,
+        toolName: payload.toolName,
+        args: payload.args,
+        status: 'running'
+      })
+
+      // 新结构：更新 turns
+      if (!msg.turns) msg.turns = []
+      if (msg.turns.length === 0) {
+        msg.turns.push({ text: '', toolCalls: [], editEvents: [] })
       }
+
+      const currentTurn = msg.turns[msg.turns.length - 1]
+
+      // 如果当前 turn 已有文本内容，创建新 turn 用于工具调用
+      if (currentTurn.text.trim()) {
+        msg.turns.push({ text: '', toolCalls: [], editEvents: [] })
+      }
+
+      const targetTurn = msg.turns[msg.turns.length - 1]
+      targetTurn.toolCalls.push({
+        toolUseId: payload.toolUseId,
+        toolName: payload.toolName,
+        args: payload.args,
+        status: 'running'
+      })
+
       return
     }
+
     if (payload.type === 'tool_result') {
       const msg = messages.value.find((m) => m.id === streamingMsgId)
-      const tc = msg?.toolCalls?.find((t) => t.toolUseId === payload.toolUseId)
+      if (!msg) return
+
+      // 向后兼容：更新 toolCalls
+      const tc = msg.toolCalls?.find((t) => t.toolUseId === payload.toolUseId)
       if (tc) {
         tc.status = payload.isError ? 'error' : 'done'
         tc.result = payload.content
         tc.isError = payload.isError
         tc.durationMs = payload.durationMs
       }
+
+      // 新结构：更新 turns 中的 toolCall
+      if (msg.turns) {
+        for (const turn of msg.turns) {
+          const turnTc = turn.toolCalls.find((t) => t.toolUseId === payload.toolUseId)
+          if (turnTc) {
+            turnTc.status = payload.isError ? 'error' : 'done'
+            turnTc.result = payload.content
+            turnTc.isError = payload.isError
+            turnTc.durationMs = payload.durationMs
+            break
+          }
+        }
+      }
+
       return
     }
+
     if (payload.type === 'edit_applied') {
       const msg = messages.value.find((m) => m.id === streamingMsgId)
-      if (msg) {
-        if (!msg.editEvents) msg.editEvents = []
-        msg.editEvents.push({
-          chapterId: payload.chapterId,
-          editType: payload.editType,
-          preview: payload.preview,
-          versionId: payload.versionId
-        })
+      if (!msg) return
+
+      const editEvent = {
+        chapterId: payload.chapterId,
+        editType: payload.editType,
+        preview: payload.preview,
+        versionId: payload.versionId
       }
+
+      // 向后兼容：更新 editEvents
+      if (!msg.editEvents) msg.editEvents = []
+      msg.editEvents.push(editEvent)
+
+      // 新结构：添加到当前 turn
+      if (!msg.turns) msg.turns = []
+      if (msg.turns.length === 0) {
+        msg.turns.push({ text: '', toolCalls: [], editEvents: [] })
+      }
+      const currentTurn = msg.turns[msg.turns.length - 1]
+      currentTurn.editEvents.push(editEvent)
+
       void appStore.reloadChapterFromDb(payload.chapterId)
       return
     }
+
     if (payload.type === 'agent_status') {
       agentStatus.value = payload.message
       return
     }
+
     if (payload.type === 'done') {
       finalizeStreamingMsg()
       const msg = messages.value.find((m) => m.id === streamingMsgId)
@@ -251,6 +352,7 @@ export function useChapterAi(): {
       resolve?.(msg?.content ?? '')
       return
     }
+
     if (payload.type === 'canceled') {
       finalizeStreamingMsg()
       const reject = rejectStream

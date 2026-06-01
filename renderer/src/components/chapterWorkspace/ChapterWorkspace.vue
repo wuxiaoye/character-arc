@@ -7,15 +7,37 @@ import ChapterAiPanel from './ChapterAiPanel.vue'
 
 const COMPACT_BREAKPOINT = 1180
 const COMPACT_BREAKPOINT_AI_OPEN = 1440
+const DEFAULT_AI_WIDTH = 380
+const MIN_AI_WIDTH = 280
+const MAX_AI_WIDTH = 600
 
 const aiOpen = ref(true)
 const focusMode = ref(false)
 const sidebarDrawerVisible = ref(false)
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
+const aiPanelWidth = ref(DEFAULT_AI_WIDTH)
+const isDraggingPanel = ref(false)
+
 const isCompact = computed(() => {
   const threshold = aiOpen.value ? COMPACT_BREAKPOINT_AI_OPEN : COMPACT_BREAKPOINT
   return viewportWidth.value <= threshold
 })
+
+const effectiveAiWidth = computed(() => {
+  if (isCompact.value) return Math.min(aiPanelWidth.value, 320)
+  return aiPanelWidth.value
+})
+
+const gridStyle = computed(() => {
+  if (focusMode.value) {
+    return { gridTemplateColumns: aiOpen.value ? `1fr 4px ${effectiveAiWidth.value}px` : '1fr' }
+  }
+  if (isCompact.value) {
+    return { gridTemplateColumns: aiOpen.value ? `1fr 4px ${effectiveAiWidth.value}px` : '1fr' }
+  }
+  return { gridTemplateColumns: aiOpen.value ? `280px 1fr 4px ${effectiveAiWidth.value}px` : '280px 1fr' }
+})
+
 const aiPanelRef = ref<InstanceType<typeof ChapterAiPanel> | null>(null)
 
 function toggleAi(): void {
@@ -46,6 +68,38 @@ function handleGenerateDraft(): void {
   })
 }
 
+function startPanelDrag(e: MouseEvent): void {
+  e.preventDefault()
+  isDraggingPanel.value = true
+  const startX = e.clientX
+  const startWidth = aiPanelWidth.value
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'col-resize'
+
+  function onMove(ev: MouseEvent): void {
+    const delta = startX - ev.clientX
+    const newWidth = Math.max(MIN_AI_WIDTH, Math.min(MAX_AI_WIDTH, startWidth + delta))
+    aiPanelWidth.value = newWidth
+  }
+
+  function onEnd(): void {
+    isDraggingPanel.value = false
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+    localStorage.setItem('arc-ai-panel-width', String(aiPanelWidth.value))
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onEnd)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onEnd)
+}
+
+function handlePanelDblClick(): void {
+  aiPanelWidth.value = DEFAULT_AI_WIDTH
+  localStorage.setItem('arc-ai-panel-width', String(DEFAULT_AI_WIDTH))
+}
+
 function syncViewport(): void {
   viewportWidth.value = window.innerWidth
 }
@@ -64,6 +118,13 @@ function handleKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('resize', syncViewport)
+  const saved = localStorage.getItem('arc-ai-panel-width')
+  if (saved) {
+    const val = Number(saved)
+    if (val >= MIN_AI_WIDTH && val <= MAX_AI_WIDTH) {
+      aiPanelWidth.value = val
+    }
+  }
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
@@ -75,6 +136,7 @@ onBeforeUnmount(() => {
   <section
     class="chapter-workspace"
     :class="{ 'ai-open': aiOpen, focus: focusMode, compact: isCompact }"
+    :style="gridStyle"
   >
     <ChapterTreeSidebar v-if="!focusMode && !isCompact" class="ws-sidebar" />
     <ChapterEditorPane
@@ -87,6 +149,14 @@ onBeforeUnmount(() => {
       @toggle-sidebar="toggleSidebar"
       @selection-action="handleSelectionAction"
       @generate-draft="handleGenerateDraft"
+    />
+    <!-- Panel resize handle -->
+    <div
+      v-if="aiOpen"
+      class="panel-resize-handle"
+      :class="{ dragging: isDraggingPanel }"
+      @mousedown="startPanelDrag"
+      @dblclick="handlePanelDblClick"
     />
     <ChapterAiPanel v-if="aiOpen" ref="aiPanelRef" class="ws-ai" @close="aiOpen = false" />
     <button v-if="focusMode" class="focus-exit" @click="toggleFocus">
@@ -109,33 +179,12 @@ onBeforeUnmount(() => {
 .chapter-workspace {
   position: relative;
   display: grid;
-  grid-template-columns: 280px 1fr;
   height: 100%;
   width: 100%;
   background: var(--arc-bg-body);
   overflow: hidden;
   min-height: 0;
   min-width: 0;
-}
-
-.chapter-workspace.ai-open {
-  grid-template-columns: 280px 1fr 380px;
-}
-
-.chapter-workspace.focus {
-  grid-template-columns: 1fr;
-}
-
-.chapter-workspace.focus.ai-open {
-  grid-template-columns: 1fr 380px;
-}
-
-.chapter-workspace.compact {
-  grid-template-columns: 1fr;
-}
-
-.chapter-workspace.compact.ai-open {
-  grid-template-columns: 1fr 320px;
 }
 
 .ws-sidebar,
@@ -145,6 +194,42 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
+/* ── Panel Resize Handle ── */
+.panel-resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.panel-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 0;
+  border-radius: 1px;
+  background: var(--arc-border-strong);
+  transform: translate(-50%, -50%);
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.panel-resize-handle:hover::after {
+  height: 32px;
+  opacity: 0.6;
+}
+
+.panel-resize-handle.dragging::after {
+  height: 100%;
+  opacity: 1;
+  background: var(--arc-primary);
+  width: 2px;
+}
+
+/* ── Focus Exit ── */
 .focus-exit {
   position: fixed;
   top: 16px;
@@ -167,6 +252,7 @@ onBeforeUnmount(() => {
   color: var(--arc-text-primary);
 }
 
+/* ── Sidebar Overlay ── */
 .sidebar-overlay {
   position: absolute;
   inset: 0;

@@ -23,13 +23,20 @@ function stripSkillFrontmatter(content: string): string {
 }
 
 function resolveStreamingAgentMaxSteps(taskName: AiTaskPayload['task'], optionalSkillCount: number): number | undefined {
-  if (taskName !== 'chapter-first-draft') {
-    return undefined
+  if (taskName === 'chapter-first-draft') {
+    const normalizedOptionalSkills = Math.max(0, Math.min(optionalSkillCount, 3))
+    // 预算预留给：1 次项目数据读取 + 2-3 次 skill_load + 1-2 轮正文收束/修正。
+    return Math.min(6 + normalizedOptionalSkills, AGENT_STREAM_MAX_ITERATIONS)
   }
 
-  const normalizedOptionalSkills = Math.max(0, Math.min(optionalSkillCount, 3))
-  // 预算预留给：1 次项目数据读取 + 2-3 次 skill_load + 1-2 轮正文收束/修正。
-  return Math.min(6 + normalizedOptionalSkills, AGENT_STREAM_MAX_ITERATIONS)
+  if (taskName === 'chapter-assistant') {
+    // 创作助理：预留足够步数用于工具调用 + 最终文本回复
+    // 典型流程：读取章节(1) + 读取项目数据(1-3) + 多轮推理(2-4) + 最终回复(1)
+    // 设置为 20 确保复杂任务有足够余量
+    return 20
+  }
+
+  return undefined
 }
 
 /**

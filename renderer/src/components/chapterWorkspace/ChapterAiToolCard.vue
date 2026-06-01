@@ -10,18 +10,46 @@ const props = defineProps<{
 const expanded = ref(false)
 
 const toolLabel = computed(() => {
+  const args = props.toolCall.args
+
   switch (props.toolCall.toolName) {
-    case 'read_chapter': return '读取章节'
-    case 'edit_chapter': return '编辑章节'
-    case 'search_project': return '搜索项目'
-    case 'list_chapters': return '章节列表'
-    case 'read_project_data': return '读取项目数据'
-    case 'skill_load': return '加载写作技能'
-    case 'skill_read_reference': return '读取技能参考'
-    case 'skill_glob': return '浏览技能文件'
-    case 'skill_run_script': return '执行技能脚本'
-    case 'save_knowledge_document': return '保存知识文档'
-    default: return props.toolCall.toolName
+    case 'read_chapter': {
+      // 尝试从 args 中获取章节信息（如果有的话）
+      const chapterId = args.chapter_id || args.chapterId
+      // 这里无法直接访问章节标题，先显示基本信息
+      return chapterId ? `读取章节` : '读取当前章节'
+    }
+    case 'edit_chapter':
+      return '编辑章节'
+    case 'search_project':
+      return '搜索项目'
+    case 'list_chapters':
+      return '章节列表'
+    case 'read_project_data': {
+      const entityType = args.entity_type || args.entityType
+      const typeLabels: Record<string, string> = {
+        'characters': '读取角色设定',
+        'worldview': '读取世界观',
+        'outline': '读取章节大纲',
+        'plotThreads': '读取剧情线索',
+        'knowledge': '读取项目知识库',
+        'deconstructionLibrary': '读取拆书知识库',
+        'style': '读取写作风格'
+      }
+      return typeLabels[String(entityType)] || '读取项目数据'
+    }
+    case 'skill_load':
+      return args.skill_id ? `加载技能：${args.skill_id}` : '加载写作技能'
+    case 'skill_read_reference':
+      return args.file_path ? `读取技能文件` : '读取技能参考'
+    case 'skill_glob':
+      return '浏览技能文件'
+    case 'skill_run_script':
+      return '执行技能脚本'
+    case 'save_knowledge_document':
+      return '保存知识文档'
+    default:
+      return props.toolCall.toolName
   }
 })
 
