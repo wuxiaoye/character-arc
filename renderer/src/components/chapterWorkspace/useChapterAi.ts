@@ -548,7 +548,7 @@ export function useChapterAi(): {
             outlineItems: appStore.outlineItems.filter((item) => item.volumeId === chapter.volumeId).slice(0, 6),
             plotThreads: appStore.plotThreads,
             workflowDocuments: [],
-            knowledgeDocuments: [],
+            knowledgeDocuments: appStore.projectConstraints,
             selectedText: selectedText.value,
             responseMode: 'freeform',
             responseLength: 'medium',

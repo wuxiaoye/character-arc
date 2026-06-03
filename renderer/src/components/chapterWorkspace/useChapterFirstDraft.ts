@@ -427,6 +427,7 @@ export function useChapterFirstDraft(): {
             outlineChapterSplit,
             outlineItems: outlineItemsForCurrentChapter,
             plotThreads: appStore.plotThreads,
+            knowledgeDocuments: appStore.projectConstraints,
             chapterContent: '',
             targetWordCount,
             userPrompt: `请生成这一章的完整初稿，目标字数约 ${targetWordCount} 字（参考值，优先保证情节自然完整）。如果当前正文为空，就从零起稿；如果当前正文不为空，也按整章重写处理，而不是续写。`,

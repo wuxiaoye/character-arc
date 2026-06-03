@@ -94,6 +94,8 @@ function resolveKnowledgeSourceBaseScore(sourceType: KnowledgeDocumentSourceType
 
 /** 需要知识检索注入的 AI 任务白名单 */
 const KNOWLEDGE_RETRIEVAL_TASKS: ReadonlySet<string> = new Set([
+  'global-assistant',
+  'global-assistant-proposal',
   'chapter-assistant',
   'chapter-first-draft',
   'assistant-action-proposal',

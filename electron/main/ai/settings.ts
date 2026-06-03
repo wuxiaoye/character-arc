@@ -118,6 +118,10 @@ export function resolveMaxTokens(task?: AiTaskPayload): number | undefined {
       return 400
     case 'chapter-first-draft':
       return 4000
+    case 'global-assistant':
+      return 1400
+    case 'global-assistant-proposal':
+      return 1800
     case 'chapter-assistant':
       switch (String(task.context.responseLength ?? 'medium')) {
         case 'short':

@@ -17,11 +17,12 @@ import {
   Users,
   GitMerge
 } from 'lucide-vue-next'
-import { NInput } from 'naive-ui'
+import { NButton, NInput } from 'naive-ui'
 import { resolveNovelLengthLabel } from '@/features/wizard/projectGenres'
 import { useAppStore } from '@/stores/app'
 import NovelWorkflowPanel from '@/components/NovelWorkflowPanel.vue'
 import OverviewPanel from '@/components/OverviewPanel.vue'
+import GlobalAssistantPanel from '@/components/GlobalAssistantPanel.vue'
 import ProjectKnowledgePanel from '@/components/ProjectKnowledgePanel.vue'
 import WorldviewPanel from '@/components/WorldviewPanel.vue'
 import CharactersPanel from '@/components/CharactersPanel.vue'
@@ -39,6 +40,7 @@ const appStore = useAppStore()
 const isSidebarOpen = ref(true)
 // 当前视口宽度，用于响应式判断侧边栏模式
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
+const isGlobalAssistantOpen = ref(false)
 
 // 各面板独立的搜索关键词缓存，切换面板时保留搜索状态
 const panelSearch = reactive<Record<string, string>>({
@@ -131,6 +133,7 @@ const sidebarSummary = computed(
 const isCompactSidebar = computed(() => viewportWidth.value <= 1280)
 // 是否渲染侧边栏中的文字标签（非紧凑模式且侧边栏展开时显示）
 const shouldRenderSidebarLabels = computed(() => isSidebarOpen.value && !isCompactSidebar.value)
+const shouldOverlayAssistant = computed(() => viewportWidth.value <= 1320)
 
 /** 切换侧边栏展开/收起，紧凑模式下不允许切换 */
 function toggleSidebar(): void {
@@ -139,6 +142,14 @@ function toggleSidebar(): void {
   }
 
   isSidebarOpen.value = !isSidebarOpen.value
+}
+
+function toggleGlobalAssistant(): void {
+  isGlobalAssistantOpen.value = !isGlobalAssistantOpen.value
+}
+
+function closeGlobalAssistant(): void {
+  isGlobalAssistantOpen.value = false
 }
 
 /**
@@ -286,41 +297,74 @@ watch(searchKeyword, (value) => {
         </div>
 
         <div class="header-tools">
-            <n-input
-              v-model:value="searchKeyword"
-              class="search-input"
-              placeholder="搜索设定、角色、知识或章节..."
-              clearable
-              size="small"
-            >
-              <template #prefix>
-                <Search :size="14" />
-              </template>
-            </n-input>
-          </div>
+          <n-input
+            v-model:value="searchKeyword"
+            class="search-input"
+            placeholder="搜索设定、角色、知识或章节..."
+            clearable
+            size="small"
+          >
+            <template #prefix>
+              <Search :size="14" />
+            </template>
+          </n-input>
+          <n-button
+            size="small"
+            round
+            :type="isGlobalAssistantOpen ? 'primary' : 'default'"
+            class="assistant-toggle"
+            @click="toggleGlobalAssistant"
+          >
+            全局助手
+          </n-button>
+        </div>
       </header>
 
-      <div class="workspace-body arc-scrollbar">
-        <Transition name="panel-switch" mode="out-in">
-          <!-- 搜索模式下显示全局搜索结果面板 -->
-          <SearchResultsPanel
-            v-if="isSearchMode"
-            key="search-results"
-            :query="normalizedSearch"
-            @open-result="openSearchResult"
-          />
-          <!-- 非搜索模式下根据当前激活的面板渲染对应组件 -->
-          <NovelWorkflowPanel v-else-if="appStore.activePanel === 'workflow'" key="workflow" />
-          <OverviewPanel v-else-if="appStore.activePanel === 'overview'" key="overview" :search-query="normalizedSearch" />
-          <ProjectKnowledgePanel v-else-if="appStore.activePanel === 'project-knowledge'" key="project-knowledge" />
-          <WorldviewPanel v-else-if="appStore.activePanel === 'world'" key="world" :search-query="normalizedSearch" />
-          <CharactersPanel v-else-if="appStore.activePanel === 'characters'" key="characters" :search-query="normalizedSearch" />
-          <RelationsPanel v-else-if="appStore.activePanel === 'relations'" key="relations" :search-query="normalizedSearch" />
-          <InspirationPanel v-else-if="appStore.activePanel === 'inspiration'" key="inspiration" :search-query="normalizedSearch" />
-          <OutlinePanel v-else-if="appStore.activePanel === 'outline'" key="outline" :search-query="normalizedSearch" />
-          <PlotThreadsPanel v-else-if="appStore.activePanel === 'threads'" key="threads" :search-query="normalizedSearch" />
-          <SettingsPanel v-else key="settings" />
-        </Transition>
+      <div class="workspace-body">
+        <div class="workspace-body-shell">
+          <div class="workspace-body-main arc-scrollbar">
+            <Transition name="panel-switch" mode="out-in">
+              <!-- 搜索模式下显示全局搜索结果面板 -->
+              <SearchResultsPanel
+                v-if="isSearchMode"
+                key="search-results"
+                :query="normalizedSearch"
+                @open-result="openSearchResult"
+              />
+              <!-- 非搜索模式下根据当前激活的面板渲染对应组件 -->
+              <NovelWorkflowPanel v-else-if="appStore.activePanel === 'workflow'" key="workflow" />
+              <OverviewPanel v-else-if="appStore.activePanel === 'overview'" key="overview" :search-query="normalizedSearch" />
+              <ProjectKnowledgePanel v-else-if="appStore.activePanel === 'project-knowledge'" key="project-knowledge" />
+              <WorldviewPanel v-else-if="appStore.activePanel === 'world'" key="world" :search-query="normalizedSearch" />
+              <CharactersPanel v-else-if="appStore.activePanel === 'characters'" key="characters" :search-query="normalizedSearch" />
+              <RelationsPanel v-else-if="appStore.activePanel === 'relations'" key="relations" :search-query="normalizedSearch" />
+              <InspirationPanel v-else-if="appStore.activePanel === 'inspiration'" key="inspiration" :search-query="normalizedSearch" />
+              <OutlinePanel v-else-if="appStore.activePanel === 'outline'" key="outline" :search-query="normalizedSearch" />
+              <PlotThreadsPanel v-else-if="appStore.activePanel === 'threads'" key="threads" :search-query="normalizedSearch" />
+              <SettingsPanel v-else key="settings" />
+            </Transition>
+          </div>
+
+          <Transition name="assistant-backdrop">
+            <button
+              v-if="isGlobalAssistantOpen && shouldOverlayAssistant"
+              type="button"
+              class="assistant-backdrop"
+              aria-label="关闭全局助手"
+              @click="closeGlobalAssistant"
+            />
+          </Transition>
+
+          <Transition name="assistant-dock">
+            <GlobalAssistantPanel
+              v-if="isGlobalAssistantOpen"
+              class="workspace-assistant-dock"
+              :class="{ overlay: shouldOverlayAssistant }"
+              :active-view-label="activeViewLabel"
+              @close="closeGlobalAssistant"
+            />
+          </Transition>
+        </div>
       </div>
     </main>
   </section>
@@ -657,6 +701,10 @@ watch(searchKeyword, (value) => {
   min-width: 0;
 }
 
+.assistant-toggle {
+  flex-shrink: 0;
+}
+
 .search-input {
   width: clamp(160px, 18vw, 260px);
 }
@@ -670,9 +718,57 @@ watch(searchKeyword, (value) => {
 
 .workspace-body {
   flex: 1;
-  overflow-y: auto;
   min-width: 0;
+  min-height: 0;
   padding: 24px;
+}
+
+.workspace-body-shell {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  gap: 18px;
+}
+
+.workspace-body-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.assistant-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  border: none;
+  background: rgba(15, 23, 42, 0.16);
+  cursor: pointer;
+}
+
+.workspace-assistant-dock {
+  width: min(420px, 100%);
+  flex-shrink: 0;
+  min-height: 0;
+  border: 1px solid var(--arc-border);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--arc-shadow-md);
+}
+
+.workspace-assistant-dock.overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 12;
+  width: min(440px, calc(100vw - 28px));
+  border-radius: 20px 0 0 20px;
+  border-right: none;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
 }
 
 /* panel-switch transition */
@@ -692,6 +788,29 @@ watch(searchKeyword, (value) => {
 }
 
 .panel-switch-leave-to {
+  opacity: 0;
+}
+
+.assistant-dock-enter-active,
+.assistant-dock-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.assistant-dock-enter-from,
+.assistant-dock-leave-to {
+  opacity: 0;
+  transform: translateX(18px);
+}
+
+.assistant-backdrop-enter-active,
+.assistant-backdrop-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.assistant-backdrop-enter-from,
+.assistant-backdrop-leave-to {
   opacity: 0;
 }
 
@@ -762,6 +881,10 @@ watch(searchKeyword, (value) => {
   .workspace-body {
     padding: 20px;
   }
+
+  .workspace-body-shell {
+    gap: 14px;
+  }
 }
 
 @media (max-width: 960px) {
@@ -784,6 +907,10 @@ watch(searchKeyword, (value) => {
   .workspace-body {
     padding: 16px;
   }
+
+  .workspace-body-shell {
+    gap: 0;
+  }
 }
 
 @media (max-width: 820px) {
@@ -794,6 +921,10 @@ watch(searchKeyword, (value) => {
 
   .workspace-body {
     padding: 14px;
+  }
+
+  .workspace-assistant-dock.overlay {
+    width: min(100%, calc(100vw - 20px));
   }
 }
 </style>

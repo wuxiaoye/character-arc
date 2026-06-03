@@ -47,6 +47,8 @@ import type {
   ImportExportModuleType,
   KnowledgeDocument,
   AiRunRecord,
+  GlobalAssistantProposal,
+  GlobalAssistantSession,
   NovelLength,
   OrganizationEntry,
   OrganizationMembership,
@@ -231,11 +233,22 @@ export const useAppStore = defineStore('app', () => {
   /** 当前项目的章节历史版本列表 */
   const chapterVersions = computed(() => currentWorkspace.value.chapterVersions)
   /** 当前项目的 AI 聊天消息列表 */
-  const messages = computed(() => currentWorkspace.value.messages)
+  const globalAssistantSessions = computed(() => currentWorkspace.value.globalAssistantSessions)
+  const activeGlobalAssistantSessionId = computed(() => currentWorkspace.value.activeGlobalAssistantSessionId)
+  const activeGlobalAssistantSession = computed(
+    () => globalAssistantSessions.value.find((session) => session.id === activeGlobalAssistantSessionId.value)
+      ?? globalAssistantSessions.value[0]
+  )
+  const messages = computed(() => activeGlobalAssistantSession.value?.messages ?? currentWorkspace.value.messages)
   /** 当前项目的剧情线索列表 */
   const plotThreads = computed(() => currentWorkspace.value.plotThreads)
   /** 全局拆书库知识文档（跨项目共享） */
   const knowledgeDocuments = ref<KnowledgeDocument[]>(stored.knowledgeDocuments ?? [])
+  const projectConstraints = computed(() =>
+    knowledgeDocuments.value
+      .filter((document) => document.sourceType === 'canon-fact' && document.sourceLabel === 'global-constraint')
+      .sort((left, right) => (right.updatedAt || '').localeCompare(left.updatedAt || ''))
+  )
   /** 全局拆书库参考作品（跨项目共享） */
   const referenceWorks = ref<ReferenceWorkItem[]>(stored.referenceWorks ?? [])
   /** 当前项目的 AI 运行记录列表 */
@@ -1064,6 +1077,65 @@ export const useAppStore = defineStore('app', () => {
 
     knowledgeDocuments.value = knowledgeDocuments.value.filter((document) => !idSet.has(document.id))
     schedulePersist('fast')
+  }
+
+  function upsertProjectConstraint(payload: {
+    id?: string
+    title: string
+    content: string
+    summary?: string
+    keywords?: string[]
+    scope?: string
+    locked?: boolean
+  }): void {
+    const title = String(payload.title ?? '').trim()
+    const content = String(payload.content ?? '').trim()
+    if (!title || !content) {
+      return
+    }
+
+    const now = new Date().toISOString()
+    const targetId = String(payload.id ?? '').trim()
+    const existing = targetId
+      ? knowledgeDocuments.value.find((document) => document.id === targetId)
+      : null
+
+    const nextDocument: KnowledgeDocument = {
+      id: existing?.id || uniqueId('constraint'),
+      title,
+      sourceType: 'canon-fact',
+      sourceLabel: 'global-constraint',
+      content,
+      summary: String(payload.summary ?? '').trim() || content.slice(0, 180),
+      keywords: Array.isArray(payload.keywords)
+        ? payload.keywords.map((item) => String(item).trim()).filter(Boolean).slice(0, 12)
+        : [],
+      metadata: {
+        ...(existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}),
+        scope: String(payload.scope ?? '').trim() || String(existing?.metadata?.scope ?? '').trim() || 'project',
+        locked: payload.locked ?? existing?.metadata?.locked ?? true
+      },
+      createdAt: existing?.createdAt || now,
+      updatedAt: now
+    }
+
+    if (existing) {
+      knowledgeDocuments.value = knowledgeDocuments.value.map((document) =>
+        document.id === existing.id ? nextDocument : document
+      )
+    } else {
+      knowledgeDocuments.value = [...knowledgeDocuments.value, nextDocument]
+    }
+
+    schedulePersist('fast')
+  }
+
+  function removeProjectConstraint(documentId: string): void {
+    const trimmedId = String(documentId ?? '').trim()
+    if (!trimmedId) {
+      return
+    }
+    removeKnowledgeDocuments([trimmedId])
   }
 
   function upsertReferenceWork(work: ReferenceWorkItem): void {
@@ -2169,35 +2241,209 @@ export const useAppStore = defineStore('app', () => {
 
   const MAX_CHAT_MESSAGES = 100
 
+  function resolveSessionTitle(messages: ChatMessage[]): string {
+    const firstUserMessage = messages.find((item) => item.role === 'user')?.content.trim()
+    if (!firstUserMessage) {
+      return '新对话'
+    }
+
+    return firstUserMessage.length > 24 ? `${firstUserMessage.slice(0, 24)}...` : firstUserMessage
+  }
+
+  function createGlobalAssistantSession(messages: ChatMessage[] = createEmptyWorkspace().messages): GlobalAssistantSession {
+    const now = new Date().toISOString()
+    const clonedMessages = messages.map((item) => ({ ...item }))
+    return {
+      id: uniqueId('global-assistant-session'),
+      title: resolveSessionTitle(clonedMessages),
+      messages: clonedMessages,
+      proposal: null,
+      lastProposalPrompt: '',
+      lastAssistantReply: '',
+      createdAt: now,
+      updatedAt: now
+    }
+  }
+
+  function syncActiveGlobalAssistantSession(
+    workspace: ProjectWorkspaceData,
+    updater: (session: GlobalAssistantSession) => GlobalAssistantSession
+  ): ProjectWorkspaceData {
+    const sessions = workspace.globalAssistantSessions.length
+      ? workspace.globalAssistantSessions
+      : [createGlobalAssistantSession(workspace.messages)]
+    const activeSession = sessions.find((session) => session.id === workspace.activeGlobalAssistantSessionId) ?? sessions[0]
+    const nextActiveSession = updater(activeSession)
+    const nextSessions = sessions.map((session) => (
+      session.id === nextActiveSession.id ? nextActiveSession : session
+    ))
+
+    return {
+      ...workspace,
+      messages: nextActiveSession.messages,
+      globalAssistantSessions: nextSessions,
+      activeGlobalAssistantSessionId: nextActiveSession.id
+    }
+  }
+
   // ── AI 聊天消息 ──
   /** 添加用户消息到聊天记录 */
   function pushUserMessage(content: string): void {
-    updateCurrentWorkspace((workspace) => ({
-      ...workspace,
-      messages: [
-        ...workspace.messages.slice(-MAX_CHAT_MESSAGES + 1),
+    updateCurrentWorkspace((workspace) => syncActiveGlobalAssistantSession(workspace, (session) => {
+      const now = new Date().toISOString()
+      const nextMessages: ChatMessage[] = [
+        ...session.messages.slice(-MAX_CHAT_MESSAGES + 1),
         {
           id: uniqueId('msg'),
           role: 'user',
           content
         }
       ]
+
+      return {
+        ...session,
+        title: resolveSessionTitle(nextMessages),
+        messages: nextMessages,
+        updatedAt: now
+      }
     }))
     schedulePersist('fast')
   }
 
   function pushAssistantMessage(content: string): void {
-    updateCurrentWorkspace((workspace) => ({
-      ...workspace,
-      messages: [
-        ...workspace.messages.slice(-MAX_CHAT_MESSAGES + 1),
+    updateCurrentWorkspace((workspace) => syncActiveGlobalAssistantSession(workspace, (session) => {
+      const now = new Date().toISOString()
+      const nextMessages: ChatMessage[] = [
+        ...session.messages.slice(-MAX_CHAT_MESSAGES + 1),
         {
           id: uniqueId('msg'),
           role: 'assistant',
           content
         }
       ]
+
+      return {
+        ...session,
+        title: resolveSessionTitle(nextMessages),
+        messages: nextMessages,
+        updatedAt: now
+      }
     }))
+    schedulePersist('fast')
+  }
+
+  function pushStreamingAssistantMessage(): string {
+    const messageId = uniqueId('msg')
+    updateCurrentWorkspace((workspace) => syncActiveGlobalAssistantSession(workspace, (session) => {
+      const now = new Date().toISOString()
+      const nextMessages: ChatMessage[] = [
+        ...session.messages.slice(-MAX_CHAT_MESSAGES + 1),
+        {
+          id: messageId,
+          role: 'assistant',
+          content: ''
+        }
+      ]
+
+      return {
+        ...session,
+        title: resolveSessionTitle(nextMessages),
+        messages: nextMessages,
+        updatedAt: now
+      }
+    }))
+    schedulePersist('fast')
+    return messageId
+  }
+
+  function updateAssistantMessageContent(messageId: string, updater: (content: string) => string): void {
+    updateCurrentWorkspace((workspace) => syncActiveGlobalAssistantSession(workspace, (session) => {
+      const now = new Date().toISOString()
+      const nextMessages = session.messages.map((item) => (
+        item.id === messageId
+          ? { ...item, content: updater(item.content) }
+          : item
+      ))
+
+      return {
+        ...session,
+        title: resolveSessionTitle(nextMessages),
+        messages: nextMessages,
+        updatedAt: now
+      }
+    }))
+    schedulePersist('fast')
+  }
+
+  function updateAssistantSessionProposal(payload: {
+    proposal?: GlobalAssistantProposal | null
+    lastProposalPrompt?: string
+    lastAssistantReply?: string
+  }): void {
+    updateCurrentWorkspace((workspace) => syncActiveGlobalAssistantSession(workspace, (session) => ({
+      ...session,
+      proposal: payload.proposal === undefined ? session.proposal : payload.proposal,
+      lastProposalPrompt: payload.lastProposalPrompt === undefined ? session.lastProposalPrompt : payload.lastProposalPrompt,
+      lastAssistantReply: payload.lastAssistantReply === undefined ? session.lastAssistantReply : payload.lastAssistantReply,
+      updatedAt: new Date().toISOString()
+    })))
+    schedulePersist('fast')
+  }
+
+  function clearAssistantMessages(): void {
+    updateCurrentWorkspace((workspace) => syncActiveGlobalAssistantSession(workspace, (session) => {
+      const messages = createEmptyWorkspace().messages
+      return {
+        ...session,
+        title: resolveSessionTitle(messages),
+        messages,
+        updatedAt: new Date().toISOString()
+      }
+    }))
+    schedulePersist('fast')
+  }
+
+  function createAssistantSession(): void {
+    const nextSession = createGlobalAssistantSession()
+    updateCurrentWorkspace((workspace) => ({
+      ...workspace,
+      messages: nextSession.messages,
+      globalAssistantSessions: [nextSession, ...workspace.globalAssistantSessions],
+      activeGlobalAssistantSessionId: nextSession.id
+    }))
+    schedulePersist('fast')
+  }
+
+  function switchAssistantSession(sessionId: string): void {
+    updateCurrentWorkspace((workspace) => {
+      const target = workspace.globalAssistantSessions.find((session) => session.id === sessionId)
+      if (!target) {
+        return workspace
+      }
+
+      return {
+        ...workspace,
+        messages: target.messages,
+        activeGlobalAssistantSessionId: target.id
+      }
+    })
+    schedulePersist('fast')
+  }
+
+  function deleteAssistantSession(sessionId: string): void {
+    updateCurrentWorkspace((workspace) => {
+      const nextSessions = workspace.globalAssistantSessions.filter((session) => session.id !== sessionId)
+      const fallbackSession = nextSessions.find((session) => session.id === workspace.activeGlobalAssistantSessionId)
+        ?? nextSessions[0]
+        ?? createGlobalAssistantSession()
+
+      return {
+        ...workspace,
+        messages: fallbackSession.messages,
+        globalAssistantSessions: nextSessions.length ? nextSessions : [fallbackSession],
+        activeGlobalAssistantSessionId: fallbackSession.id
+      }
+    })
     schedulePersist('fast')
   }
 
@@ -2438,6 +2684,7 @@ export const useAppStore = defineStore('app', () => {
     autoSaveIntervalLabel,
     aiRuns,
     appSettings,
+    activeGlobalAssistantSessionId,
     coverWorkbenchHistory,
     backToProjects,
     backToWorkbench,
@@ -2462,10 +2709,12 @@ export const useAppStore = defineStore('app', () => {
     createChapter,
     createChapterFromOutlineItem,
     chapterVolumeGroups,
+    activeGlobalAssistantSession,
     currentTheme,
     currentProject,
     currentChapterSelection,
     currentView,
+    globalAssistantSessions,
     hasHydrated,
     initialize,
     isLiveAutoSave,
@@ -2502,7 +2751,11 @@ export const useAppStore = defineStore('app', () => {
     pendingChapterInsertion,
     plotThreads,
     projects,
+    clearAssistantMessages,
+    createAssistantSession,
+    deleteAssistantSession,
     pushAssistantMessage,
+    pushStreamingAssistantMessage,
     pushUserMessage,
     restoreChapterVersion,
     saveCurrentChapterVersion,
@@ -2512,6 +2765,7 @@ export const useAppStore = defineStore('app', () => {
     selectedChapterVolume,
     selectedProjectId,
     setPanel,
+    switchAssistantSession,
     setTheme,
     theme,
     updateAppSetting,
@@ -2520,6 +2774,8 @@ export const useAppStore = defineStore('app', () => {
     addAiProfile,
     deleteAiProfile,
     updateAiProfile,
+    updateAssistantMessageContent,
+    updateAssistantSessionProposal,
     updateCoverWorkbenchHistory,
     updateProject,
     activeWorkflowVolumeId,
@@ -2527,6 +2783,9 @@ export const useAppStore = defineStore('app', () => {
     setActiveWorkflowVolumeId,
     mergeKnowledgeDocuments,
     removeKnowledgeDocuments,
+    projectConstraints,
+    upsertProjectConstraint,
+    removeProjectConstraint,
     referenceWorks,
     upsertReferenceWork,
     removeReferenceWork,

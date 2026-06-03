@@ -8,6 +8,30 @@ function useStreamFallback(settings: AppSettings): boolean {
   return settings.provider === 'anthropic'
 }
 
+function useOpenAIChatCompatibility(settings: AppSettings): boolean {
+  const provider = settings.provider?.trim().toLowerCase() || ''
+  const model = settings.model?.trim().toLowerCase() || ''
+  if (provider === 'openai' || provider === 'anthropic') {
+    return false
+  }
+  return /^(gpt-5|o1|o3|o4-mini)/.test(model)
+}
+
+type AiProviderOptions = Parameters<typeof generateText>[0]['providerOptions']
+
+function resolveProviderOptions(settings: AppSettings): AiProviderOptions | undefined {
+  if (!useOpenAIChatCompatibility(settings)) {
+    return undefined
+  }
+
+  return {
+    openai: {
+      forceReasoning: false,
+      systemMessageMode: 'system'
+    }
+  }
+}
+
 export type AiGenerateOptions = {
   schema?: ZodTypeAny
 }
@@ -67,6 +91,7 @@ export async function aiGenerateTextWithUsage(
 ): Promise<AiTextGenerationResult> {
   const system = buildSystemPrompt(settings, prompt.system)
   const canUseNativeStructuredOutput = providerSupportsNativeStructuredOutput(settings)
+  const providerOptions = resolveProviderOptions(settings)
 
   if (options?.schema && canUseNativeStructuredOutput) {
     if (useStreamFallback(settings)) {
@@ -76,6 +101,7 @@ export async function aiGenerateTextWithUsage(
         prompt: prompt.user,
         schema: options.schema,
         maxOutputTokens: maxTokens,
+        providerOptions,
         abortSignal: signal
       })
       let full = ''
@@ -93,6 +119,7 @@ export async function aiGenerateTextWithUsage(
       prompt: prompt.user,
       schema: options.schema,
       maxOutputTokens: maxTokens,
+      providerOptions,
       abortSignal: signal
     })
     return {
@@ -107,6 +134,7 @@ export async function aiGenerateTextWithUsage(
       system,
       prompt: prompt.user,
       maxOutputTokens: maxTokens,
+      providerOptions,
       abortSignal: signal
     })
     let full = ''
@@ -124,6 +152,7 @@ export async function aiGenerateTextWithUsage(
     system,
     prompt: prompt.user,
     maxOutputTokens: maxTokens,
+    providerOptions,
     abortSignal: signal
   })
   return {
@@ -150,11 +179,13 @@ export async function aiStreamTextWithUsage(
   signal: AbortSignal,
   maxTokens?: number
 ): Promise<AiTextGenerationResult> {
+  const providerOptions = resolveProviderOptions(settings)
   const result = streamText({
     model: createModel(settings),
     system: buildSystemPrompt(settings, prompt.system),
     prompt: prompt.user,
     maxOutputTokens: maxTokens,
+    providerOptions,
     abortSignal: signal
   })
   let full = ''
@@ -186,6 +217,7 @@ export async function aiStreamObjectWithUsage(
     prompt: prompt.user,
     schema,
     maxOutputTokens: maxTokens,
+    providerOptions: resolveProviderOptions(settings),
     abortSignal: signal
   })
 

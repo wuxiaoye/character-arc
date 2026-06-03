@@ -5,6 +5,8 @@ import type {
   ChatMessage,
   CharacterRelationship,
   CharacterCard,
+  GlobalAssistantProposal,
+  GlobalAssistantSession,
   InspirationEntry,
   OutlineItemStatus,
   OrganizationEntry,
@@ -130,7 +132,7 @@ export function createInitialMessages(): ChatMessage[] {
     {
       id: `msg-${Date.now()}-welcome`,
       role: 'assistant',
-      content: '我是你的创作助理。已读取世界观和当前章节内容。需要我帮你润色段落，或者提供剧情建议吗？'
+      content: '我是你的项目级创作助理。我会围绕当前项目的世界观、人物卡、大纲和知识沉淀，协助你录入、补完和修正全局设定。'
     }
   ]
 }
@@ -138,6 +140,79 @@ export function createInitialMessages(): ChatMessage[] {
 // 浅拷贝消息列表，空列表时回退到初始欢迎消息
 function cloneMessages(messages?: ChatMessage[]): ChatMessage[] {
   return messages?.length ? messages.map((message) => ({ ...message })) : createInitialMessages()
+}
+
+function normalizeGlobalAssistantProposal(proposal?: GlobalAssistantProposal | null): GlobalAssistantProposal | null {
+  if (!proposal || typeof proposal !== 'object') {
+    return null
+  }
+
+  return {
+    summary: String(proposal.summary ?? '').trim(),
+    constraintCreates: Array.isArray(proposal.constraintCreates) ? proposal.constraintCreates : [],
+    worldviewCreates: Array.isArray(proposal.worldviewCreates) ? proposal.worldviewCreates : [],
+    worldviewUpdates: Array.isArray(proposal.worldviewUpdates) ? proposal.worldviewUpdates : [],
+    characterCreates: Array.isArray(proposal.characterCreates) ? proposal.characterCreates : [],
+    characterUpdates: Array.isArray(proposal.characterUpdates) ? proposal.characterUpdates : [],
+    outlineCreates: Array.isArray(proposal.outlineCreates) ? proposal.outlineCreates : [],
+    outlineUpdates: Array.isArray(proposal.outlineUpdates) ? proposal.outlineUpdates : [],
+    notes: Array.isArray(proposal.notes) ? proposal.notes : []
+  }
+}
+
+function createGlobalAssistantSession(messages?: ChatMessage[]): GlobalAssistantSession {
+  const now = new Date().toISOString()
+  return {
+    id: `global-assistant-session-${Date.now()}`,
+    title: resolveGlobalAssistantSessionTitle(messages ?? []),
+    messages: cloneMessages(messages),
+    proposal: null,
+    lastProposalPrompt: '',
+    lastAssistantReply: '',
+    createdAt: now,
+    updatedAt: now
+  }
+}
+
+function resolveGlobalAssistantSessionTitle(messages: ChatMessage[]): string {
+  const firstUserMessage = messages.find((message) => message.role === 'user')?.content.trim()
+  if (!firstUserMessage) {
+    return '新对话'
+  }
+
+  return firstUserMessage.length > 24 ? `${firstUserMessage.slice(0, 24)}...` : firstUserMessage
+}
+
+function cloneGlobalAssistantSessions(
+  sessions?: GlobalAssistantSession[],
+  legacyMessages?: ChatMessage[],
+  activeSessionId?: string
+): { sessions: GlobalAssistantSession[]; activeSessionId: string; messages: ChatMessage[] } {
+  const normalizedSessions = sessions?.length
+    ? sessions.map((session) => {
+        const messages = cloneMessages(session.messages)
+        const createdAt = toIsoTimestamp(session.createdAt)
+        return {
+          ...session,
+          id: session.id || `global-assistant-session-${Date.now()}`,
+          title: session.title?.trim() || resolveGlobalAssistantSessionTitle(messages),
+          messages,
+          proposal: normalizeGlobalAssistantProposal(session.proposal),
+          lastProposalPrompt: String(session.lastProposalPrompt ?? ''),
+          lastAssistantReply: String(session.lastAssistantReply ?? ''),
+          createdAt,
+          updatedAt: toIsoTimestamp(session.updatedAt || session.createdAt)
+        }
+      })
+    : [createGlobalAssistantSession(legacyMessages)]
+
+  const active = normalizedSessions.find((session) => session.id === activeSessionId) ?? normalizedSessions[0]
+
+  return {
+    sessions: normalizedSessions,
+    activeSessionId: active.id,
+    messages: active.messages
+  }
 }
 
 // 浅拷贝章节版本列表
@@ -233,6 +308,11 @@ export function createEmptyWorkspace(overrides?: Partial<ProjectWorkspaceData>):
     ...volume,
     workflowDocuments: normalizeVolumeWorkflowDocuments(volume)
   }))
+  const assistantSessionState = cloneGlobalAssistantSessions(
+    overrides?.globalAssistantSessions,
+    overrides?.messages,
+    overrides?.activeGlobalAssistantSessionId
+  )
 
   return {
     worldviewEntries: cloneWorldviewEntries(overrides?.worldviewEntries),
@@ -245,7 +325,9 @@ export function createEmptyWorkspace(overrides?: Partial<ProjectWorkspaceData>):
     outlineItems: cloneOutlineItems(volumeState.outlineItems),
     chapters: cloneChapters(volumeState.chapters),
     chapterVersions: cloneChapterVersions(overrides?.chapterVersions),
-    messages: cloneMessages(overrides?.messages),
+    messages: assistantSessionState.messages,
+    globalAssistantSessions: assistantSessionState.sessions,
+    activeGlobalAssistantSessionId: assistantSessionState.activeSessionId,
     aiRuns: cloneAiRuns(overrides?.aiRuns),
     workflowDocuments: normalizeWorkflowDocuments(overrides?.workflowDocuments as WorkflowDocument[] | undefined),
     plotThreads: Array.isArray(overrides?.plotThreads) ? (overrides.plotThreads as PlotThread[]) : []
@@ -284,6 +366,11 @@ export function normalizeWorkspace(
       index === 0 ? projectLevelDocs : undefined
     )
   }))
+  const assistantSessionState = cloneGlobalAssistantSessions(
+    workspace.globalAssistantSessions,
+    workspace.messages,
+    workspace.activeGlobalAssistantSessionId
+  )
 
   return {
     worldviewEntries: cloneWorldviewEntries(workspace.worldviewEntries),
@@ -296,7 +383,9 @@ export function normalizeWorkspace(
     outlineItems: cloneOutlineItems(volumeState.outlineItems),
     chapters: cloneChapters(volumeState.chapters),
     chapterVersions: cloneChapterVersions(workspace.chapterVersions),
-    messages: cloneMessages(workspace.messages),
+    messages: assistantSessionState.messages,
+    globalAssistantSessions: assistantSessionState.sessions,
+    activeGlobalAssistantSessionId: assistantSessionState.activeSessionId,
     aiRuns: cloneAiRuns(workspace.aiRuns),
     workflowDocuments: normalizeWorkflowDocuments(projectLevelDocs),
     plotThreads: Array.isArray(workspace.plotThreads) ? (workspace.plotThreads as PlotThread[]) : []

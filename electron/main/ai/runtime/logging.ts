@@ -150,6 +150,7 @@ export function logError(
   const skillLine = extra?.usedSkills?.length ? `技能: ${extra.usedSkills.join(', ')}` : ''
   const message = error instanceof Error ? error.message : String(error)
   const stack = error instanceof Error && error.stack ? error.stack : ''
+  const details = formatErrorDetails(error)
   const content = [
     '',
     `===== AI 错误 ${label} =====`,
@@ -161,11 +162,50 @@ export function logError(
     skillLine,
     '--- ERROR ---',
     message,
+    details ? '--- DETAILS ---' : '',
+    details,
     stack ? '--- STACK ---' : '',
     stack,
     `===== END AI 错误 ${label} =====`
   ].filter(Boolean).join('\n')
 
-  console.error(`[ai] error: ${label} | task=${taskName} | provider=${provider} | model=${model} | ${durationMs}ms | ${message}`)
+  console.error(`[ai] error: ${label} | task=${taskName} | provider=${provider} | model=${model} | ${durationMs}ms | ${message}${details ? ` | ${details}` : ''}`)
   void writePromptLogFile(content)
+}
+
+function formatErrorDetails(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return ''
+  }
+
+  const record = error as Record<string, unknown>
+  const lines: string[] = []
+  const statusCode = record.statusCode
+  if (typeof statusCode === 'number' || typeof statusCode === 'string') {
+    lines.push(`statusCode: ${statusCode}`)
+  }
+
+  const responseBody = record.responseBody
+  if (typeof responseBody === 'string' && responseBody.trim()) {
+    lines.push(`responseBody: ${responseBody.slice(0, 1200)}`)
+  }
+
+  const data = record.data
+  if (data !== undefined) {
+    try {
+      lines.push(`data: ${JSON.stringify(data).slice(0, 1200)}`)
+    } catch {
+      lines.push(`data: ${String(data).slice(0, 1200)}`)
+    }
+  }
+
+  const cause = record.cause
+  if (cause && typeof cause === 'object' && cause !== error) {
+    const causeDetails = formatErrorDetails(cause)
+    if (causeDetails) {
+      lines.push(`cause: ${causeDetails}`)
+    }
+  }
+
+  return lines.join('\n')
 }

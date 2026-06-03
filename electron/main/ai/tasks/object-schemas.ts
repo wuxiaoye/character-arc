@@ -50,6 +50,48 @@ const taskObjectSchemas: Partial<Record<AiTaskName, z.ZodTypeAny>> = {
     requiresConfirmation: z.boolean(),
     payload: recordField
   }),
+  'global-assistant-proposal': z.object({
+    summary: stringField,
+    constraintCreates: z.array(z.object({
+      title: stringField,
+      content: stringField,
+      scope: stringField,
+      reason: stringField,
+      keywords: stringList
+    })),
+    worldviewCreates: z.array(worldviewEntrySchema),
+    worldviewUpdates: z.array(z.object({
+      matchTitle: stringField,
+      reason: stringField,
+      type: stringField.optional(),
+      title: stringField.optional(),
+      content: stringField.optional()
+    })),
+    characterCreates: z.array(z.object({
+      name: stringField,
+      role: stringField,
+      description: stringField,
+      tags: stringList
+    })),
+    characterUpdates: z.array(z.object({
+      matchName: stringField,
+      reason: stringField,
+      name: stringField.optional(),
+      role: stringField.optional(),
+      description: stringField.optional(),
+      tags: stringList.optional()
+    })),
+    outlineCreates: z.array(outlineItemSchema),
+    outlineUpdates: z.array(z.object({
+      matchTitle: stringField,
+      reason: stringField,
+      title: stringField.optional(),
+      wordTarget: stringField.optional(),
+      conflict: stringField.optional(),
+      summary: stringField.optional()
+    })),
+    notes: stringList
+  }),
   'chapter-audit': z.object({
     audit: z.object({
       pass: z.boolean(),

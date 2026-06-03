@@ -54,6 +54,8 @@ export type AiTaskName =
   | 'workflow-documents'
   | 'assistant-intent'
   | 'assistant-action-proposal'
+  | 'global-assistant'
+  | 'global-assistant-proposal'
   | 'chapter-assistant'
   | 'chapter-first-draft'
   | 'chapter-summarize'
@@ -206,6 +208,49 @@ export type OutlineBatchResult = {
 /** 章节助手（对话）的回复结果 */
 export type ChapterAssistantResult = {
   content: string
+}
+
+/** 项目级全局助手回复结果 */
+export type GlobalAssistantResult = {
+  content: string
+}
+
+export type GlobalAssistantProposalResult = {
+  summary: string
+  constraintCreates: Array<{
+    title: string
+    content: string
+    scope: string
+    reason: string
+    keywords: string[]
+  }>
+  worldviewCreates: WorldviewResult[]
+  worldviewUpdates: Array<{
+    matchTitle: string
+    reason: string
+    type?: string
+    title?: string
+    content?: string
+  }>
+  characterCreates: CharacterResult[]
+  characterUpdates: Array<{
+    matchName: string
+    reason: string
+    name?: string
+    role?: string
+    description?: string
+    tags?: string[]
+  }>
+  outlineCreates: OutlineResult[]
+  outlineUpdates: Array<{
+    matchTitle: string
+    reason: string
+    title?: string
+    wordTarget?: string
+    conflict?: string
+    summary?: string
+  }>
+  notes: string[]
 }
 
 /** 助手意图识别结果：普通聊天或操作提案 */
@@ -370,6 +415,8 @@ export type AiTaskResult =
   | OutlineResult
   | OutlineBatchResult
   | ChapterAssistantResult
+  | GlobalAssistantResult
+  | GlobalAssistantProposalResult
   | AssistantIntentResult
   | AssistantActionProposalResult
   | ProjectBootstrapResult

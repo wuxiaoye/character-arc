@@ -41,6 +41,8 @@ const TASK_DEFAULT_CAPABILITIES: Record<AiTaskName, PromptCapabilityId[]> = {
   'workflow-documents': ['settings', 'workflow', 'import-export'],
   'assistant-intent': ['settings', 'chapters', 'analysis', 'versioning'],
   'assistant-action-proposal': ['settings', 'chapters', 'worldview', 'characters', 'relations', 'outline', 'inspiration', 'writing-style', 'project-skills', 'versioning'],
+  'global-assistant': ['settings', 'workflow', 'worldview', 'characters', 'relations', 'outline', 'inspiration', 'analysis', 'writing-style', 'project-skills', 'versioning'],
+  'global-assistant-proposal': ['settings', 'workflow', 'worldview', 'characters', 'relations', 'outline', 'inspiration', 'analysis', 'writing-style', 'project-skills', 'versioning'],
   'chapter-assistant': ['settings', 'chapters', 'worldview', 'characters', 'relations', 'outline', 'inspiration', 'writing-style', 'project-skills', 'versioning'],
   'chapter-first-draft': ['settings', 'chapters', 'worldview', 'characters', 'relations', 'outline', 'inspiration', 'writing-style', 'project-skills', 'versioning'],
   'project-bootstrap': ['settings', 'worldview', 'outline', 'characters', 'writing-style'],

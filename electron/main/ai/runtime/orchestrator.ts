@@ -210,6 +210,7 @@ export async function streamAiTask(
 ): Promise<AiTaskResponse> {
   if (
     task.task !== 'chapter-assistant'
+    && task.task !== 'global-assistant'
     && task.task !== 'chapter-first-draft'
     && task.task !== 'chapter-memo'
     && task.task !== 'chapter-audit'

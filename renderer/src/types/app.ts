@@ -722,6 +722,8 @@ export interface ProjectWorkspaceData {
   chapterVersions: ChapterVersion[]
   /** AI 聊天消息列表 */
   messages: ChatMessage[]
+  globalAssistantSessions: GlobalAssistantSession[]
+  activeGlobalAssistantSessionId: string
   /** AI 运行记录列表 */
   aiRuns: AiRunRecord[]
   /** 项目固定流程文件 */
@@ -824,4 +826,67 @@ export interface CoverWorkbenchHistoryItem {
   targetPlatform: string
   authorName: string
   extraNotes: string
+}
+
+export interface GlobalAssistantSession {
+  id: string
+  title: string
+  messages: ChatMessage[]
+  proposal?: GlobalAssistantProposal | null
+  lastProposalPrompt?: string
+  lastAssistantReply?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface GlobalAssistantProposal {
+  summary: string
+  constraintCreates: Array<{
+    title: string
+    content: string
+    scope: string
+    reason: string
+    keywords: string[]
+  }>
+  worldviewCreates: Array<{
+    type: string
+    title: string
+    content: string
+  }>
+  worldviewUpdates: Array<{
+    matchTitle: string
+    reason: string
+    type?: string
+    title?: string
+    content?: string
+  }>
+  characterCreates: Array<{
+    name: string
+    role: string
+    description: string
+    tags: string[]
+  }>
+  characterUpdates: Array<{
+    matchName: string
+    reason: string
+    name?: string
+    role?: string
+    description?: string
+    tags?: string[]
+  }>
+  outlineCreates: Array<{
+    title: string
+    wordTarget: string
+    conflict: string
+    summary: string
+  }>
+  outlineUpdates: Array<{
+    matchTitle: string
+    reason: string
+    title?: string
+    wordTarget?: string
+    conflict?: string
+    summary?: string
+  }>
+  notes: string[]
 }

@@ -420,6 +420,8 @@ export function normalizeProjectWorkspaceData(
     chapters: normalized.chapters.map(normalizeChapterDraft),
     chapterVersions: normalized.chapterVersions.map(normalizeChapterVersion),
     messages: normalized.messages,
+    globalAssistantSessions: normalized.globalAssistantSessions,
+    activeGlobalAssistantSessionId: normalized.activeGlobalAssistantSessionId,
     aiRuns: normalizeAiRuns(normalized.aiRuns),
     workflowDocuments: normalizeWorkflowDocuments(normalized.workflowDocuments),
     plotThreads: normalized.plotThreads

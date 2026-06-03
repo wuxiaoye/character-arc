@@ -11,6 +11,8 @@ import chapterAnalysis from './chapter-analysis'
 import inspirationPack from './inspiration-pack'
 import assistantIntent from './assistant-intent'
 import assistantActionProposal from './assistant-action-proposal'
+import globalAssistant from './global-assistant'
+import globalAssistantProposal from './global-assistant-proposal'
 import chapterAssistant from './chapter-assistant'
 import chapterFirstDraft from './chapter-first-draft'
 import chapterSummarize from './chapter-summarize'
@@ -54,6 +56,8 @@ register(chapterAnalysis)
 register(inspirationPack)
 register(assistantIntent)
 register(assistantActionProposal)
+register(globalAssistant)
+register(globalAssistantProposal)
 register(chapterAssistant)
 register(chapterFirstDraft)
 register(chapterSummarize)

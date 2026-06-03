@@ -116,6 +116,7 @@ export type ChapterFirstDraftContextInput = {
     description: string
     content: string
   }>
+  knowledgeDocuments?: KnowledgeDocument[]
   chapterContent: string
   targetWordCount: number
   userPrompt: string
@@ -323,6 +324,14 @@ export function buildChapterFirstDraftContext(input: ChapterFirstDraftContextInp
       conflict: item.conflict,
       isCurrent: input.currentOutlineItem ? item.id === input.currentOutlineItem.id : false,
       summary: item.summary
+    })),
+    knowledgeDocuments: (input.knowledgeDocuments ?? []).slice(0, 8).map((document) => ({
+      id: document.id,
+      title: document.title,
+      sourceType: document.sourceType,
+      sourceLabel: document.sourceLabel,
+      summary: document.summary,
+      keywords: document.keywords
     })),
     projectSkills: input.projectSkills ?? [],
     userPrompt: input.userPrompt,
