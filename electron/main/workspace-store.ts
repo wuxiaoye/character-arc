@@ -344,6 +344,7 @@ export async function ensureWorkspaceDb(): Promise<DatabaseSync> {
   `)
 
   ensureAppSettingsColumns(db)
+  ensureAiRunColumns(db)
   ensureChapterColumns(db)
   ensureProjectColumns(db)
   ensureProjectScopedColumns(db)
@@ -399,9 +400,6 @@ function ensureAppSettingsColumns(db: DatabaseSync): void {
   if (!columnNames.has('image_model')) {
     db.exec(`ALTER TABLE app_settings ADD COLUMN image_model TEXT NOT NULL DEFAULT '';`)
   }
-  if (!columnNames.has('tool_calls_json')) {
-    db.exec(`ALTER TABLE ai_runs ADD COLUMN tool_calls_json TEXT NOT NULL DEFAULT '[]';`)
-  }
 
   if (!columnNames.has('image_api_key')) {
     db.exec(`ALTER TABLE app_settings ADD COLUMN image_api_key TEXT NOT NULL DEFAULT '';`)
@@ -409,6 +407,15 @@ function ensureAppSettingsColumns(db: DatabaseSync): void {
 
   if (!columnNames.has('image_base_url')) {
     db.exec(`ALTER TABLE app_settings ADD COLUMN image_base_url TEXT NOT NULL DEFAULT '';`)
+  }
+}
+
+function ensureAiRunColumns(db: DatabaseSync): void {
+  const columns = db.prepare(`PRAGMA table_info('ai_runs')`).all() as Array<{ name: string }>
+  const columnNames = new Set(columns.map((column) => column.name))
+
+  if (!columnNames.has('tool_calls_json')) {
+    db.exec(`ALTER TABLE ai_runs ADD COLUMN tool_calls_json TEXT NOT NULL DEFAULT '[]';`)
   }
 }
 
