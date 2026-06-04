@@ -78,6 +78,13 @@ export type WorkspaceAiRunRecord = {
     cachedInputTokens?: number
   }
   usedKnowledge: WorkspaceAiRunKnowledgeItem[]
+  toolCalls?: Array<{
+    tool: string
+    args: Record<string, unknown>
+    durationMs: number
+    status: 'ok' | 'error'
+    error?: string
+  }>
   repairTriggered: boolean
   error: string
   responsePreview: string

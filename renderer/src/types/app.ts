@@ -623,6 +623,14 @@ export interface AiRunRecord {
   usage?: AiRunUsage
   /** 本次使用的知识项 */
   usedKnowledge: AiRunKnowledgeItem[]
+  /** agent 模式下的工具调用轨迹 */
+  toolCalls?: Array<{
+    tool: string
+    args: Record<string, unknown>
+    durationMs: number
+    status: 'ok' | 'error'
+    error?: string
+  }>
   /** 是否触发结构化修复 */
   repairTriggered: boolean
   /** 错误摘要 */

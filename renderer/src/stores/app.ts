@@ -1220,7 +1220,16 @@ export const useAppStore = defineStore('app', () => {
                     : []
                 }
               })
-            : []
+            : [],
+          toolCalls: Array.isArray(record.toolCalls)
+            ? record.toolCalls.map((item) => ({
+                tool: String(item.tool ?? '').trim(),
+                args: item.args && typeof item.args === 'object' ? item.args as Record<string, unknown> : {},
+                durationMs: Number.isFinite(item.durationMs) ? Math.max(0, Number(item.durationMs)) : 0,
+                status: (item.status === 'error' ? 'error' : 'ok') as 'ok' | 'error',
+                error: String(item.error ?? '').trim() || undefined
+              }))
+            : undefined
         }
       ].slice(-200)
     }))

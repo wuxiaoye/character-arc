@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 import {
   type KnowledgeDocumentSourceType,
   type LegacyWorkspacePayload,
+  type WorkspaceAiRunRecord,
   type WorkspaceAiRunKnowledgeItem,
   type WorkspaceAiRunStatus,
   type WorkspacePayload,
@@ -243,6 +244,7 @@ export async function ensureWorkspaceDb(): Promise<DatabaseSync> {
       finished_at TEXT NOT NULL DEFAULT '',
       duration_ms INTEGER,
       used_knowledge_json TEXT NOT NULL DEFAULT '[]',
+      tool_calls_json TEXT NOT NULL DEFAULT '[]',
       repair_triggered INTEGER NOT NULL DEFAULT 0,
       error TEXT NOT NULL DEFAULT '',
       response_preview TEXT NOT NULL DEFAULT '',
@@ -396,6 +398,9 @@ function ensureAppSettingsColumns(db: DatabaseSync): void {
 
   if (!columnNames.has('image_model')) {
     db.exec(`ALTER TABLE app_settings ADD COLUMN image_model TEXT NOT NULL DEFAULT '';`)
+  }
+  if (!columnNames.has('tool_calls_json')) {
+    db.exec(`ALTER TABLE ai_runs ADD COLUMN tool_calls_json TEXT NOT NULL DEFAULT '[]';`)
   }
 
   if (!columnNames.has('image_api_key')) {
@@ -891,7 +896,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
   const aiRuns = db.prepare(`
     SELECT project_id AS projectId, id, chapter_id AS chapterId, task, provider, model, status,
       started_at AS startedAt, finished_at AS finishedAt, duration_ms AS durationMs,
-      used_knowledge_json AS usedKnowledgeJson, repair_triggered AS repairTriggered,
+      used_knowledge_json AS usedKnowledgeJson, tool_calls_json AS toolCallsJson, repair_triggered AS repairTriggered,
       error, response_preview AS responsePreview
     FROM ai_runs
     ORDER BY project_id ASC, sort_order ASC
@@ -907,6 +912,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
     finishedAt: (row.finishedAt as string) || undefined,
     durationMs: typeof row.durationMs === 'number' ? row.durationMs : undefined,
     usedKnowledge: parseJson(row.usedKnowledgeJson as string, [] as WorkspaceAiRunKnowledgeItem[]),
+    toolCalls: parseJson(row.toolCallsJson as string, [] as NonNullable<WorkspaceAiRunRecord['toolCalls']>),
     repairTriggered: Boolean(row.repairTriggered),
     error: row.error as string,
     responsePreview: row.responsePreview as string
@@ -1242,8 +1248,8 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
     `)
 
     const insertAiRun = db.prepare(`
-      INSERT OR REPLACE INTO ai_runs (id, project_id, chapter_id, task, provider, model, status, started_at, finished_at, duration_ms, used_knowledge_json, repair_triggered, error, response_preview, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO ai_runs (id, project_id, chapter_id, task, provider, model, status, started_at, finished_at, duration_ms, used_knowledge_json, tool_calls_json, repair_triggered, error, response_preview, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertWorkflowDocument = db.prepare(`
@@ -1433,6 +1439,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
           run.finishedAt ?? '',
           typeof run.durationMs === 'number' ? Math.max(0, Math.round(run.durationMs)) : null,
           JSON.stringify(run.usedKnowledge ?? []),
+          JSON.stringify(run.toolCalls ?? []),
           run.repairTriggered ? 1 : 0,
           run.error ?? '',
           run.responsePreview ?? '',
