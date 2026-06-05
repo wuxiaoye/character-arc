@@ -320,7 +320,17 @@ watch(
                       <div v-for="toolCall in group.items" :key="toolCall.toolUseId" class="ga-toolrow" :class="toolCall.status">
                         <span class="ga-toolrow__icon"><component :is="toolRowIcon(toolCall)" :size="13" /></span>
                         <span class="ga-toolrow__name">{{ a.describeToolAction(toolCall) }}</span>
-                        <span class="ga-toolrow__detail">{{ a.formatToolArgs(toolCall.args) }}</span>
+                        <button
+                          v-if="a.resolveKnowledgeSaveDestination(toolCall)"
+                          type="button"
+                          class="ga-toolrow__destination"
+                          :disabled="!a.resolveKnowledgeSaveDestination(toolCall)?.canOpen"
+                          @click="a.openKnowledgeSaveDestination(toolCall)"
+                        >
+                          <span>已保存到 {{ a.resolveKnowledgeSaveDestination(toolCall)?.label }}</span>
+                          <strong>{{ a.resolveKnowledgeSaveDestination(toolCall)?.title }}</strong>
+                        </button>
+                        <span v-else class="ga-toolrow__detail">{{ a.formatToolArgs(toolCall.args) }}</span>
                         <span class="ga-toolrow__status" :class="toolCall.status">
                           <Loader2 v-if="toolCall.status === 'running'" :size="13" class="ga-spin" />
                           <Check v-else :size="13" />
@@ -1230,6 +1240,44 @@ watch(
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+}
+.ga-toolrow__destination {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--arc-success, #10b981) 24%, var(--arc-border, #e5e7eb));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--arc-success, #10b981) 5%, var(--arc-bg-surface, #ffffff));
+  color: var(--arc-text-secondary, #4b5563);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.ga-toolrow__destination:hover:not(:disabled) {
+  border-color: var(--arc-success, #10b981);
+  color: var(--arc-success, #10b981);
+}
+.ga-toolrow__destination:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+.ga-toolrow__destination span,
+.ga-toolrow__destination strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ga-toolrow__destination span {
+  flex-shrink: 0;
+  color: var(--arc-text-hint, #9ca3af);
+}
+.ga-toolrow__destination strong {
+  min-width: 0;
+  font-weight: 600;
+  color: inherit;
 }
 .ga-toolrow__status {
   margin-left: auto;

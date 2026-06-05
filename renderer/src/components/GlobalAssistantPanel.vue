@@ -86,7 +86,9 @@ const {
   getMessageToolCalls,
   describeToolAction,
   toolStatusLabel,
-  groupedToolCalls
+  groupedToolCalls,
+  resolveKnowledgeSaveDestination,
+  openKnowledgeSaveDestination
 } = useGlobalAssistant({ activeViewLabel: () => props.activeViewLabel ?? '' })
 
 // ─── 展示层：dock 专属 ───
@@ -337,7 +339,17 @@ watch(
                       {{ toolStatusLabel(toolCall) }}
                     </span>
                   </div>
-                  <div class="global-tool-log__args">参数：{{ formatToolArgs(toolCall.args) }}</div>
+                  <button
+                    v-if="resolveKnowledgeSaveDestination(toolCall)"
+                    type="button"
+                    class="global-tool-log__destination"
+                    :disabled="!resolveKnowledgeSaveDestination(toolCall)?.canOpen"
+                    @click="openKnowledgeSaveDestination(toolCall)"
+                  >
+                    <span>已保存到 {{ resolveKnowledgeSaveDestination(toolCall)?.label }}</span>
+                    <strong>{{ resolveKnowledgeSaveDestination(toolCall)?.title }}</strong>
+                  </button>
+                  <div v-else class="global-tool-log__args">参数：{{ formatToolArgs(toolCall.args) }}</div>
                   <div v-if="toolCall.result" class="global-tool-log__result">{{ formatToolResultPreview(toolCall.result, toolCall) }}</div>
                 </div>
               </div>
@@ -1051,6 +1063,50 @@ watch(
 
 .global-tool-log__args {
   color: var(--arc-text-hint);
+}
+
+.global-tool-log__destination {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--arc-success) 24%, var(--arc-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--arc-success) 5%, var(--arc-bg-surface));
+  color: var(--arc-text-secondary);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.global-tool-log__destination:hover:not(:disabled) {
+  border-color: var(--arc-success);
+  color: var(--arc-success);
+}
+
+.global-tool-log__destination:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.global-tool-log__destination span,
+.global-tool-log__destination strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-tool-log__destination span {
+  flex-shrink: 0;
+  color: var(--arc-text-hint);
+}
+
+.global-tool-log__destination strong {
+  min-width: 0;
+  font-weight: 600;
+  color: inherit;
 }
 
 .global-tool-log__result {

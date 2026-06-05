@@ -24,6 +24,13 @@ export type ToolGroup = {
   items: AssistantToolCall[]
 }
 
+export type KnowledgeSaveDestination = {
+  label: string
+  title: string
+  documentId: string
+  canOpen: boolean
+}
+
 export interface UseGlobalAssistantOptions {
   /** 当前视图标签，用于流式上下文 currentPanelLabel */
   activeViewLabel?: MaybeRefOrGetter<string>
@@ -95,6 +102,10 @@ function formatToolArgs(args: Record<string, unknown>): string {
 function formatToolResultPreview(content?: string, toolCall?: AssistantToolCall): string {
   const normalized = String(content ?? '').replace(/\s+/g, ' ').trim()
   if (!normalized) return '无返回内容'
+
+  if (toolCall?.toolName === 'knowledge_save_document' && normalized.includes('已落库')) {
+    return '已保存到项目知识库，后续生成会自动检索这份知识。'
+  }
 
   if (
     toolCall?.toolName === 'read_chapter'
@@ -446,6 +457,33 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
 
   function openAsset(panel: PanelName): void {
     appStore.setPanel(panel)
+  }
+
+  function resolveKnowledgeSaveDestination(toolCall: AssistantToolCall): KnowledgeSaveDestination | null {
+    if (toolCall.toolName !== 'knowledge_save_document') return null
+
+    const titleFromArgs = typeof toolCall.args.title === 'string' ? toolCall.args.title.trim() : ''
+    const resultText = String(toolCall.result ?? '')
+    const titleFromResult = resultText.match(/知识文档：(.+?)（/)?.[1]?.trim() ?? ''
+    const title = titleFromArgs || titleFromResult || '新保存的知识文档'
+    const document = appStore.knowledgeDocuments.find((item) => item.title === title)
+
+    return {
+      label: '项目知识库',
+      title,
+      documentId: document?.id ?? '',
+      canOpen: toolCall.status === 'done'
+    }
+  }
+
+  function openKnowledgeSaveDestination(toolCall: AssistantToolCall): void {
+    const destination = resolveKnowledgeSaveDestination(toolCall)
+    if (!destination?.canOpen) return
+
+    appStore.setPanel('project-knowledge')
+    if (destination.documentId) {
+      appStore.setAssistantFocusTarget('project-knowledge', destination.documentId)
+    }
   }
 
   function clearTargetSelections(): void {
@@ -1077,6 +1115,8 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     setMode,
     fillQuickAction,
     openAsset,
+    resolveKnowledgeSaveDestination,
+    openKnowledgeSaveDestination,
     startNewConversation,
     switchConversation,
     deleteConversation,

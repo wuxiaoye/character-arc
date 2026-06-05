@@ -67,7 +67,7 @@ import type {
   WorldviewEntry
 } from '@/types/app'
 
-type AssistantFocusPanel = 'world' | 'characters' | 'outline'
+type AssistantFocusPanel = 'world' | 'characters' | 'outline' | 'project-knowledge'
 
 interface AssistantFocusTarget {
   panel: AssistantFocusPanel

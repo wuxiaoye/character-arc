@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { marked } from 'marked'
 import { FileCheck2, History, RefreshCw, Sparkles } from 'lucide-vue-next'
 import {
@@ -15,7 +15,7 @@ import {
   useMessage
 } from 'naive-ui'
 import { loadEnabledProjectSkillsContext } from '@/features/projectSkills/context'
-import { formatKnowledgeDateTime } from '@/features/knowledge/knowledgeCenter'
+import { formatKnowledgeDateTime, resolveKnowledgeSourceTypeLabel } from '@/features/knowledge/knowledgeCenter'
 import { useAppStore } from '@/stores/app'
 import { toIpcPayload } from '@/utils/ipcPayload'
 import type { KnowledgeDocument } from '@/types/app'
@@ -32,6 +32,8 @@ const isRunningStoryAudit = ref(false)
 const isBackfillingState = ref(false)
 const backfillProgress = ref<CharacterArcBackfillStateProgressPayload | null>(null)
 const selectedAuditReport = ref<KnowledgeDocument | null>(null)
+const selectedKnowledgeDocument = ref<KnowledgeDocument | null>(null)
+const knowledgeHistoryRef = ref<HTMLElement | null>(null)
 
 const cleanupBackfillProgress = window.characterArc.onBackfillStateProgress((payload) => {
   backfillProgress.value = payload
@@ -48,6 +50,12 @@ const auditReports = computed(() =>
 )
 
 const latestAuditReport = computed(() => auditReports.value[0] ?? null)
+
+const assistantKnowledgeDocuments = computed(() =>
+  appStore.knowledgeDocuments
+    .filter((doc) => !(doc.sourceType === 'canon-fact' && doc.sourceLabel === 'story-deep-audit'))
+    .sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''))
+)
 
 const chapterCount = computed(() => appStore.chapters.length)
 const validChapterCount = computed(
@@ -186,6 +194,44 @@ function deleteAuditReport(report: KnowledgeDocument): void {
     }
   })
 }
+
+function openKnowledgeDocument(document: KnowledgeDocument): void {
+  selectedKnowledgeDocument.value = document
+}
+
+function deleteKnowledgeDocument(document: KnowledgeDocument): void {
+  const project = appStore.currentProject
+  if (!project) return
+
+  dialog.warning({
+    title: '删除知识文档',
+    content: `确认删除「${document.title}」吗？此操作无法撤销。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      appStore.removeKnowledgeDocuments([document.id])
+      if (selectedKnowledgeDocument.value?.id === document.id) {
+        selectedKnowledgeDocument.value = null
+      }
+      message.success('已删除知识文档')
+    }
+  })
+}
+
+watch(
+  () => appStore.assistantFocusTarget,
+  async (target) => {
+    if (!target || target.panel !== 'project-knowledge') return
+    const document = appStore.knowledgeDocuments.find((item) => item.id === target.entityId)
+    if (!document) return
+
+    selectedKnowledgeDocument.value = document
+    await nextTick()
+    knowledgeHistoryRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    appStore.clearAssistantFocusTarget('project-knowledge', target.entityId)
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -226,6 +272,7 @@ function deleteAuditReport(report: KnowledgeDocument): void {
         <div class="pk-card-meta">
           <n-tag size="small" :bordered="false">当前章节数 {{ chapterCount }}</n-tag>
           <n-tag size="small" :bordered="false" type="info">历史报告 {{ auditReports.length }}</n-tag>
+          <n-tag size="small" :bordered="false" type="success">知识文档 {{ assistantKnowledgeDocuments.length }}</n-tag>
           <n-tag v-if="latestAuditReport" size="small" :bordered="false" type="success">
             最近审计 {{ formatKnowledgeDateTime(latestAuditReport.createdAt) }}
           </n-tag>
@@ -303,6 +350,44 @@ function deleteAuditReport(report: KnowledgeDocument): void {
       </n-space>
     </section>
 
+    <section ref="knowledgeHistoryRef" class="pk-history">
+      <div class="pk-history-head">
+        <div class="pk-history-title">
+          <FileCheck2 :size="16" />
+          <strong>知识文档</strong>
+          <n-tag size="tiny" :bordered="false">{{ assistantKnowledgeDocuments.length }} 份</n-tag>
+        </div>
+      </div>
+
+      <n-empty v-if="!assistantKnowledgeDocuments.length" description="全局助理保存的知识文档会出现在这里。" />
+      <n-space v-else vertical size="small">
+        <n-card
+          v-for="document in assistantKnowledgeDocuments"
+          :key="document.id"
+          size="small"
+          hoverable
+          class="pk-history-item"
+          @click="openKnowledgeDocument(document)"
+        >
+          <template #header>
+            <div class="pk-history-item-title">
+              <strong>{{ document.title }}</strong>
+              <n-tag size="tiny" :bordered="false" type="success">
+                {{ resolveKnowledgeSourceTypeLabel(document.sourceType) }}
+              </n-tag>
+              <n-tag size="tiny" :bordered="false" type="info">
+                {{ formatKnowledgeDateTime(document.updatedAt || document.createdAt) }}
+              </n-tag>
+            </div>
+          </template>
+          <template #header-extra>
+            <n-button size="tiny" quaternary type="error" @click.stop="deleteKnowledgeDocument(document)">删除</n-button>
+          </template>
+          <p class="pk-history-summary">{{ document.summary || document.content.slice(0, 160) }}</p>
+        </n-card>
+      </n-space>
+    </section>
+
     <n-modal
       :show="Boolean(selectedAuditReport)"
       preset="card"
@@ -317,6 +402,23 @@ function deleteAuditReport(report: KnowledgeDocument): void {
     >
       <n-scrollbar v-if="selectedAuditReport" style="max-height: 72vh;">
         <div class="pk-report-content pk-md" v-html="renderMarkdown(selectedAuditReport.content)" />
+      </n-scrollbar>
+    </n-modal>
+
+    <n-modal
+      :show="Boolean(selectedKnowledgeDocument)"
+      preset="card"
+      style="width: min(840px, 94vw); max-height: 88vh;"
+      :title="selectedKnowledgeDocument?.title ?? '知识文档'"
+      :bordered="false"
+      size="small"
+      closable
+      role="dialog"
+      aria-modal="true"
+      @update:show="(v: boolean) => { if (!v) selectedKnowledgeDocument = null }"
+    >
+      <n-scrollbar v-if="selectedKnowledgeDocument" style="max-height: 72vh;">
+        <div class="pk-report-content pk-md" v-html="renderMarkdown(selectedKnowledgeDocument.content)" />
       </n-scrollbar>
     </n-modal>
   </section>
