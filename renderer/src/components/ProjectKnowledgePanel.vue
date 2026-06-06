@@ -15,7 +15,7 @@ import {
   useMessage
 } from 'naive-ui'
 import { loadEnabledProjectSkillsContext } from '@/features/projectSkills/context'
-import { formatKnowledgeDateTime, resolveKnowledgeSourceTypeLabel } from '@/features/knowledge/knowledgeCenter'
+import { formatKnowledgeDateTime, isProjectKnowledgeSource, resolveKnowledgeSourceTypeLabel } from '@/features/knowledge/knowledgeCenter'
 import { useAppStore } from '@/stores/app'
 import { toIpcPayload } from '@/utils/ipcPayload'
 import type { KnowledgeDocument } from '@/types/app'
@@ -53,7 +53,7 @@ const latestAuditReport = computed(() => auditReports.value[0] ?? null)
 
 const assistantKnowledgeDocuments = computed(() =>
   appStore.knowledgeDocuments
-    .filter((doc) => !(doc.sourceType === 'canon-fact' && doc.sourceLabel === 'story-deep-audit'))
+    .filter((doc) => isProjectKnowledgeSource(doc.sourceType) && !(doc.sourceType === 'canon-fact' && doc.sourceLabel === 'story-deep-audit'))
     .sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''))
 )
 
