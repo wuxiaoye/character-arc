@@ -310,30 +310,39 @@ watch(
     <n-modal
       :show="editorVisible"
       preset="card"
-      class="arc-editor-modal"
+      class="arc-editor-modal-wide"
       :title="isEditing ? '编辑世界观词条' : '新建世界观词条'"
       :bordered="false"
       @close="editorVisible = false"
     >
-      <n-form label-placement="top">
-        <n-form-item label="词条分类">
-          <n-select v-model:value="form.type" :options="typeOptions" />
-        </n-form-item>
-        <n-form-item label="词条标题">
-          <n-input v-model:value="form.title" placeholder="例如：新法则 / 地理区域 / 势力设定" />
-        </n-form-item>
-        <n-form-item label="词条内容">
-          <n-input
-            v-model:value="form.content"
-            type="textarea"
-            :autosize="{ minRows: 5, maxRows: 8 }"
-            placeholder="补充这个词条的核心设定与作用..."
-          />
-        </n-form-item>
-      </n-form>
-
-      <template #footer>
-        <div class="arc-modal-actions">
+      <div class="arc-split-body">
+        <div class="arc-split-left">
+          <n-form label-placement="top">
+            <n-form-item label="词条分类">
+              <n-select v-model:value="form.type" :options="typeOptions" />
+            </n-form-item>
+            <n-form-item label="词条标题">
+              <n-input v-model:value="form.title" placeholder="例如：新法则 / 地理区域 / 势力设定" />
+            </n-form-item>
+          </n-form>
+        </div>
+        <div class="arc-split-right">
+          <div class="arc-split-right-header">词条内容</div>
+          <div class="arc-split-right-body">
+            <n-input
+              v-model:value="form.content"
+              type="textarea"
+              placeholder="补充这个词条的核心设定与作用..."
+              :show-count="true"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="arc-modal-footer">
+        <div class="arc-modal-footer-left">
+          <span>{{ form.content.length }} 字</span>
+        </div>
+        <div class="arc-modal-footer-right">
           <n-button round strong @click="editorVisible = false">取消</n-button>
           <n-button round strong :loading="enhanceLoading" @click="handleAiEnhance">
             <template #icon><Sparkles :size="14" /></template>
@@ -343,6 +352,10 @@ watch(
             {{ isEditing ? '保存修改' : '创建词条' }}
           </n-button>
         </div>
+      </div>
+
+      <template #footer>
+        <span />
       </template>
     </n-modal>
 

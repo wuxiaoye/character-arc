@@ -367,33 +367,43 @@ watch(
     <n-modal
       :show="editorVisible"
       preset="card"
-      class="arc-editor-modal"
+      class="arc-editor-modal-wide"
       :title="editingCharacterId ? '编辑角色' : '新建角色'"
       :bordered="false"
       @close="editorVisible = false"
     >
-      <n-form label-placement="top">
-        <n-form-item label="角色名称">
-          <n-input v-model:value="form.name" placeholder="例如：李雷 / 艾达" />
-        </n-form-item>
-        <n-form-item label="角色定位">
-          <n-input v-model:value="form.role" placeholder="例如：男主 / 情报中间人" />
-        </n-form-item>
-        <n-form-item label="角色简介">
-          <n-input
-            v-model:value="form.description"
-            type="textarea"
-            :autosize="{ minRows: 4, maxRows: 7 }"
-            placeholder="补充角色背景、动机和冲突..."
-          />
-        </n-form-item>
-        <n-form-item label="角色标签">
-          <n-dynamic-tags v-model:value="form.tags" />
-        </n-form-item>
-      </n-form>
-
-      <template #footer>
-        <div class="arc-modal-actions">
+      <div class="arc-split-body">
+        <div class="arc-split-left">
+          <n-form label-placement="top">
+            <n-form-item label="角色名称">
+              <n-input v-model:value="form.name" placeholder="例如：李雷 / 艾达" />
+            </n-form-item>
+            <n-form-item label="角色定位">
+              <n-input v-model:value="form.role" placeholder="例如：男主 / 情报中间人" />
+            </n-form-item>
+            <n-form-item label="角色标签">
+              <n-dynamic-tags v-model:value="form.tags" />
+            </n-form-item>
+          </n-form>
+        </div>
+        <div class="arc-split-right">
+          <div class="arc-split-right-header">角色简介</div>
+          <div class="arc-split-right-body">
+            <n-input
+              v-model:value="form.description"
+              type="textarea"
+              placeholder="补充角色背景、动机和冲突..."
+              :show-count="true"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="arc-modal-footer">
+        <div class="arc-modal-footer-left">
+          <span>{{ form.description.length }} 字</span>
+          <span>{{ form.tags.length }} 个标签</span>
+        </div>
+        <div class="arc-modal-footer-right">
           <n-button round strong @click="editorVisible = false">取消</n-button>
           <n-button round strong :loading="enhanceLoading" @click="handleAiEnhance">
             <template #icon><Sparkles :size="14" /></template>
@@ -403,6 +413,10 @@ watch(
             {{ editingCharacterId ? '保存修改' : '创建角色' }}
           </n-button>
         </div>
+      </div>
+
+      <template #footer>
+        <span />
       </template>
     </n-modal>
 

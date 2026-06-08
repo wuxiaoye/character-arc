@@ -317,49 +317,63 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
     <n-modal
       :show="editorVisible"
       preset="card"
-      class="arc-editor-modal"
+      class="arc-editor-modal-wide"
       :title="isEditing ? '编辑灵感卡片' : '新建灵感卡片'"
       :bordered="false"
       @close="editorVisible = false"
     >
-      <n-form label-placement="top">
-        <n-form-item label="灵感类型">
-          <div class="modal-chip-row">
-            <button
-              v-for="type in focusTypes"
-              :key="type"
-              type="button"
-              class="modal-chip"
-              :class="{ active: form.type === type }"
-              @click="form.type = type"
-            >
-              {{ type }}
-            </button>
+      <div class="arc-split-body">
+        <div class="arc-split-left">
+          <n-form label-placement="top">
+            <n-form-item label="灵感类型">
+              <div class="modal-chip-row">
+                <button
+                  v-for="type in focusTypes"
+                  :key="type"
+                  type="button"
+                  class="modal-chip"
+                  :class="{ active: form.type === type }"
+                  @click="form.type = type"
+                >
+                  {{ type }}
+                </button>
+              </div>
+            </n-form-item>
+            <n-form-item label="灵感标题">
+              <n-input v-model:value="form.title" placeholder="例如：寒夜长街的第一次试探" />
+            </n-form-item>
+            <n-form-item label="灵感标签">
+              <n-dynamic-tags v-model:value="form.tags" />
+            </n-form-item>
+          </n-form>
+        </div>
+        <div class="arc-split-right">
+          <div class="arc-split-right-header">灵感内容</div>
+          <div class="arc-split-right-body">
+            <n-input
+              v-model:value="form.content"
+              type="textarea"
+              placeholder="记录冲突、情绪、场景、台词或推进动作..."
+              :show-count="true"
+            />
           </div>
-        </n-form-item>
-        <n-form-item label="灵感标题">
-          <n-input v-model:value="form.title" placeholder="例如：寒夜长街的第一次试探" />
-        </n-form-item>
-        <n-form-item label="灵感内容">
-          <n-input
-            v-model:value="form.content"
-            type="textarea"
-            :autosize="{ minRows: 5, maxRows: 8 }"
-            placeholder="记录冲突、情绪、场景、台词或推进动作..."
-          />
-        </n-form-item>
-        <n-form-item label="灵感标签">
-          <n-dynamic-tags v-model:value="form.tags" />
-        </n-form-item>
-      </n-form>
-
-      <template #footer>
-        <div class="arc-modal-actions">
+        </div>
+      </div>
+      <div class="arc-modal-footer">
+        <div class="arc-modal-footer-left">
+          <span>{{ form.content.length }} 字</span>
+          <span>{{ form.tags.length }} 个标签</span>
+        </div>
+        <div class="arc-modal-footer-right">
           <n-button round strong @click="editorVisible = false">取消</n-button>
           <n-button type="primary" round strong @click="submitEntry">
             {{ isEditing ? '保存修改' : '创建卡片' }}
           </n-button>
         </div>
+      </div>
+
+      <template #footer>
+        <span />
       </template>
     </n-modal>
   </section>

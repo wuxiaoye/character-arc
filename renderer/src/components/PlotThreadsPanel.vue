@@ -230,54 +230,68 @@ function formatTime(value: string): string {
       v-model:show="editorVisible"
       preset="card"
       :title="isEditing ? '编辑线索' : '新建线索'"
-      class="arc-editor-modal thread-editor-modal"
+      class="arc-editor-modal-wide"
       :mask-closable="false"
     >
-      <n-form label-placement="top" :show-feedback="false" class="thread-form">
-        <n-form-item label="线索标题" required>
-          <n-input v-model:value="form.title" placeholder="如：林莫的穿越遗物" maxlength="60" show-count />
-        </n-form-item>
-        <n-form-item label="详细描述">
-          <n-input
-            v-model:value="form.description"
-            type="textarea"
-            placeholder="描述这条伏笔的内容、背景或潜在影响"
-            :rows="3"
-          />
-        </n-form-item>
-        <n-form-item label="埋入章节">
-          <n-select
-            v-model:value="form.openedInChapterId"
-            :options="chapterOptions"
-            placeholder="选择埋入的章节"
-            clearable
-            filterable
-          />
-        </n-form-item>
-        <n-form-item v-if="isEditing" label="状态">
-          <n-select
-            v-model:value="form.status"
-            :options="[{ label: '活跃（未收尾）', value: 'open' }, { label: '已收尾', value: 'resolved' }]"
-          />
-        </n-form-item>
-        <n-form-item v-if="form.status === 'resolved'" label="收尾章节">
-          <n-select
-            v-model:value="form.closedInChapterId"
-            :options="chapterOptions"
-            placeholder="选择收尾的章节"
-            clearable
-            filterable
-          />
-        </n-form-item>
-        <n-form-item label="关联标签">
-          <n-dynamic-tags v-model:value="form.tags" />
-        </n-form-item>
-      </n-form>
-      <template #footer>
-        <div class="arc-modal-actions">
+      <div class="arc-split-body">
+        <div class="arc-split-left">
+          <n-form label-placement="top" :show-feedback="false" class="thread-form">
+            <n-form-item label="线索标题" required>
+              <n-input v-model:value="form.title" placeholder="如：林莫的穿越遗物" maxlength="60" show-count />
+            </n-form-item>
+            <n-form-item label="埋入章节">
+              <n-select
+                v-model:value="form.openedInChapterId"
+                :options="chapterOptions"
+                placeholder="选择埋入的章节"
+                clearable
+                filterable
+              />
+            </n-form-item>
+            <n-form-item v-if="isEditing" label="状态">
+              <n-select
+                v-model:value="form.status"
+                :options="[{ label: '活跃（未收尾）', value: 'open' }, { label: '已收尾', value: 'resolved' }]"
+              />
+            </n-form-item>
+            <n-form-item v-if="form.status === 'resolved'" label="收尾章节">
+              <n-select
+                v-model:value="form.closedInChapterId"
+                :options="chapterOptions"
+                placeholder="选择收尾的章节"
+                clearable
+                filterable
+              />
+            </n-form-item>
+            <n-form-item label="关联标签">
+              <n-dynamic-tags v-model:value="form.tags" />
+            </n-form-item>
+          </n-form>
+        </div>
+        <div class="arc-split-right">
+          <div class="arc-split-right-header">详细描述</div>
+          <div class="arc-split-right-body">
+            <n-input
+              v-model:value="form.description"
+              type="textarea"
+              placeholder="描述这条伏笔的内容、背景或潜在影响"
+              :show-count="true"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="arc-modal-footer">
+        <div class="arc-modal-footer-left">
+          <span>{{ form.description.length }} 字</span>
+        </div>
+        <div class="arc-modal-footer-right">
           <n-button @click="editorVisible = false">取消</n-button>
           <n-button type="primary" @click="handleSave">{{ isEditing ? '保存' : '添加' }}</n-button>
         </div>
+      </div>
+
+      <template #footer>
+        <span />
       </template>
     </n-modal>
   </div>
@@ -463,9 +477,5 @@ function formatTime(value: string): string {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.thread-editor-modal {
-  width: min(92vw, 480px);
 }
 </style>

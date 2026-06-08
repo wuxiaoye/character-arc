@@ -760,40 +760,50 @@ watch(
     <n-modal
       :show="editorVisible"
       preset="card"
-      class="arc-editor-modal"
+      class="arc-editor-modal-wide"
       :title="editingOutlineId ? '编辑大纲节点' : '新建大纲节点'"
       :bordered="false"
       @close="editorVisible = false"
     >
-      <n-form label-placement="top">
-        <n-form-item label="所属分卷">
-          <n-select v-model:value="form.volumeId" :options="volumeOptions" placeholder="选择这一节点所在的分卷" />
-        </n-form-item>
-        <n-form-item label="节点标题">
-          <n-input v-model:value="form.title" placeholder="例如：第4章：夜城回响" />
-        </n-form-item>
-        <n-form-item label="预估字数">
-          <n-input v-model:value="form.wordTarget" placeholder="例如：3200">
-            <template #suffix>字</template>
-          </n-input>
-        </n-form-item>
-        <n-form-item label="推进状态">
-          <n-select v-model:value="form.status" :options="outlineStatusOptions" placeholder="选择当前节点所处阶段" />
-        </n-form-item>
-        <n-form-item label="核心冲突">
-          <n-input v-model:value="form.conflict" placeholder="概括这一节点的核心矛盾..." />
-        </n-form-item>
-        <n-form-item label="剧情描述">
-          <n-input
-            v-model:value="form.summary"
-            type="textarea"
-            :autosize="{ minRows: 4, maxRows: 7 }"
-            placeholder="补充这一节点如何推进剧情..."
-          />
-        </n-form-item>
-      </n-form>
-      <template #footer>
-        <div class="arc-modal-actions">
+      <div class="arc-split-body">
+        <div class="arc-split-left">
+          <n-form label-placement="top">
+            <n-form-item label="所属分卷">
+              <n-select v-model:value="form.volumeId" :options="volumeOptions" placeholder="选择这一节点所在的分卷" />
+            </n-form-item>
+            <n-form-item label="节点标题">
+              <n-input v-model:value="form.title" placeholder="例如：第4章：夜城回响" />
+            </n-form-item>
+            <n-form-item label="预估字数">
+              <n-input v-model:value="form.wordTarget" placeholder="例如：3200">
+                <template #suffix>字</template>
+              </n-input>
+            </n-form-item>
+            <n-form-item label="推进状态">
+              <n-select v-model:value="form.status" :options="outlineStatusOptions" placeholder="选择当前节点所处阶段" />
+            </n-form-item>
+            <n-form-item label="核心冲突">
+              <n-input v-model:value="form.conflict" placeholder="概括这一节点的核心矛盾..." />
+            </n-form-item>
+          </n-form>
+        </div>
+        <div class="arc-split-right">
+          <div class="arc-split-right-header">剧情描述</div>
+          <div class="arc-split-right-body">
+            <n-input
+              v-model:value="form.summary"
+              type="textarea"
+              placeholder="补充这一节点如何推进剧情..."
+              :show-count="true"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="arc-modal-footer">
+        <div class="arc-modal-footer-left">
+          <span>{{ form.summary.length }} 字</span>
+        </div>
+        <div class="arc-modal-footer-right">
           <n-button round strong @click="editorVisible = false">取消</n-button>
           <n-button round strong :loading="enhanceItemLoading" @click="handleAiEnhanceItem">
             <template #icon><Sparkles :size="14" /></template>
@@ -803,6 +813,10 @@ watch(
             {{ editingOutlineId ? '保存修改' : '创建节点' }}
           </n-button>
         </div>
+      </div>
+
+      <template #footer>
+        <span />
       </template>
     </n-modal>
 
@@ -817,29 +831,39 @@ watch(
     <n-modal
       :show="volumeEditorVisible"
       preset="card"
-      class="arc-editor-modal"
+      class="arc-editor-modal-wide"
       :title="editingVolumeId ? '编辑分卷' : '新建分卷'"
       :bordered="false"
       @close="volumeEditorVisible = false"
     >
-      <n-form label-placement="top">
-        <n-form-item label="分卷标题">
-          <n-input v-model:value="volumeForm.title" placeholder="例如：霓虹下的老鼠" />
-        </n-form-item>
-        <n-form-item label="目标字数">
-          <n-input v-model:value="volumeForm.wordTarget" placeholder="例如：目标 5万字" />
-        </n-form-item>
-        <n-form-item label="分卷摘要">
-          <n-input
-            v-model:value="volumeForm.summary"
-            type="textarea"
-            :autosize="{ minRows: 3, maxRows: 5 }"
-            placeholder="概括这一卷的主线、冲突和情绪走向..."
-          />
-        </n-form-item>
-      </n-form>
-      <template #footer>
-        <div class="arc-modal-actions">
+      <div class="arc-split-body">
+        <div class="arc-split-left">
+          <n-form label-placement="top">
+            <n-form-item label="分卷标题">
+              <n-input v-model:value="volumeForm.title" placeholder="例如：霓虹下的老鼠" />
+            </n-form-item>
+            <n-form-item label="目标字数">
+              <n-input v-model:value="volumeForm.wordTarget" placeholder="例如：目标 5万字" />
+            </n-form-item>
+          </n-form>
+        </div>
+        <div class="arc-split-right">
+          <div class="arc-split-right-header">分卷摘要</div>
+          <div class="arc-split-right-body">
+            <n-input
+              v-model:value="volumeForm.summary"
+              type="textarea"
+              placeholder="概括这一卷的主线、冲突和情绪走向..."
+              :show-count="true"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="arc-modal-footer">
+        <div class="arc-modal-footer-left">
+          <span>{{ volumeForm.summary.length }} 字</span>
+        </div>
+        <div class="arc-modal-footer-right">
           <n-button round strong @click="volumeEditorVisible = false">取消</n-button>
           <n-button round strong :loading="enhanceVolumeLoading" @click="handleAiEnhanceVolume">
             <template #icon><Sparkles :size="14" /></template>
@@ -849,6 +873,10 @@ watch(
             {{ editingVolumeId ? '保存修改' : '创建分卷' }}
           </n-button>
         </div>
+      </div>
+
+      <template #footer>
+        <span />
       </template>
     </n-modal>
 
