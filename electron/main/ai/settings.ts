@@ -11,11 +11,12 @@ export function resolveProviderDefaults(provider: ProviderName): { baseUrl: stri
   switch (provider) {
     case 'anthropic':
       return { baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-6' }
+    case 'zhipu':
+      return { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-5.1' }
     case 'openai-compatible':
     case 'openai':
     case 'deepseek':
     case 'qwen':
-    case 'zhipu':
     case 'moonshot':
     case 'siliconflow':
     case 'ollama':
@@ -24,6 +25,44 @@ export function resolveProviderDefaults(provider: ProviderName): { baseUrl: stri
     default:
       return { baseUrl: '', model: '' }
   }
+}
+
+function stripKnownEndpointSuffix(baseUrl: string): string {
+  const knownEndpointSuffixes = [
+    '/chat/completions',
+    '/embeddings',
+    '/models',
+    '/images/generations'
+  ]
+
+  for (const suffix of knownEndpointSuffixes) {
+    if (baseUrl.endsWith(suffix)) {
+      return baseUrl.slice(0, -suffix.length)
+    }
+  }
+
+  return baseUrl
+}
+
+function isZhipuBaseUrl(provider: string, baseUrl: string): boolean {
+  if (provider === 'zhipu') return true
+  return /(^|\.)open\.bigmodel\.cn(\/|$)/i.test(baseUrl)
+}
+
+function normalizeBaseUrl(provider: string, rawBaseUrl: string): string {
+  let baseUrl = stripKnownEndpointSuffix(rawBaseUrl.trim().replace(/\/+$/, ''))
+  if (!baseUrl) return ''
+
+  if (isZhipuBaseUrl(provider, baseUrl)) {
+    baseUrl = baseUrl.replace(/\/v1$/i, '')
+    return baseUrl
+  }
+
+  if (!baseUrl.endsWith('/v1')) {
+    baseUrl = `${baseUrl}/v1`
+  }
+
+  return baseUrl
 }
 
 /**
@@ -35,13 +74,7 @@ export function resolveProviderDefaults(provider: ProviderName): { baseUrl: stri
 export function normalizeSettings(settings: AppSettings): AppSettings {
   const provider = settings.provider?.trim().toLowerCase() || 'openai-compatible'
   const defaults = resolveProviderDefaults(provider)
-  let baseUrl = settings.baseUrl?.trim() || defaults.baseUrl
-  if (baseUrl) {
-    baseUrl = baseUrl.replace(/\/+$/, '')
-    if (!baseUrl.endsWith('/v1')) {
-      baseUrl = `${baseUrl}/v1`
-    }
-  }
+  const baseUrl = normalizeBaseUrl(provider, settings.baseUrl?.trim() || defaults.baseUrl)
   return {
     provider,
     model: settings.model?.trim() || defaults.model,

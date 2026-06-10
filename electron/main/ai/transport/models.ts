@@ -17,6 +17,20 @@ const KNOWN_COMPAT_SUFFIXES = [
   '/step_plan', '/coding', '/claude'
 ]
 
+const KNOWN_ENDPOINT_SUFFIXES = [
+  '/chat/completions',
+  '/embeddings',
+  '/models',
+  '/images/generations'
+]
+
+function stripKnownEndpointSuffix(baseUrl: string): string {
+  for (const suffix of KNOWN_ENDPOINT_SUFFIXES) {
+    if (baseUrl.endsWith(suffix)) return baseUrl.slice(0, -suffix.length)
+  }
+  return baseUrl
+}
+
 /** 从 baseUrl 中剥离已知的兼容性后缀，返回剥离后的 URL，无匹配时返回 null */
 function stripCompatSuffix(baseUrl: string): string | null {
   for (const suffix of KNOWN_COMPAT_SUFFIXES) {
@@ -27,9 +41,12 @@ function stripCompatSuffix(baseUrl: string): string | null {
 
 /** 根据 baseUrl 构建候选的模型列表请求 URL，自动尝试多种路径格式 */
 function buildModelsUrlCandidates(baseUrl: string): string[] {
-  const trimmed = baseUrl.trim().replace(/\/+$/, '')
+  const trimmed = stripKnownEndpointSuffix(baseUrl.trim().replace(/\/+$/, ''))
   if (!trimmed) return []
   const candidates: string[] = []
+  if (/(^|\.)open\.bigmodel\.cn(\/|$)/i.test(trimmed) || trimmed.endsWith('/api/paas/v4')) {
+    candidates.push(`${trimmed.replace(/\/v1$/i, '')}/models`)
+  }
   if (trimmed.endsWith('/v1')) {
     candidates.push(`${trimmed}/models`)
   } else {
