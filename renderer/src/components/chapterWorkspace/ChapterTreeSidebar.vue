@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { ChevronDown, ChevronsDownUp, FilePlus, FileText, FolderPlus, MoreVertical, Plus, Search, Settings } from 'lucide-vue-next'
+import { ArrowLeft, ChevronDown, ChevronsDownUp, FilePlus, FileText, FolderPlus, MoreVertical, Plus, Search } from 'lucide-vue-next'
 import { NDropdown, NTag, NTooltip, useDialog, useMessage } from 'naive-ui'
 import ChapterMetaDialog from './ChapterMetaDialog.vue'
 import { useAppStore } from '@/stores/app'
@@ -141,7 +141,7 @@ function handleMenuSelect(key: string | number, chapter: ChapterDraft): void {
       <n-tooltip trigger="hover" placement="bottom">
         <template #trigger>
           <button class="icon-btn" @click="appStore.backToWorkbench()">
-            <Settings :size="14" />
+            <ArrowLeft :size="14" />
           </button>
         </template>
         返回工作台

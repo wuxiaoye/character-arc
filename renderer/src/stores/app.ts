@@ -172,9 +172,9 @@ export const useAppStore = defineStore('app', () => {
   /** 当前视图：项目列表 / 新建向导 / 工作台 / 章节写作 / 独立能力页 */
   const currentView = ref<'projects' | 'wizard' | 'workbench' | 'chapter-studio' | 'deconstruction-library' | 'skills' | 'cover-workbench'>('projects')
   /** 工作台中当前激活的面板 */
-  const activePanel = ref<PanelName>('workflow')
+  const activePanel = ref<PanelName>('outline')
   /** 上一次在工作台中查看的面板（非 chapters），用于从章节写作返回时恢复 */
-  const lastWorkbenchPanel = ref<Exclude<PanelName, 'chapters'>>('workflow')
+  const lastWorkbenchPanel = ref<Exclude<PanelName, 'chapters'>>('outline')
   /** 当前主题名称 */
   const theme = ref<ThemeName>(stored.theme)
   /** 当前选中的项目 ID */
@@ -594,7 +594,7 @@ export const useAppStore = defineStore('app', () => {
     selectedProjectId.value = project.id
     pendingChapterInsertion.value = null
     currentView.value = 'workbench'
-    activePanel.value = 'workflow'
+    activePanel.value = 'outline'
     syncSelectedChapter(project.id)
     schedulePersist('fast')
   }
