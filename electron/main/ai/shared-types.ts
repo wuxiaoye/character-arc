@@ -69,6 +69,7 @@ export type AiTaskName =
   | 'spiral-validate'
   | 'chapter-analysis'
   | 'chapter-repair'
+  | 'chapter-session-note'
   | 'inspiration-pack'
   | 'story-deep-audit'
   | 'character-enhance'

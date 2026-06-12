@@ -129,6 +129,7 @@ export type ChapterFirstDraftContextInput = {
     decisionChecks: string[]
     endingChanges: string[]
     doNotDo: string[]
+    emotionArc: string
   }
   recentEndingsTrail?: Array<{ chapterTitle: string; endingLine: string }>
 }

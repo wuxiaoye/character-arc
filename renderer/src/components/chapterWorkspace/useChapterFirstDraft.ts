@@ -33,7 +33,7 @@ export type ChapterAuditPayload = {
   }>
 }
 
-type StreamTaskName = 'chapter-first-draft' | 'chapter-memo' | 'chapter-audit' | 'chapter-repair'
+type StreamTaskName = 'chapter-first-draft' | 'chapter-memo' | 'chapter-audit' | 'chapter-repair' | 'chapter-session-note'
 
 type StreamTaskResult = {
   text: string
@@ -413,6 +413,18 @@ export function useChapterFirstDraft(): {
           executionLabel.value = '检索相关章节与情节线索'
           recompute()
           await new Promise((r) => setTimeout(r, 0))
+
+          const recentJournals = appStore.knowledgeDocuments
+            .filter((d) => d.sourceLabel === 'writing-journal')
+            .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+            .slice(0, 3)
+          if (recentJournals.length > 0) {
+            memoBaseContext.recentWritingJournals = recentJournals.map((j) => ({
+              title: j.title,
+              content: j.content
+            }))
+          }
+
           executionLabel.value = '正在流式生成写作备忘...'
           let chapterMemo: ChapterFirstDraftContextInput['chapterMemo'] | undefined
           try {
@@ -513,6 +525,41 @@ export function useChapterFirstDraft(): {
               } finally {
                 isAuditing.value = false
               }
+            }
+
+            // 生成写作日志（跨章节记忆）
+            try {
+              const endingSnippet = fullText.slice(-200)
+              const auditSummary = auditResult.value
+                ? (auditResult.value.pass ? '通过' : `未通过，${auditResult.value.issues.length} 个问题`)
+                : '未审计'
+              const noteStream = await streamTask('chapter-session-note', {
+                projectId: project.id,
+                chapterTitle: chapter.title,
+                chapterSummary: chapter.summary,
+                emotionArc: chapterMemo?.emotionArc ?? '',
+                endingSnippet,
+                auditSummary
+              })
+              const noteResult = noteStream.result as { sessionNote?: { craftDecisions: string; effectiveReferences: string; nextChapterAdvice: string } } | undefined
+              if (noteResult?.sessionNote) {
+                const note = noteResult.sessionNote
+                const now = new Date().toISOString()
+                appStore.mergeKnowledgeDocuments([{
+                  id: `journal-${Date.now()}`,
+                  title: `写作日志｜${chapter.title}`,
+                  sourceType: 'chapter-summary',
+                  sourceLabel: 'writing-journal',
+                  content: `技法：${note.craftDecisions}\n参考：${note.effectiveReferences}\n下章建议：${note.nextChapterAdvice}`,
+                  summary: note.nextChapterAdvice,
+                  keywords: [chapter.title, 'writing-journal'],
+                  metadata: { chapterId: chapter.id, journalType: 'writing-journal' },
+                  createdAt: now,
+                  updatedAt: now
+                }])
+              }
+            } catch {
+              // session note 失败不阻塞流程
             }
           }
         }
