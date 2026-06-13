@@ -58,7 +58,8 @@ const taskLabelMap: Record<string, string> = {
   'outline-item': '大纲扩写',
   'outline-batch': '分卷补全',
   'outline-enhance': '大纲补充',
-  'reference-deep-analyze': '深度拆书'
+  'reference-deep-analyze': '深度拆书',
+  'cover-generate': '封面生成'
 }
 
 async function handleFetchModels(): Promise<void> {

@@ -217,7 +217,8 @@ async function generateCoverImage(): Promise<void> {
       () =>
         window.characterArc.generateImage({
           settings: toIpcPayload({ ...appStore.appSettings }),
-          prompt: promptResult.prompt
+          prompt: promptResult.prompt,
+          projectId: input.project.id
         })
     )
     if (!result.success || !result.result?.dataUrl) {

@@ -75,7 +75,10 @@ export async function runStreamingAgentTask(
   }
   const prompt = handler.buildPrompt(input)
   const baseMaxTokens = handler.resolveMaxTokens?.(input) ?? resolveMaxTokens(task) ?? 4096
-  const maxTokens = Math.max(baseMaxTokens, 4096)
+  // Agent 路径常与推理模型（如 gpt-5 系列）搭配，推理 token 与可见输出共享同一预算。
+  // 4096 的下限会被推理 token 吃光，导致 finish_reason=length、可见输出为 0。抬高下限留足空间。
+  const AGENT_MIN_OUTPUT_TOKENS = 16000
+  const maxTokens = Math.max(baseMaxTokens, AGENT_MIN_OUTPUT_TOKENS)
 
   const candidateSkillDefs = candidateSkills
     .map((sel) => getSkillById(sel.id, projectId || undefined))

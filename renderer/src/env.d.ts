@@ -344,11 +344,12 @@ declare global {
         result?: Array<{ id: string; ownedBy: string | null }>
         error?: string
       }>
-      generateImage: (payload: { settings: import('@/types/app').AppSettings; prompt: string }) => Promise<{
+      generateImage: (payload: { settings: import('@/types/app').AppSettings; prompt: string; projectId?: string }) => Promise<{
         success: boolean
         result?: {
           dataUrl: string
           revisedPrompt?: string
+          usage?: import('@/types/app').AiRunUsage
         }
         error?: string
       }>

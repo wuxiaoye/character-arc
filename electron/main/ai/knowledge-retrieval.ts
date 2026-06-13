@@ -133,19 +133,21 @@ function buildKnowledgeSnippet(document: WorkspaceKnowledgeDocument): string {
  */
 export function retrieveKnowledgeContext(
   task: AiTaskPayload,
-  latestWorkspaceSnapshot: { workspaces?: Record<string, { knowledgeDocuments?: WorkspaceKnowledgeDocument[] }> } | null
+  latestWorkspaceSnapshot: { knowledgeDocuments?: WorkspaceKnowledgeDocument[] } | null
 ): { usedKnowledge: WorkspaceAiRunKnowledgeItem[] } {
   if (!KNOWLEDGE_RETRIEVAL_TASKS.has(task.task)) {
     return { usedKnowledge: [] }
   }
 
   const projectId = String(task.context.projectId ?? '').trim()
-  if (!projectId || !latestWorkspaceSnapshot?.workspaces?.[projectId]) {
+  if (!projectId) {
     return { usedKnowledge: [] }
   }
 
-  const workspace = latestWorkspaceSnapshot.workspaces[projectId]
-  const documents = Array.isArray(workspace.knowledgeDocuments) ? workspace.knowledgeDocuments : []
+  // 知识文档（含跨项目拆书库）统一存放在快照顶层，而非 workspaces[projectId] 下。
+  const documents = Array.isArray(latestWorkspaceSnapshot?.knowledgeDocuments)
+    ? latestWorkspaceSnapshot.knowledgeDocuments
+    : []
   if (!documents.length) {
     return { usedKnowledge: [] }
   }

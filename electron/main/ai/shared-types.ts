@@ -75,6 +75,7 @@ export type AiTaskName =
   | 'worldview-enhance'
   | 'outline-enhance'
   | 'relation-enhance'
+  | 'cover-generate'
 
 /**
  * AI 运行时注入 prompt 的知识条目。

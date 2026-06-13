@@ -88,6 +88,8 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
     params.handlers.onTextDelta(chunk)
   }
 
+  const finishReason = await result.finishReason
+
   const totalUsage = await result.totalUsage
   const usage: AiRunUsage = {
     promptTokens: Number.isFinite(totalUsage.inputTokens) ? totalUsage.inputTokens : undefined,
@@ -95,6 +97,17 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
     totalTokens: Number.isFinite(totalUsage.totalTokens) ? totalUsage.totalTokens : undefined,
     reasoningTokens: Number.isFinite(totalUsage.reasoningTokens) ? totalUsage.reasoningTokens : undefined,
     cachedInputTokens: Number.isFinite(totalUsage.cachedInputTokens) ? totalUsage.cachedInputTokens : undefined
+  }
+
+  // 推理模型可能把输出预算全用在推理 token 上，导致 finish_reason=length 且可见文本为空。
+  // 此时静默返回空文本会让上层误判为成功并显示兜底语，必须显式报错引导用户。
+  if (!fullText.trim() && finishReason === 'length') {
+    const reasoningTokens = usage.reasoningTokens ?? 0
+    throw new Error(
+      reasoningTokens > 0
+        ? `模型输出被截断：${reasoningTokens} 个推理 token 已耗尽输出预算，未产生可见回复。请在设置中提高输出上限，或改用非推理模型。`
+        : '模型输出被截断（finish_reason=length），未产生可见回复。请提高输出上限后重试。'
+    )
   }
 
   return {

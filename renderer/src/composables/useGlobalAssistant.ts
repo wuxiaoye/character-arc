@@ -1380,7 +1380,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
           assistantMode: activeMode.value,
           currentPanelLabel: resolveViewLabel(),
           userPrompt: prompt,
-          enabledContextModules: ['worldview', 'characters', 'organizations', 'relationships', 'outline', 'plotThreads', 'inspiration', 'knowledge', 'workflowDocuments', 'projectConstraints'],
+          enabledContextModules: ['worldview', 'characters', 'organizations', 'relationships', 'outline', 'plotThreads', 'inspiration', 'knowledge', 'deconstructionLibrary', 'workflowDocuments', 'projectConstraints'],
           recentMessages: appStore.messages.slice(0, -2).slice(-8).map((item) => ({ role: item.role, content: item.content })),
           worldviewEntries: appStore.worldviewEntries.slice(0, 24),
           characters: appStore.characters.slice(0, 24),

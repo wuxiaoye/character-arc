@@ -6,6 +6,7 @@ import { runStreamingAgentTask } from './agent/streaming-orchestrator'
 import { providerSupportsTools } from './provider'
 import { setChapterPostGenerationIssuesEmitter, setChapterWarningsEmitter } from './runtime/orchestrator'
 import { retrieveKnowledgeContext } from './knowledge-retrieval'
+import { buildRunMeta } from './runtime/run-meta'
 import { backfillProjectStateFromChapters } from './state-backfill'
 import { buildStoryStateContext } from '../story-state-store'
 import { ensureWorkspaceDb } from '../workspace-store'
@@ -329,16 +330,43 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
 
   // ── 图片生成 ──
   ipcMain.handle('characterarc:ai-generate-image', async (_event, payload: unknown) => {
+    const request = payload as { settings?: AppSettings; prompt?: string; projectId?: string }
+    const projectId = String(request?.projectId ?? '').trim()
+    const settings = request?.settings as AppSettings
+    const startedAt = new Date().toISOString()
+    // 运行记录里展示图片模型（封面专用模型与文本模型分开配置）。
+    const metaSettings = { ...settings, model: settings?.imageModel?.trim() || settings?.model } as AppSettings
     try {
-      const request = payload as { settings?: AppSettings; prompt?: string }
       const prompt = String(request?.prompt ?? '').trim()
       if (!prompt) {
         throw new Error('图片生成提示词不能为空。')
       }
-      const result = await generateImage(request.settings as AppSettings, prompt)
+      const result = await generateImage(settings, prompt)
+
+      if (projectId) {
+        const meta = buildRunMeta(
+          'cover-generate', projectId, undefined, metaSettings, 'success',
+          startedAt, new Date().toISOString(),
+          result.usage,
+          [], [],
+          false, result.revisedPrompt ?? '封面图片已生成', ''
+        )
+        deps!.emitAiRunEvent({ projectId, meta: { id: randomUUID(), ...meta } })
+      }
       return { success: true, result }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : '图片生成失败' }
+      const message = error instanceof Error ? error.message : '图片生成失败'
+      if (projectId) {
+        const meta = buildRunMeta(
+          'cover-generate', projectId, undefined, metaSettings, 'error',
+          startedAt, new Date().toISOString(),
+          undefined,
+          [], [],
+          false, '', message
+        )
+        deps!.emitAiRunEvent({ projectId, meta: { id: randomUUID(), ...meta } })
+      }
+      return { success: false, error: message }
     }
   })
 
