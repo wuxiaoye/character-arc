@@ -9,6 +9,8 @@ import {
   formatVolumeChapterSummaries, formatOpenPlotThreads
 } from '../prompts/format-helpers'
 
+const CHAPTER_MEMO_MAX_TOKENS = 26000
+
 function formatWritingJournals(journals: unknown): string {
   if (!Array.isArray(journals) || journals.length === 0) return ''
   const entries = journals
@@ -82,7 +84,7 @@ const handler: TaskHandler = {
     )
   },
   resolveMaxTokens(): number {
-    return 4000
+    return CHAPTER_MEMO_MAX_TOKENS
   }
 }
 export default handler

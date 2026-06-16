@@ -250,13 +250,46 @@ export async function streamAiTask(
   let totalUsage: AiRunUsage | undefined
 
   try {
-    const generation = structuredSchema
+    let generation = structuredSchema
       ? await aiStreamObjectWithUsage(settings, prompt, handlers, signal, structuredSchema, maxTokens)
       : await aiStreamTextWithUsage(settings, prompt, handlers, signal, maxTokens)
     totalUsage = addAiRunUsage(totalUsage, generation.usage)
-    const rawText = generation.text
+    let rawText = generation.text
     logResponse('STREAM', settings, task.task, rawText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
-    const result = taskHandler.normalize(rawText)
+    let result: AiTaskResult
+    let normalizeFailed = false
+    try {
+      result = taskHandler.normalize(rawText)
+    } catch {
+      result = {} as AiTaskResult
+      normalizeFailed = true
+    }
+    let repairTriggered = false
+
+    if (taskHandler.outputType === 'json' && (normalizeFailed || !taskHandler.validate(result))) {
+      const validationErrors = (!normalizeFailed && taskHandler.describeValidationErrors)
+        ? taskHandler.describeValidationErrors(result)
+        : ['JSON 解析失败或结构不完整']
+      const repairPromptPair = buildRepairPrompt(prompt.system, prompt.user, rawText, validationErrors)
+      logPrompt('STREAM_REPAIR', settings, repairPromptPair, task.task, usedSkillIds)
+      const repairStartedAt = Date.now()
+      generation = await aiGenerateTextWithUsage(
+        settings,
+        repairPromptPair,
+        maxTokens,
+        signal,
+        structuredSchema ? { schema: structuredSchema } : undefined
+      )
+      totalUsage = addAiRunUsage(totalUsage, generation.usage)
+      rawText = generation.text
+      logResponse('STREAM_REPAIR', settings, task.task, rawText, Date.now() - repairStartedAt, { usedSkills: usedSkillIds })
+      result = taskHandler.normalize(rawText)
+      repairTriggered = true
+
+      if (!taskHandler.validate(result)) {
+        throw new Error('AI 返回的结构化结果不完整，请稍后重试或调整提示词。')
+      }
+    }
     const finishedAt = new Date().toISOString()
     const status = signal.aborted ? 'canceled' : 'success'
 
@@ -283,7 +316,7 @@ export async function streamAiTask(
         totalUsage,
         knowledgeContext?.usedKnowledge ?? [],
         usedSkillIds,
-        false,
+        repairTriggered,
         buildResponsePreview(result),
         '',
         clientKey

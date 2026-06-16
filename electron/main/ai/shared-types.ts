@@ -456,6 +456,8 @@ export type PromptPair = {
 /** 流式 AI 生成的回调处理器 */
 export type AiStreamHandlers = {
   onTextDelta: (delta: string) => void
+  /** 推理模型的思考过程增量。可选——只有支持 reasoning 的模型会触发。 */
+  onReasoningDelta?: (delta: string) => void
 }
 
 /** Agent 流式生成的回调处理器（含工具调用和编辑事件） */

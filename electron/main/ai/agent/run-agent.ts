@@ -48,7 +48,7 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
   // streamText 默认不抛流错误，仅通过 onError 暴露；捕获后在消费流时重抛，确保错误能上报到 UI。
   let streamError: unknown = null
   const result = streamText({
-    model: createModel(params.settings),
+    model: createModel(params.settings, params.handlers.onReasoningDelta),
     system: buildSystemPrompt(params.settings, params.systemPrompt),
     prompt: params.userPrompt,
     ...(params.disableTools ? {} : { tools: sdkTools, stopWhen: stepCountIs(maxSteps) }),

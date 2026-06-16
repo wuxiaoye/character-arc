@@ -178,6 +178,11 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
                 if (!event.sender.isDestroyed()) {
                   event.sender.send('characterarc:ai-stream-event', { streamId, type: 'chunk', delta, charCount: streamedContent.length })
                 }
+              },
+              onReasoningDelta: (delta: string) => {
+                if (!event.sender.isDestroyed()) {
+                  event.sender.send('characterarc:ai-stream-event', { streamId, type: 'reasoning', delta })
+                }
               }
             },
             controller.signal,
@@ -306,6 +311,11 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
                 streamedContent += delta
                 if (!event.sender.isDestroyed()) {
                   event.sender.send('characterarc:ai-stream-event', { streamId, type: 'chunk', delta, charCount: streamedContent.length })
+                }
+              },
+              onReasoningDelta: (delta: string) => {
+                if (!event.sender.isDestroyed()) {
+                  event.sender.send('characterarc:ai-stream-event', { streamId, type: 'reasoning', delta })
                 }
               }
             },

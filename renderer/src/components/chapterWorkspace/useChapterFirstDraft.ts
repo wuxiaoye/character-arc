@@ -167,12 +167,12 @@ export function useChapterFirstDraft(): {
     }
     if (currentStreamTask.value === 'chapter-memo') {
       progressPercent.value = previewContent.value.trim() ? 14 : 10
-      progressText.value = '正在流式生成本章写作备忘...'
+      progressText.value = '正在生成本章写作备忘...'
       return
     }
     if (currentStreamTask.value === 'chapter-audit') {
       progressPercent.value = previewContent.value.trim() ? 92 : 90
-      progressText.value = '正在流式审计本章质量...'
+      progressText.value = '正在审计本章质量...'
       return
     }
     if (currentStreamTask.value === 'chapter-repair') {
