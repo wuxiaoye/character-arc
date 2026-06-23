@@ -6,6 +6,27 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: writing
+  compatibility: native
+  enabled: true
+  priority: 5
+  stages:
+    - premise
+    - outline
+    - draft
+  tasks:
+    - project-bootstrap
+    - inspiration-pack
+    - outline-item
+    - chapter-assistant
+  triggers:
+    - 创新
+    - 反套路
+    - 融合
+    - 热梗
+    - 新颖
+    - 差异化
 ---
 
 # 创新、反套路与融合引擎

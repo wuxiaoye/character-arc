@@ -6,6 +6,28 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: writing
+  compatibility: native
+  enabled: true
+  priority: 7
+  stages:
+    - outline
+    - draft
+  tasks:
+    - outline-item
+    - outline-batch
+    - chapter-scene-plan
+    - chapter-first-draft
+    - chapter-assistant
+  triggers:
+    - 爽点
+    - 爽感
+    - 打脸
+    - 逆袭
+    - 金手指
+    - 装逼
+    - 高潮
 ---
 
 # 爽点模式大全与疲劳管理

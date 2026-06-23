@@ -6,6 +6,26 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: writing
+  compatibility: native
+  enabled: true
+  priority: 7
+  stages:
+    - premise
+    - setting
+  tasks:
+    - character-card
+    - character-enhance
+    - relation-enhance
+    - project-bootstrap
+  triggers:
+    - 人设
+    - 主角
+    - 配角
+    - 反派
+    - 人物关系
+    - 弧光
 ---
 
 # 人设与群像工程

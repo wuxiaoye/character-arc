@@ -6,6 +6,23 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: polish
+  compatibility: native
+  enabled: true
+  priority: 4
+  stages:
+    - draft
+  tasks:
+    - chapter-assistant
+    - chapter-audit
+    - chapter-repair
+  triggers:
+    - 敏感词
+    - 合规
+    - 审核
+    - 违规
+    - 过审
 ---
 
 # 敏感词规避与合规

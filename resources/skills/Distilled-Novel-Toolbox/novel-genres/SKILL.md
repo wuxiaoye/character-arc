@@ -6,6 +6,26 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: market
+  compatibility: native
+  enabled: true
+  priority: 6
+  stages:
+    - reference
+    - premise
+  tasks:
+    - project-bootstrap
+    - inspiration-pack
+    - worldview-entry
+  triggers:
+    - 题材
+    - 流派
+    - 类型
+    - 玄幻
+    - 仙侠
+    - 都市
+    - 混合类型
 ---
 
 # 题材与子类融合引擎

@@ -6,6 +6,24 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: market
+  compatibility: native
+  enabled: true
+  priority: 4
+  stages:
+    - reference
+    - premise
+  tasks:
+    - project-bootstrap
+    - inspiration-pack
+  triggers:
+    - 平台
+    - 变现
+    - 签约
+    - 起点
+    - 番茄
+    - 商业化
 ---
 
 # 商业化与平台特化

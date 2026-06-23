@@ -6,6 +6,22 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: polish
+  compatibility: native
+  enabled: true
+  priority: 4
+  stages:
+    - draft
+  tasks:
+    - chapter-assistant
+    - chapter-repair
+  triggers:
+    - AI检测
+    - AIGC
+    - 检测率
+    - 风控
+    - 降AI
 ---
 
 # 反AI检测与风控

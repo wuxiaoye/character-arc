@@ -6,6 +6,24 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: writing
+  compatibility: native
+  enabled: true
+  priority: 6
+  stages:
+    - draft
+  tasks:
+    - chapter-first-draft
+    - chapter-assistant
+    - chapter-repair
+  triggers:
+    - 文风
+    - 语言
+    - 叙述视角
+    - 修辞
+    - 画面感
+    - 玩梗
 ---
 
 # 语言与文风光谱

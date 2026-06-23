@@ -6,6 +6,25 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: writing
+  compatibility: native
+  enabled: true
+  priority: 6
+  stages:
+    - draft
+  tasks:
+    - chapter-first-draft
+    - chapter-assistant
+    - chapter-scene-plan
+    - chapter-repair
+  triggers:
+    - 情绪
+    - 代入感
+    - 共情
+    - 沉浸
+    - 情绪曲线
+    - 期待
 ---
 
 # 情绪与代入感设计

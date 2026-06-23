@@ -6,6 +6,31 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: writing
+  compatibility: native
+  enabled: true
+  priority: 7
+  stages:
+    - outline
+    - draft
+  tasks:
+    - outline-item
+    - outline-batch
+    - outline-chain
+    - outline-enhance
+    - chapter-scene-plan
+    - chapter-first-draft
+    - chapter-assistant
+  triggers:
+    - 节奏
+    - 结构
+    - 开篇
+    - 章节结构
+    - 高潮
+    - 断章
+    - 钩子
+    - 黄金三章
 ---
 
 # 节奏与结构工程

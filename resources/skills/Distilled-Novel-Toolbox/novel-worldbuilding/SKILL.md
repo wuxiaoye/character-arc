@@ -6,6 +6,26 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: writing
+  compatibility: native
+  enabled: true
+  priority: 7
+  stages:
+    - premise
+    - setting
+  tasks:
+    - worldview-entry
+    - worldview-enhance
+    - project-bootstrap
+    - outline-item
+  triggers:
+    - 世界观
+    - 设定
+    - 力量体系
+    - 势力
+    - 金手指
+    - 悬念
 ---
 
 # 世界观与设定体系

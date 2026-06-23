@@ -6,6 +6,23 @@ compatibility: opencode
 metadata:
   audience: novel-writers
   version: 1.0.0
+manifest:
+  category: polish
+  compatibility: native
+  enabled: true
+  priority: 6
+  stages:
+    - draft
+  tasks:
+    - chapter-assistant
+    - chapter-first-draft
+    - chapter-repair
+  triggers:
+    - 润色
+    - 去AI味
+    - AI痕迹
+    - 改写
+    - 口语化
 ---
 
 # 润色与去AI味
